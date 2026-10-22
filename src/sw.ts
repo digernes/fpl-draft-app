@@ -2,15 +2,16 @@
 // data on screen when offline. Network first, falling back to the cached copy, and
 // only for this site's own files (the live relay, photos and fonts pass straight by).
 
+const sw = self as unknown as ServiceWorkerGlobalScope;
 const CACHE = 'draft-v1';
 
-self.addEventListener('install', () => self.skipWaiting());
-self.addEventListener('activate', (event) => event.waitUntil(self.clients.claim()));
+sw.addEventListener('install', () => sw.skipWaiting());
+sw.addEventListener('activate', (event) => event.waitUntil(sw.clients.claim()));
 
-self.addEventListener('fetch', (event) => {
+sw.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== self.location.origin) return;
+  if (request.method !== 'GET' || url.origin !== sw.location.origin) return;
   const key = url.origin + url.pathname; // one copy of data.json, not one per ?v= timestamp
   event.respondWith(
     fetch(request)

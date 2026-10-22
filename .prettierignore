@@ -1,0 +1,11 @@
+node_modules/
+_site/
+.cache/
+package-lock.json
+public/data.json
+public/seasons/
+public/assets/app.js
+public/sw.js
+tests/fixtures/
+# Hand-laid-out; whitespace between inline elements matters there
+public/index.html

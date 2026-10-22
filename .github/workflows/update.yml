@@ -13,7 +13,7 @@ on:
   workflow_dispatch:
   push:
     branches: [main]
-    paths-ignore: [data.json]
+    paths-ignore: [public/data.json, 'public/seasons/**']
 
 permissions: {} # each job asks for what it needs
 
@@ -26,7 +26,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write # commit data.json back
+      contents: write # commit public/data.json back
     outputs:
       deploy: ${{ steps.commit.outputs.changed == 'true' || github.event_name != 'schedule' }}
     steps:
@@ -34,10 +34,18 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 22
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+
+      # Scheduled runs only refresh the data; code was checked when it was pushed.
+      - name: Type-check, lint and test
+        if: github.event_name != 'schedule'
+        run: npm run check
 
       - name: Build data.json from the FPL Draft API
-        run: node scripts/build-data.mjs
+        run: npm run data
         env:
           LEAGUE_ID: ${{ vars.LEAGUE_ID || '23793' }}
 
@@ -46,26 +54,26 @@ jobs:
       - name: Commit the data if it changed
         id: commit
         run: |
-          if [ -z "$(git status --porcelain -- data.json seasons)" ]; then
+          if [ -z "$(git status --porcelain -- public/data.json public/seasons)" ]; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add data.json seasons
+          git add public/data.json public/seasons
           git commit -m "Update data $(date -u '+%Y-%m-%d %H:%M') UTC"
           git pull --rebase origin main # in case code was pushed while this ran
           git push
           echo "changed=true" >> "$GITHUB_OUTPUT"
 
-      - name: Stage the site
+      - name: Bundle the page and the service worker into public/
         if: steps.commit.outputs.changed == 'true' || github.event_name != 'schedule'
-        run: mkdir _site && cp -r index.html manifest.webmanifest sw.js assets data.json seasons _site/
+        run: npm run build
 
       - uses: actions/upload-pages-artifact@v3
         if: steps.commit.outputs.changed == 'true' || github.event_name != 'schedule'
         with:
-          path: _site
+          path: public
 
   deploy:
     needs: build

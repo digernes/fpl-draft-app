@@ -229,7 +229,6 @@ img {
   flex: none;
 }
 
-
 .logo-word {
   font-size: 20px;
   font-weight: 700;
@@ -340,7 +339,6 @@ img {
   font-weight: 700;
 }
 
-
 .settings {
   position: relative;
   margin-left: auto;
@@ -354,7 +352,6 @@ img {
   border-radius: 50%;
   color: var(--text);
 }
-
 
 .icon-btn:disabled {
   opacity: 0.3;
@@ -586,7 +583,6 @@ img {
   font-weight: 500;
 }
 
-
 .empty {
   padding: 24px 16px;
   color: var(--text-2);
@@ -739,7 +735,6 @@ img {
   white-space: nowrap;
 }
 
-
 .tab[aria-selected='true'] {
   color: var(--text);
   opacity: 1;
@@ -752,7 +747,9 @@ img {
   height: 3px;
   border-radius: 3px 3px 0 0;
   background: var(--tab-indicator);
-  transition: left 0.2s ease-out, width 0.2s ease-out;
+  transition:
+    left 0.2s ease-out,
+    width 0.2s ease-out;
 }
 
 @media (max-width: 599px) {
@@ -870,15 +867,50 @@ img {
   font-size: 17px;
 }
 
-.m0 { --av-bg: var(--m0); background: var(--m0); }
-.m1 { --av-bg: var(--m1); --av-ink: var(--ink-m1, #fff); background: var(--m1); }
-.m2 { --av-bg: var(--m2); --av-ink: var(--ink-m2, #fff); background: var(--m2); }
-.m3 { --av-bg: var(--m3); --av-ink: var(--ink-m3, #fff); background: var(--m3); }
-.m4 { --av-bg: var(--m4); --av-ink: var(--ink-m4, #fff); background: var(--m4); }
-.m5 { --av-bg: var(--m5); --av-ink: var(--ink-m5, #fff); background: var(--m5); }
-.m6 { --av-bg: var(--m6); --av-ink: var(--ink-m6, #fff); background: var(--m6); }
-.m7 { --av-bg: var(--m7); --av-ink: var(--ink-m7, #fff); background: var(--m7); }
-.m8 { --av-bg: var(--m8); --av-ink: var(--ink-m8, #fff); background: var(--m8); }
+.m0 {
+  --av-bg: var(--m0);
+  background: var(--m0);
+}
+.m1 {
+  --av-bg: var(--m1);
+  --av-ink: var(--ink-m1, #fff);
+  background: var(--m1);
+}
+.m2 {
+  --av-bg: var(--m2);
+  --av-ink: var(--ink-m2, #fff);
+  background: var(--m2);
+}
+.m3 {
+  --av-bg: var(--m3);
+  --av-ink: var(--ink-m3, #fff);
+  background: var(--m3);
+}
+.m4 {
+  --av-bg: var(--m4);
+  --av-ink: var(--ink-m4, #fff);
+  background: var(--m4);
+}
+.m5 {
+  --av-bg: var(--m5);
+  --av-ink: var(--ink-m5, #fff);
+  background: var(--m5);
+}
+.m6 {
+  --av-bg: var(--m6);
+  --av-ink: var(--ink-m6, #fff);
+  background: var(--m6);
+}
+.m7 {
+  --av-bg: var(--m7);
+  --av-ink: var(--ink-m7, #fff);
+  background: var(--m7);
+}
+.m8 {
+  --av-bg: var(--m8);
+  --av-ink: var(--ink-m8, #fff);
+  background: var(--m8);
+}
 
 .stack {
   display: inline-flex;
@@ -945,11 +977,21 @@ img {
   font-weight: 500;
 }
 
-.ptsp.p0 { background: var(--lose); }
-.ptsp.p1 { background: #f08022; }
-.ptsp.p2 { background: var(--draw); }
-.ptsp.p3 { background: var(--win); }
-.ptsp.p4 { background: #0e87e0; }
+.ptsp.p0 {
+  background: var(--lose);
+}
+.ptsp.p1 {
+  background: #f08022;
+}
+.ptsp.p2 {
+  background: var(--draw);
+}
+.ptsp.p3 {
+  background: var(--win);
+}
+.ptsp.p4 {
+  background: #0e87e0;
+}
 
 .ptsp.xp {
   background: var(--hover);
@@ -998,7 +1040,6 @@ img {
   font-weight: 500;
   white-space: nowrap;
 }
-
 
 .chip[aria-pressed='true'] {
   border-color: transparent;
@@ -1067,6 +1108,17 @@ img {
   }
 }
 
+/* The opposite: things phones reach some other way (the odds format is in settings). */
+.wide-only {
+  display: contents;
+}
+
+@media (max-width: 599px) {
+  .wide-only {
+    display: none;
+  }
+}
+
 @media (min-width: 769px) {
   .chip {
     padding: 0 20px;
@@ -1102,7 +1154,6 @@ img {
   color: var(--text-2);
   font-weight: 500;
 }
-
 
 .trow.featured {
   background: var(--featured);
@@ -1169,7 +1220,6 @@ img {
   text-overflow: ellipsis;
 }
 
-
 .form {
   display: flex;
   justify-content: flex-end;
@@ -1189,7 +1239,6 @@ img {
   text-align: center;
 }
 
-
 /* fotmob.com's live score pill: coloured by the result as it stands, gently pulsing. */
 .livep {
   display: inline-grid;
@@ -1204,9 +1253,15 @@ img {
   animation: pulse 2s ease-in-out infinite;
 }
 
-.livep.W { background: var(--win); }
-.livep.D { background: var(--draw); }
-.livep.L { background: var(--lose); }
+.livep.W {
+  background: var(--win);
+}
+.livep.D {
+  background: var(--draw);
+}
+.livep.L {
+  background: var(--lose);
+}
 
 @keyframes pulse {
   50% {
@@ -1214,9 +1269,15 @@ img {
   }
 }
 
-.pill.W { background: var(--win); }
-.pill.D { background: var(--draw); }
-.pill.L { background: var(--lose); }
+.pill.W {
+  background: var(--win);
+}
+.pill.D {
+  background: var(--draw);
+}
+.pill.L {
+  background: var(--lose);
+}
 
 .pill.latest::after {
   content: '';
@@ -1408,7 +1469,6 @@ img {
   border-radius: 50%;
   color: var(--text-2);
 }
-
 
 .info-btn svg {
   width: 16px;
@@ -1671,7 +1731,6 @@ img {
   border-radius: 10px;
 }
 
-
 .side {
   display: flex;
   align-items: center;
@@ -1784,7 +1843,6 @@ img {
   color: var(--odds-price);
 }
 
-
 .match-detail {
   display: grid;
   gap: 16px;
@@ -1892,6 +1950,14 @@ img {
   gap: 4px;
 }
 
+/* Phones have no odds toggle beside it, so the arrows go to either end. */
+@media (max-width: 599px) {
+  .gw-nav {
+    flex: 1;
+    justify-content: space-between;
+  }
+}
+
 .gw-select {
   position: relative;
   display: inline-flex;
@@ -1909,7 +1975,6 @@ img {
   font-weight: 500;
   cursor: pointer;
 }
-
 
 .gw-select .chev {
   position: absolute;
@@ -1949,7 +2014,9 @@ img {
 
 .tile {
   padding: 16px;
-  box-shadow: 1px 0 0 var(--divider), 0 1px 0 var(--divider);
+  box-shadow:
+    1px 0 0 var(--divider),
+    0 1px 0 var(--divider);
 }
 
 .tile-label {
@@ -2025,11 +2092,26 @@ img {
   font-weight: 500;
 }
 
-.hm-cell.h0 { background: var(--h0); color: var(--ink-h0, var(--text)); }
-.hm-cell.h1 { background: var(--h1); color: var(--ink-h1, var(--text)); }
-.hm-cell.h2 { background: var(--h2); color: var(--ink-h2, var(--text)); }
-.hm-cell.h3 { background: var(--h3); color: var(--ink-h3, var(--text)); }
-.hm-cell.h4 { background: var(--h4); color: var(--ink-h4, var(--text)); }
+.hm-cell.h0 {
+  background: var(--h0);
+  color: var(--ink-h0, var(--text));
+}
+.hm-cell.h1 {
+  background: var(--h1);
+  color: var(--ink-h1, var(--text));
+}
+.hm-cell.h2 {
+  background: var(--h2);
+  color: var(--ink-h2, var(--text));
+}
+.hm-cell.h3 {
+  background: var(--h3);
+  color: var(--ink-h3, var(--text));
+}
+.hm-cell.h4 {
+  background: var(--h4);
+  color: var(--ink-h4, var(--text));
+}
 
 .hm-cell.best {
   box-shadow: inset 0 0 0 2px var(--text);
@@ -2042,11 +2124,21 @@ img {
   text-align: center;
 }
 
-.legend-item i.h0 { background: var(--h0); }
-.legend-item i.h1 { background: var(--h1); }
-.legend-item i.h2 { background: var(--h2); }
-.legend-item i.h3 { background: var(--h3); }
-.legend-item i.h4 { background: var(--h4); }
+.legend-item i.h0 {
+  background: var(--h0);
+}
+.legend-item i.h1 {
+  background: var(--h1);
+}
+.legend-item i.h2 {
+  background: var(--h2);
+}
+.legend-item i.h3 {
+  background: var(--h3);
+}
+.legend-item i.h4 {
+  background: var(--h4);
+}
 
 .legend-item i.best-key {
   box-shadow: inset 0 0 0 1.5px var(--text);
@@ -2089,7 +2181,6 @@ img {
   border-radius: 4px 4px 0 0;
   background: var(--brand-solid);
 }
-
 
 .bar-value {
   margin-bottom: 6px;
@@ -2172,7 +2263,6 @@ img {
   min-height: 64px;
   padding: 12px 16px;
 }
-
 
 .squad-who {
   display: flex;
@@ -2354,10 +2444,18 @@ img {
   background: var(--hover);
 }
 
-.db-cell.pos-GKP { background: var(--pos-GKP); }
-.db-cell.pos-DEF { background: var(--pos-DEF); }
-.db-cell.pos-MID { background: var(--pos-MID); }
-.db-cell.pos-FWD { background: var(--pos-FWD); }
+.db-cell.pos-GKP {
+  background: var(--pos-GKP);
+}
+.db-cell.pos-DEF {
+  background: var(--pos-DEF);
+}
+.db-cell.pos-MID {
+  background: var(--pos-MID);
+}
+.db-cell.pos-FWD {
+  background: var(--pos-FWD);
+}
 
 .db-cell.gone {
   opacity: 0.4;
@@ -2386,10 +2484,18 @@ img {
   font-size: 6px;
 }
 
-.legend-item i.pos-GKP { background: var(--pos-GKP); }
-.legend-item i.pos-DEF { background: var(--pos-DEF); }
-.legend-item i.pos-MID { background: var(--pos-MID); }
-.legend-item i.pos-FWD { background: var(--pos-FWD); }
+.legend-item i.pos-GKP {
+  background: var(--pos-GKP);
+}
+.legend-item i.pos-DEF {
+  background: var(--pos-DEF);
+}
+.legend-item i.pos-MID {
+  background: var(--pos-MID);
+}
+.legend-item i.pos-FWD {
+  background: var(--pos-FWD);
+}
 
 .legend-item i.gone-key {
   background: var(--featured-key);
@@ -2453,7 +2559,10 @@ img {
 .match,
 .squad-summary,
 .bar {
-  transition: opacity 0.15s ease, background-color 0.15s ease, color 0.2s ease;
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease,
+    color 0.2s ease;
 }
 
 @media (hover: hover) {

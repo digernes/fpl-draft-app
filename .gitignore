@@ -3,3 +3,9 @@ _site/
 .DS_Store
 # local preview config for Claude Code
 .claude/
+node_modules/
+# built by `npm run build` from src/
+public/assets/app.js
+public/assets/app.js.map
+public/sw.js
+public/sw.js.map

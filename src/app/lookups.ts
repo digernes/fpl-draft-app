@@ -1,0 +1,29 @@
+// Lookups into the loaded data, aware of live scores and the season being viewed.
+
+import type { Lineup, Match } from '../shared/data.ts';
+import { esc } from './format.ts';
+import { COLOR_SLOTS, D, live, managers, seasons, state } from './state.ts';
+
+/** A match that has started, so both scores are in. */
+export type Played = Match & { homePts: number; awayPts: number };
+
+export const mgr = (id: number | null | undefined) => managers.get(id as number);
+export const first = (id: number | null | undefined) => esc(mgr(id)?.first ?? '?');
+export const player = (id: number) => D.players[id];
+export const club = (id: number | undefined) => D.clubs[id as number];
+export const gwInfo = (gw: number) => D.gameweeks.find((g) => g.id === gw);
+export const gwPoints = (pid: number, gw: number) => (live?.gw === gw ? live.points(pid) : (player(pid)?.pts?.[gw - D.meta.firstGw] ?? 0));
+export const lineupFor = (id: number, gw: number): Lineup | undefined => (live?.gw === gw && live.lineups[id]) || D.lineups[id]?.[gw];
+export const seasonStat = (id: number) => D.seasonStats.find((s) => s.id === id);
+export const slotOf = (id: number) => {
+  const slot = mgr(id)?.slot ?? COLOR_SLOTS;
+  return slot < COLOR_SLOTS ? slot + 1 : 0;
+};
+export const isLive = () => D.matches.some((m) => m.started && !m.finished);
+
+export const matchKey = (m: Match) => `${m.gw}:${m.home}:${m.away}`;
+
+export const seasonSlug = (season: string) => season.replace('/', '-');
+export const seasonLabel = (season: string) => `${Number(season.slice(0, 4))}/${Number(season.slice(0, 4)) + 1}`;
+export const seasonEntry = () => seasons.find((s) => seasonSlug(s.season) === state.season);
+export const isArchive = () => Boolean(seasonEntry() && !seasonEntry()!.current);

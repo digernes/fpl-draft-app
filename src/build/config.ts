@@ -1,0 +1,75 @@
+// The numbers that shape the page. Change them here.
+
+import type { Position } from '../shared/data.ts';
+
+// Bump when data.json changes shape, so the page can tell which archives it can read.
+export const SCHEMA = 1;
+
+// Top-gameweek ranking only: points knocked off per scoring-XI player whose club plays twice.
+export const DGW_PENALTY = 4;
+export const TOP_GAMEWEEKS = 10;
+export const FORM_LENGTH = 5;
+// Odds: bookmaker overround and how many gameweeks ahead get prices. A manager's
+// expected score is the league average plus a share of how far their form, and (next
+// gameweek only) their best projected XI, sit from the league's. FPL's own expected
+// points spread far wider than real scores do, hence the small projection share.
+export const ODDS_OVERROUND = 1.05;
+export const ODDS_GAMEWEEKS = 3;
+export const FORM_WEIGHT = 0.6;
+export const PROJECTION_WEIGHT = 0.3;
+export const MIN_SCORE_SPREAD = 13;
+// Season simulation: runs of the remaining fixtures, and how far a manager's true
+// level may sit from their form (points a week), drawn once per run. Seeded, so the
+// same data always gives the same percentages.
+export const SIM_RUNS = 10000;
+export const SIM_SKILL_SPREAD = 3;
+export const SIM_SEED = 20262027;
+
+export const POSITIONS: Record<number, Position> = { 1: 'GKP', 2: 'DEF', 3: 'MID', 4: 'FWD' };
+// Home shirt and trim colours by the Premier League's club code, for the placeholder
+// shown when a player has no photo. The API has no kit colours; unknown clubs go grey.
+export const KIT_COLORS: Record<number, [string, string]> = {
+  1: ['#da291c', '#ffffff'], // Man Utd
+  2: ['#ffffff', '#1d428a'], // Leeds
+  3: ['#ef0107', '#ffffff'], // Arsenal
+  4: ['#241f20', '#ffffff'], // Newcastle
+  6: ['#ffffff', '#132257'], // Tottenham
+  7: ['#670e36', '#95bfe5'], // Aston Villa
+  8: ['#034694', '#ffffff'], // Chelsea
+  9: ['#59a5d8', '#ffffff'], // Coventry
+  11: ['#003399', '#ffffff'], // Everton
+  13: ['#003090', '#fdbe11'], // Leicester
+  14: ['#c8102e', '#f6eb61'], // Liverpool
+  17: ['#dd0000', '#ffffff'], // Nottm Forest
+  20: ['#d71920', '#ffffff'], // Southampton
+  21: ['#7a263a', '#1bb1e7'], // West Ham
+  25: ['#e11b22', '#ffffff'], // Middlesbrough
+  31: ['#1b458f', '#c4122e'], // Crystal Palace
+  35: ['#122f67', '#ffffff'], // West Brom
+  36: ['#0057b8', '#ffffff'], // Brighton
+  39: ['#fdb913', '#231f20'], // Wolves
+  40: ['#0044a9', '#ffffff'], // Ipswich
+  43: ['#6cabdd', '#ffffff'], // Man City
+  45: ['#fff200', '#00a650'], // Norwich
+  49: ['#ee2737', '#ffffff'], // Sheffield Utd
+  54: ['#ffffff', '#000000'], // Fulham
+  56: ['#eb172b', '#ffffff'], // Sunderland
+  57: ['#fbee23', '#ed2127'], // Watford
+  88: ['#f5a12d', '#000000'], // Hull
+  90: ['#6c1d45', '#99d6ea'], // Burnley
+  91: ['#da291c', '#000000'], // Bournemouth
+  94: ['#e30613', '#ffffff'], // Brentford
+  102: ['#f78f1e', '#002d62'], // Luton
+};
+// The usual UK fractional ladder. Prices are rounded down onto it, so decimal and
+// fractional always show the same price.
+// prettier-ignore
+export const FRACTIONS: [number, number][] = [
+  [1, 100], [1, 50], [1, 33], [1, 25], [1, 20], [1, 16], [1, 14], [1, 12], [1, 10], [1, 9], [1, 8],
+  [2, 15], [1, 7], [1, 6], [2, 11], [1, 5], [2, 9], [1, 4], [2, 7], [3, 10], [1, 3], [4, 11], [2, 5],
+  [4, 9], [1, 2], [8, 15], [4, 7], [8, 13], [4, 6], [8, 11], [4, 5], [5, 6], [10, 11], [1, 1],
+  [21, 20], [11, 10], [6, 5], [5, 4], [11, 8], [6, 4], [13, 8], [7, 4], [15, 8], [2, 1], [9, 4],
+  [5, 2], [11, 4], [3, 1], [10, 3], [7, 2], [4, 1], [9, 2], [5, 1], [11, 2], [6, 1], [13, 2], [7, 1],
+  [15, 2], [8, 1], [17, 2], [9, 1], [10, 1], [11, 1], [12, 1], [14, 1], [16, 1], [18, 1], [20, 1],
+  [22, 1], [25, 1], [28, 1], [33, 1], [40, 1], [50, 1], [66, 1], [80, 1], [100, 1],
+];
