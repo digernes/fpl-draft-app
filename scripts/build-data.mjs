@@ -50,11 +50,40 @@ const SIM_SKILL_SPREAD = 3;
 const SIM_SEED = 20262027;
 
 const POSITIONS = { 1: 'GKP', 2: 'DEF', 3: 'MID', 4: 'FWD' };
-// FotMob team ids keyed by the Premier League's club code (stable across seasons).
-// Clubs missing here fall back to the Premier League's own badge.
-const FOTMOB_TEAM_IDS = {
-  1: 10260, 2: 8463, 3: 9825, 4: 10261, 6: 8586, 7: 10252, 8: 8455, 9: 8669, 11: 8668, 14: 8650,
-  17: 10203, 31: 9826, 36: 10204, 40: 9902, 43: 8456, 54: 9879, 56: 8472, 88: 8667, 91: 8678, 94: 9937,
+// Home shirt and trim colours by the Premier League's club code, for the placeholder
+// shown when a player has no photo. The API has no kit colours; unknown clubs go grey.
+const KIT_COLORS = {
+  1: ['#da291c', '#ffffff'], // Man Utd
+  2: ['#ffffff', '#1d428a'], // Leeds
+  3: ['#ef0107', '#ffffff'], // Arsenal
+  4: ['#241f20', '#ffffff'], // Newcastle
+  6: ['#ffffff', '#132257'], // Tottenham
+  7: ['#670e36', '#95bfe5'], // Aston Villa
+  8: ['#034694', '#ffffff'], // Chelsea
+  9: ['#59a5d8', '#ffffff'], // Coventry
+  11: ['#003399', '#ffffff'], // Everton
+  13: ['#003090', '#fdbe11'], // Leicester
+  14: ['#c8102e', '#f6eb61'], // Liverpool
+  17: ['#dd0000', '#ffffff'], // Nottm Forest
+  20: ['#d71920', '#ffffff'], // Southampton
+  21: ['#7a263a', '#1bb1e7'], // West Ham
+  25: ['#e11b22', '#ffffff'], // Middlesbrough
+  31: ['#1b458f', '#c4122e'], // Crystal Palace
+  35: ['#122f67', '#ffffff'], // West Brom
+  36: ['#0057b8', '#ffffff'], // Brighton
+  39: ['#fdb913', '#231f20'], // Wolves
+  40: ['#0044a9', '#ffffff'], // Ipswich
+  43: ['#6cabdd', '#ffffff'], // Man City
+  45: ['#fff200', '#00a650'], // Norwich
+  49: ['#ee2737', '#ffffff'], // Sheffield Utd
+  54: ['#ffffff', '#000000'], // Fulham
+  56: ['#eb172b', '#ffffff'], // Sunderland
+  57: ['#fbee23', '#ed2127'], // Watford
+  88: ['#f5a12d', '#000000'], // Hull
+  90: ['#6c1d45', '#99d6ea'], // Burnley
+  91: ['#da291c', '#000000'], // Bournemouth
+  94: ['#e30613', '#ffffff'], // Brentford
+  102: ['#f78f1e', '#002d62'], // Luton
 };
 // The usual UK fractional ladder. Prices are rounded down onto it, so decimal and
 // fractional always show the same price.
@@ -72,6 +101,8 @@ await main();
 
 async function main() {
   if (CACHE_DIR) await mkdir(CACHE_DIR, { recursive: true });
+  // The last build's output: started matches keep the odds it priced them at.
+  const previous = await readFile(OUT_FILE, 'utf8').then(JSON.parse, () => null);
 
   const [details, boot, game, txRes, tradeRes, choiceRes, statusRes, fplBoot] = await Promise.all([
     getJSON(`${DRAFT_API}/league/${LEAGUE_ID}/details`),
@@ -445,7 +476,9 @@ async function main() {
   const moves = [];
   for (const t of transactions) {
     if (t.result !== 'a') continue;
-    moves.push({ type: t.kind === 'w' ? 'waiver' : 'free', manager: t.entry, in: t.element_in, out: t.element_out, gw: t.event, at: t.added });
+    const waiver = t.kind === 'w';
+    const at = (waiver && events.find((e) => e.id === t.event)?.waivers_time) || t.added;
+    moves.push({ type: waiver ? 'waiver' : 'free', manager: t.entry, in: t.element_in, out: t.element_out, gw: t.event, at, order: t.index ?? 0 });
   }
   for (const tr of trades.filter((x) => x.state === 'p')) {
     const at = tr.response_time ?? tr.offer_time;
@@ -461,7 +494,7 @@ async function main() {
     mv.net = mv.inPts - mv.outPts;
     mv.banked = bankedSince(mv.manager, mv.in, mv.gw);
   }
-  moves.sort((a, b) => b.at.localeCompare(a.at));
+  moves.sort((a, b) => b.at.localeCompare(a.at) || (b.order ?? 0) - (a.order ?? 0));
 
   // Waiver result codes: "a" won, "di" the player in was already gone (claimed by a
   // higher priority, or by your own earlier claim), "do" the player out was already gone.
@@ -602,14 +635,38 @@ async function main() {
     FORM_WEIGHT * (ratings[id] - leagueMean) +
     (gw === nextGw && hasProjections ? PROJECTION_WEIGHT * (projections[id].pts - meanProjection) : 0);
   const spreadFor = (gw) => sigma * (gw === nextGw ? 1 : 1.1);
-  for (const m of matches) {
-    if (m.started || m.gw < nextGw || m.gw >= nextGw + ODDS_GAMEWEEKS) continue;
-    const p = winDrawWin(expectedScore(m.home, m.gw), expectedScore(m.away, m.gw), spreadFor(m.gw));
-    m.odds = {
+  const priced = (muHome, muAway, spread) => {
+    const p = winDrawWin(muHome, muAway, spread);
+    return {
       p: [round(p.home, 3), round(p.draw, 3), round(p.away, 3)],
       prices: [price(p.home), price(p.draw), price(p.away)],
-      expected: [round(expectedScore(m.home, m.gw), 1), round(expectedScore(m.away, m.gw), 1)],
+      expected: [round(muHome, 1), round(muAway, 1)],
     };
+  };
+  // A match that started before odds were kept gets what the model would have said
+  // with only the results before that gameweek: form, no projections.
+  const formBefore = (gw) => {
+    const before = (id) => results[id].filter((r) => r.gw < gw);
+    const scores = managerIds.flatMap((id) => before(id).map((r) => r.pf));
+    const mean = scores.length ? sum(scores) / scores.length : leagueMean;
+    return (id) => mean + FORM_WEIGHT * (rating(before(id), mean) - mean);
+  };
+  const keptOdds = new Map((previous?.matches ?? []).filter((m) => m.odds).map((m) => [`${m.gw}:${m.home}:${m.away}`, m.odds]));
+  for (const m of matches) {
+    if (m.started) {
+      // Pre-match odds: frozen at the last build before the deadline.
+      const kept = keptOdds.get(`${m.gw}:${m.home}:${m.away}`);
+      if (kept) {
+        const { xi, ...odds } = kept;
+        m.odds = odds;
+      } else {
+        const mu = formBefore(m.gw);
+        m.odds = { ...priced(mu(m.home), mu(m.away), sigma), afterwards: true };
+      }
+      continue;
+    }
+    if (m.gw < nextGw || m.gw >= nextGw + ODDS_GAMEWEEKS) continue;
+    m.odds = priced(expectedScore(m.home, m.gw), expectedScore(m.away, m.gw), spreadFor(m.gw));
     if (m.gw === nextGw && hasProjections) m.odds.xi = [projections[m.home].ids, projections[m.away].ids];
   }
 
@@ -695,9 +752,8 @@ async function main() {
       {
         name: t.name,
         short: t.short_name,
-        logo: FOTMOB_TEAM_IDS[t.code]
-          ? `https://images.fotmob.com/image_resources/logo/teamlogo/${FOTMOB_TEAM_IDS[t.code]}_small.png`
-          : `https://resources.premierleague.com/premierleague/badges/50/t${t.code}.png`,
+        logo: `https://resources.premierleague.com/premierleague/badges/t${t.code}.svg`,
+        kit: KIT_COLORS[t.code] ?? null,
       },
     ]),
   );

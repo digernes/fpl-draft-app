@@ -7,7 +7,7 @@ top gameweeks, transfer stats, original squads and each manager's Premier League
 
 - **Overview**: next gameweek with 1 X 2 odds, table with form, the highest-gameweek prize race, PL twins, latest transfers, original-squad tracker.
 - **Table**: All · Form (last 5 GWs) · xG (like FotMob's xG table) · Luck (every week against the league average) · Simulated (how often each manager finishes 1st, 2nd … last over 10,000 runs of the rest of the season) · Total points · PL parallel (the real PL table with managers slotted in on their H2H points), plus a luck card beside it. Phones get a Short/Form switch.
-- **Fixtures**: every gameweek. Tap a match for both XIs with points, auto-subs and DGW flags. Upcoming matches show win probability and projected XIs.
+- **Fixtures**: every gameweek. Tap a match for both XIs with points, auto-subs and DGW flags, plus the pre-match odds, settled after full time the way fotmob.com shows them. Upcoming matches show win probability and projected XIs.
 - **Stats**: top 10 gameweeks, season records, points heatmap, MVPs, bench points.
 - **Transfers**: per-manager table, awards, best pickups, the ones that got away, most-contested waivers, trades, waiver order, hot potatoes, full log.
 - **Draft**: how much of each original squad is left and how many points it produced, the draft board, steals and busts.
@@ -88,6 +88,7 @@ private. Any other static host (Cloudflare Pages, Netlify) works too, as long as
 ## How the numbers are made
 
 - **Top gameweeks and the highest-gameweek prize**: the score minus 4 for every player in the scoring XI (after auto-subs) whose club has two fixtures that gameweek. The best adjusted score holds the prize; on a tie the earlier week wins, and two managers level in the same week share it. Only finished gameweeks count. The list gives every manager's best week a place and fills the rest with the highest remaining scores; weeks only there because of that get a "Best GW" tag.
+- **Pre-match odds**: when a match starts, the build keeps the odds from its last run before the deadline. Matches that started before this existed (GW1–7 of 2026/27) show what the model would have priced with only the results known before that gameweek, and say so.
 - **Odds**: a manager's expected score is the league average, plus 60% of how far their recency-weighted form sits from it, plus (next gameweek only) 30% of how far their best projected XI sits from the league's average projection (FPL's own expected points). The spread comes from this season's scores (at least 13 points). A draw is both sides landing on the same integer. Prices carry a 5% margin and are rounded down onto the standard fractional ladder, so decimal and fractional always agree.
 - **Luck**: every week is played against the league average, and scoring above it is a win. Beating the league average is the same as beating everyone else's average. Luck is your real table points minus those points: what the fixture list gave or took.
 - **Live scores**: each scoring XI's live points plus provisional bonus (the top three BPS in a match get 3, 2 and 1 until the real bonus is in; ties share). A starter who got no minutes once all his club's matches are over makes way for the first bench player who played and keeps the formation legal, as FPL does at the end of the gameweek. A bench player whose match is still to come holds the queue. Replaying GW1–7 this way reproduces every official score and all 22 automatic substitutions. The live table ranks everyone as if the live scores were final.
@@ -101,4 +102,4 @@ private. Any other static host (Cloudflare Pages, Netlify) works too, as long as
 
 - The FPL Draft API is unofficial and undocumented. If it changes, `scripts/build-data.mjs` is the only place to fix.
 - The look follows fotmob.com's colours and layout. The real font (GT Walsheim) is licensed, so the page uses it only if it's installed and otherwise falls back to DM Sans.
-- Player photos and club badges are hotlinked from the Premier League and FotMob image CDNs.
+- Player photos and club crests are loaded from the Premier League's image servers; nothing comes from FotMob.

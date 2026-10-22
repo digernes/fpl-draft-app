@@ -22,7 +22,12 @@ const LIVE_POLL_MS = 30 * 1000; // while Premier League matches are on
 const LIVE_IDLE_MS = 5 * 60 * 1000; // between the match days of a live gameweek
 const POS_ORDER = { GKP: 0, DEF: 1, MID: 2, FWD: 3 };
 const HEAT_STEPS = [35, 45, 55, 65]; // gameweek score bands for the heatmap
-const photoUrl = (code) => `https://resources.premierleague.com/premierleague25/photos/players/40x40/${Number(code)}.png`;
+// The Premier League keeps photos in two places: newer signings only on the first,
+// some older players only on the second.
+const photoUrls = (code) => [
+  `https://resources.premierleague.com/premierleague25/photos/players/40x40/${Number(code)}.png`,
+  `https://resources.premierleague.com/premierleague/photos/players/40x40/p${Number(code)}.png`,
+];
 
 const store = {
   get(key, fallback) {
@@ -82,6 +87,7 @@ function esc(value) {
   return String(value ?? '').replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
 }
 const sum = (xs) => xs.reduce((a, b) => a + b, 0);
+const maxOf = (items, score) => items.reduce((best, item) => (best === undefined || score(item) > score(best) ? item : best), undefined);
 const signed = (n) => (n > 0 ? `+${n}` : `${n}`);
 const pct = (p) => `${Math.round(p * 100)}%`;
 const plural = (n, word, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
@@ -142,10 +148,18 @@ function clubCell(clubId) {
   return `<span class="who">${crest(clubId)}<span class="who-name">${esc(c.name)}</span></span>`;
 }
 
+// Behind every photo sits a silhouette in the club's shirt colours, which shows when
+// the Premier League has no picture of the player (see onPhotoError).
+function kitSvg(clubId) {
+  const [shirt, trim] = club(clubId)?.kit ?? ['var(--kit-none)', 'var(--kit-none-trim)'];
+  return `<svg class="kit" viewBox="0 0 40 40" aria-hidden="true"><circle class="kit-head" cx="20" cy="15" r="7.5"/><path d="M4.5 41c0-8.6 6.2-14.2 15.5-14.2S35.5 32.4 35.5 41Z" fill="${esc(shirt)}" stroke="var(--kit-edge)" stroke-width="1"/><path d="M15.4 27.5 20 32.6l4.6-5.1" fill="none" stroke="${esc(trim)}" stroke-width="2.2" stroke-linejoin="round"/></svg>`;
+}
+
 function photo(pid, size = 32) {
   const p = player(pid);
-  const img = p ? `<img src="${photoUrl(p.code)}" alt="" loading="lazy" onerror="this.remove()">` : '';
-  return `<span class="photo" style="--s:${size}px">${img}</span>`;
+  const [src, fallback] = p ? photoUrls(p.code) : [];
+  const img = p ? `<img src="${src}" data-fallback="${fallback}" alt="" loading="lazy">` : '';
+  return `<span class="photo" style="--s:${size}px">${kitSvg(p?.club)}${img}</span>`;
 }
 
 function ptsPill(pts) {
@@ -267,7 +281,10 @@ const BREAKPOINTS = ['xs', 'sm', 'md', 'lg']; // <380, ≥380, ≥550, ≥768px 
 // not on the row where the container query applies.
 const rowKey = (row) => (row.type === 'club' ? `club-${row.club}` : `m-${row.id}`);
 
-function dataTable(cols, rows, { rowClass = () => '', qual = () => null } = {}) {
+// `full` shows every desktop column whatever the width (narrow-only columns aside), in a
+// box that scrolls sideways, like fotmob.com's Full table on a phone.
+function dataTable(cols, rows, { rowClass = () => '', qual = () => null, full = false } = {}) {
+  if (full) cols = cols.filter((c) => !c.until).map((c) => ({ ...c, from: 'xs', w: typeof c.w === 'object' ? c.w.lg : c.w }));
   const visible = (col, bp) => {
     const i = BREAKPOINTS.indexOf(bp);
     return BREAKPOINTS.indexOf(col.from ?? 'xs') <= i && i <= BREAKPOINTS.indexOf(col.until ?? 'lg');
@@ -282,7 +299,11 @@ function dataTable(cols, rows, { rowClass = () => '', qual = () => null } = {}) 
       return `<div class="trow ${rowClass(row)}${q ? ' qual' : ''}" data-key="${rowKey(row)}"${q ? ` style="--qual:${q}"` : ''}>${cols.map((col) => cell(col, col.cell(row))).join('')}</div>`;
     })
     .join('');
-  return `<div class="ftable" style="${templates}"><div class="trow thead">${head}</div>${body}</div>`;
+  // Wide enough for the desktop layout: fixed columns, 12px gaps, 24px end padding and
+  // ~150px for the manager column; never under 560px so the form pills get desktop gaps.
+  const minWidth = Math.max(560, sum(cols.map((c) => (/^\d+px$/.test(c.w) ? parseInt(c.w, 10) : 150))) + 12 * (cols.length - 1) + 24);
+  const table = `<div class="ftable${full ? ' full' : ''}" style="${templates}${full ? `;min-width:${minWidth}px` : ''}"><div class="trow thead">${head}</div>${body}</div>`;
+  return full ? `<div class="table-scroll">${table}</div>` : table;
 }
 
 // The position gets 24px after its padding (8/16/24px), enough for "20" in DM Sans.
@@ -301,9 +322,15 @@ function livePill(match) {
 // The table as it would stand if every live score ended as it is now (fotmob.com's
 // live table): finished matches plus the ones being played.
 function liveStandings() {
+  const official = new Map(D.tables.overall.map((r) => [r.id, r]));
+  return tableFrom(D.matches.filter((x) => x.started)).map((r) => ({ ...official.get(r.id), ...r }));
+}
+
+// Standings from a set of matches, ranked like the real table: points, then points scored.
+function tableFrom(matches) {
   const { win, draw, loss } = D.meta.scoring;
-  const rows = new Map(D.tables.overall.map((r) => [r.id, { ...r, played: 0, won: 0, drawn: 0, lost: 0, pf: 0, pa: 0, pts: 0 }]));
-  for (const m of D.matches.filter((x) => x.started)) {
+  const rows = new Map(D.managers.map((m) => [m.id, { id: m.id, played: 0, won: 0, drawn: 0, lost: 0, pf: 0, pa: 0, pts: 0 }]));
+  for (const m of matches) {
     for (const [id, pf, pa] of [[m.home, m.homePts, m.awayPts], [m.away, m.awayPts, m.homePts]]) {
       const r = rows.get(id);
       if (!r) continue;
@@ -338,7 +365,14 @@ const standingsCols = () => {
   ];
 };
 
-const tableModeToggle = (cls = '') => `<div class="narrow-only ${cls}">${seg('table-mode', [['short', 'Short'], ['form', 'Form']], state.tableMode)}</div>`;
+// Phones: Short (the columns that fit), Form (pills instead of numbers, standings only)
+// or Full (the desktop table, scrolling sideways).
+const hasFormMode = (viewId) => ['overall', 'form'].includes(viewId);
+function tableModeToggle(viewId, cls = '') {
+  const options = [['short', 'Short'], ...(hasFormMode(viewId) ? [['form', 'Form']] : []), ['full', 'Full']];
+  const current = state.tableMode === 'form' && !hasFormMode(viewId) ? 'short' : state.tableMode;
+  return `<div class="narrow-only ${cls}">${seg('table-mode', options, current)}</div>`;
+}
 
 const TABLE_VIEWS = {
   overall: {
@@ -465,7 +499,7 @@ function parallelRows() {
 function standingsTable(viewId) {
   const view = TABLE_VIEWS[viewId];
   const rows = view.rows();
-  const table = dataTable(view.cols(), rows, { rowClass: view.rowClass, qual: (r) => view.qual?.(r, rows) });
+  const table = dataTable(view.cols(), rows, { rowClass: view.rowClass, qual: (r) => view.qual?.(r, rows), full: state.tableMode === 'full' });
   const info = view.info
     ? `<button type="button" class="info-btn" data-tip="${esc(view.info())}" aria-label="How this is worked out">${infoSvg}</button>`
     : '';
@@ -505,25 +539,38 @@ function matchBlock(m) {
     <button type="button" class="match" data-action="match" data-value="${key}" aria-expanded="${open}">
       ${side(m.home, 'home')}<span class="mid">${center}</span>${side(m.away, 'away')}
     </button>
-    ${m.odds ? oddsRow(m) : ''}
+    ${m.odds && !m.started ? oddsRow(m) : ''}
     ${open ? matchDetail(m) : ''}
   </div>`;
 }
 
-function oddsRow(m) {
+// `outcome` (0 home, 1 draw, 2 away) settles the row the way fotmob.com does after full
+// time: the losing selections go grey with their price struck through.
+function oddsRow(m, outcome = null) {
   const labels = ['1', 'X', '2'];
   const who = [`${mgr(m.home).first} to win`, 'Draw', `${mgr(m.away).first} to win`];
   return `<div class="odds">${m.odds.prices
     .map(
       (price, i) =>
-        `<span class="odd" data-tip="${esc(who[i])} · ${pct(m.odds.p[i])} chance"><span class="odd-label">${labels[i]}</span><span class="odd-price">${priceText(price)}</span></span>`,
+        `<span class="odd${outcome !== null && i !== outcome ? ' lost' : ''}" data-tip="${esc(who[i])} · ${pct(m.odds.p[i])} chance"><span class="odd-label">${labels[i]}</span><span class="odd-price">${priceText(price)}</span></span>`,
     )
     .join('')}</div>`;
 }
 
+function preMatchOdds(m) {
+  if (!m.odds) return '';
+  const outcome = !m.finished ? null : m.homePts > m.awayPts ? 0 : m.homePts === m.awayPts ? 1 : 2;
+  // The first gameweek priced before its deadline, so kept rather than worked out afterwards.
+  const keptFrom = Math.min(...D.matches.filter((x) => x.odds && !x.odds.afterwards).map((x) => x.gw));
+  const tip = m.odds.afterwards
+    ? `Worked out afterwards from form before the gameweek; from GW ${keptFrom} on, the odds are the ones at the deadline`
+    : 'The odds at the deadline';
+  return `<div class="detail-odds"><div class="detail-label">Pre-match odds <span class="muted" data-tip="${tip}">${m.odds.afterwards ? '· worked out afterwards' : '· at the deadline'}</span></div>${oddsRow(m, outcome)}</div>`;
+}
+
 function matchDetail(m) {
   if (!m.started) return upcomingDetail(m);
-  return `<div class="match-detail"><div class="lineups">${lineupColumn(m.home, m.gw)}${lineupColumn(m.away, m.gw)}</div></div>`;
+  return `<div class="match-detail">${preMatchOdds(m)}<div class="lineups">${lineupColumn(m.home, m.gw)}${lineupColumn(m.away, m.gw)}</div></div>`;
 }
 
 function lineupColumn(id, gw) {
@@ -604,7 +651,7 @@ function roundCard() {
 function tableCard() {
   return card({
     title: 'Table',
-    action: tableModeToggle(),
+    action: tableModeToggle('overall'),
     body: standingsTable('overall'),
     footer: { href: '#table', label: 'Full table' },
   });
@@ -761,9 +808,83 @@ function retentionMiniCard() {
 
 // --- Views -------------------------------------------------------------------------
 
+// --- Gameweek review ----------------------------------------------------------------
+
+function gameweekReviewCard(gw, { limit = Infinity, footer = null } = {}) {
+  const games = D.matches.filter((m) => m.gw === gw && m.started);
+  if (!games.length) return '';
+  const live = games.some((m) => !m.finished);
+  const scores = games.flatMap((m) => [
+    { id: m.home, pts: m.homePts, opp: m.away, oppPts: m.awayPts },
+    { id: m.away, pts: m.awayPts, opp: m.home, oppPts: m.homePts },
+  ]);
+  const verdict = (s) => `${s.pts > s.oppPts ? 'beat' : s.pts < s.oppPts ? 'lost to' : 'drew with'} ${first(s.opp)} ${s.pts}-${s.oppPts}`;
+  const margin = (m) => Math.abs(m.homePts - m.awayPts);
+  const winnerOf = (m) => (m.homePts > m.awayPts ? { id: m.home, loser: m.away, side: 0 } : { id: m.away, loser: m.home, side: 2 });
+  const matchText = (m) => {
+    const { id, loser } = winnerOf(m);
+    return `${first(id)} ${Math.max(m.homePts, m.awayPts)}-${Math.min(m.homePts, m.awayPts)} ${first(loser)}`;
+  };
+  const pair = (m) => `<span class="stack">${avatar(m.home, 24)}${avatar(m.away, 24)}</span>`;
+  const decided = games.filter((m) => margin(m) > 0);
+
+  const top = maxOf(scores, (s) => s.pts);
+  const low = maxOf(scores, (s) => -s.pts);
+  const biggest = maxOf(decided, margin);
+  const closest = maxOf(decided, (m) => -margin(m));
+  const star = maxOf(
+    D.managers.flatMap((mg) => (lineupFor(mg.id, gw)?.xi ?? []).map((pid) => ({ pid, id: mg.id, pts: gwPoints(pid, gw) }))),
+    (x) => x.pts,
+  );
+  // The winner the pre-match odds liked least, if they were the outsider.
+  const upset = maxOf(
+    decided
+      .filter((m) => m.odds)
+      .map((m) => ({ ...winnerOf(m), p: m.odds.p[winnerOf(m).side], price: m.odds.prices[winnerOf(m).side] }))
+      .filter((u) => u.p < 0.4),
+    (u) => -u.p,
+  );
+  const before = gw > D.meta.firstGw ? tableFrom(D.matches.filter((m) => m.started && m.gw < gw)) : null;
+  const after = tableFrom(D.matches.filter((m) => m.started && m.gw <= gw));
+  const movers = before ? after.map((r) => ({ id: r.id, rank: r.rank, change: before.find((b) => b.id === r.id).rank - r.rank })) : [];
+  const climber = maxOf(movers.filter((x) => x.change > 0), (x) => x.change);
+  const faller = maxOf(movers.filter((x) => x.change < 0), (x) => -x.change);
+  const signing = maxOf(
+    D.transfers.moves
+      .filter((mv) => mv.gw === gw && player(mv.in))
+      .map((mv) => ({ mv, pts: gwPoints(mv.in, gw) }))
+      .filter((s) => s.pts > 0),
+    (s) => s.pts,
+  );
+  const bench = maxOf(D.managers.map((mg) => ({ id: mg.id, pts: lineupFor(mg.id, gw)?.benchPts ?? 0 })), (b) => b.pts);
+  const move = (x, tone) => `<span class="rank-delta ${tone}">${triangleSvg}${Math.abs(x.change)}</span>`;
+
+  const rows = [
+    top && listRow({ lead: avatar(top.id, 32), title: 'Top score', meta: `${first(top.id)} · ${verdict(top)}`, value: top.pts, top: true }),
+    star && listRow({ lead: photo(star.pid), title: 'Player of the week', meta: `${esc(player(star.pid).name)} ${crest(player(star.pid).club, 14)} · for ${first(star.id)}`, value: star.pts }),
+    biggest && listRow({ lead: pair(biggest), title: 'Biggest win', meta: matchText(biggest), value: `+${margin(biggest)}` }),
+    upset && listRow({ lead: avatar(upset.id, 32), title: 'Upset', meta: `${first(upset.id)} beat ${first(upset.loser)} at ${priceText(upset.price)}`, value: pct(upset.p) }),
+    climber && listRow({ lead: avatar(climber.id, 32), title: 'Climber', meta: `${first(climber.id)}, up to ${ordinal(climber.rank)}`, value: move(climber, 'good') }),
+    faller && listRow({ lead: avatar(faller.id, 32), title: 'Faller', meta: `${first(faller.id)}, down to ${ordinal(faller.rank)}`, value: move(faller, 'bad') }),
+    signing && listRow({ lead: photo(signing.mv.in), title: 'Best new signing', meta: `${esc(player(signing.mv.in).name)} · ${MOVE_TYPES[signing.mv.type]} for ${first(signing.mv.manager)}`, value: signing.pts }),
+    bench?.pts > 0 && listRow({ lead: avatar(bench.id, 32), title: 'Left on the bench', meta: first(bench.id), value: bench.pts }),
+    closest && closest !== biggest && listRow({ lead: pair(closest), title: 'Closest match', meta: matchText(closest), value: `+${margin(closest)}` }),
+    low && listRow({ lead: avatar(low.id, 32), title: 'Lowest score', meta: `${first(low.id)} · ${verdict(low)}`, value: low.pts }),
+  ].filter(Boolean);
+  const average = Math.round(sum(scores.map((s) => s.pts)) / scores.length);
+  return card({
+    title: `Gameweek ${gw} ${live ? 'so far' : 'review'}`,
+    sub: `Average score ${average}${live ? ' · live' : ''}`,
+    body: `<div class="list">${rows.slice(0, limit).join('')}</div>`,
+    footer,
+  });
+}
+
 function viewOverview() {
+  const reviewGw = D.meta.lastFinishedGw;
+  const review = reviewGw ? gameweekReviewCard(reviewGw, { limit: 5, footer: { href: `#fixtures/${reviewGw}`, label: 'Full review' } }) : '';
   return `<div class="cols">
-    <div class="col">${roundCard()}${tableCard()}</div>
+    <div class="col">${roundCard()}${review}${tableCard()}</div>
     <div class="col">${gwPrizeCard()}${latestMovesCard()}${retentionMiniCard()}</div>
   </div>`;
 }
@@ -773,7 +894,7 @@ function viewTable() {
     .map(([id, v]) => chip(v.label, 'table-view', id, state.tableView === id))
     .join('');
   return `<div class="cols">
-    <div class="col">${card({ body: `<div class="filter-bar">${chips}</div>${['overall', 'form'].includes(state.tableView) ? tableModeToggle('table-tools') : ''}${standingsTable(state.tableView)}` })}</div>
+    <div class="col">${card({ body: `<div class="filter-bar">${chips}</div>${tableModeToggle(state.tableView, 'table-tools')}${standingsTable(state.tableView)}` })}</div>
     <div class="col">${twinsCard()}${luckCard()}</div>
   </div>`;
 }
@@ -816,7 +937,7 @@ function viewFixtures() {
   const doubles = info?.doubles?.length ? `<div class="table-note">Double gameweek for ${info.doubles.map((c) => esc(club(c).name)).join(', ')}</div>` : '';
   return `<div class="cols">
     <div class="col">${card({ header: nav, action: list.some((m) => m.odds) ? oddsToggle() : '', body: `${groupHead}${matchList(list)}${doubles}` })}</div>
-    <div class="col">${headToHeadCard(gw)}</div>
+    <div class="col">${gameweekReviewCard(gw)}${headToHeadCard(gw)}</div>
   </div>`;
 }
 
@@ -1385,6 +1506,7 @@ function goToGameweek(gw) {
 
 function bindChrome() {
   document.addEventListener('click', onClick);
+  document.addEventListener('error', onPhotoError, true); // image errors don't bubble
   document.addEventListener('change', (event) => {
     if (event.target.matches('[data-action="gw-select"]')) goToGameweek(Number(event.target.value));
     if (event.target.matches('[data-action="season"]')) switchSeason(event.target.value);
@@ -1413,6 +1535,18 @@ function bindChrome() {
 
   bindSearch();
   bindTooltips();
+}
+
+// A photo that fails tries the other address, then gets out of the way of the kit.
+function onPhotoError(event) {
+  const img = event.target;
+  if (!(img instanceof HTMLImageElement) || !img.closest('.photo')) return;
+  if (img.dataset.fallback) {
+    img.src = img.dataset.fallback;
+    delete img.dataset.fallback;
+  } else {
+    img.remove();
+  }
 }
 
 function closeMenu() {
