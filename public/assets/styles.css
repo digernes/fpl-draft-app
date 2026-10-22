@@ -515,6 +515,33 @@ img {
   min-width: 0;
 }
 
+/* The Stats tab's season view: on one column the top gameweeks go first, under the filters. */
+.stats-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+@media (max-width: 1024px) {
+  .stats-layout > .cols,
+  .stats-layout > .cols > .col {
+    display: contents;
+  }
+
+  .stats-layout > .filter-card {
+    order: -2;
+  }
+
+  .stats-layout .top-gameweeks {
+    order: -1;
+  }
+}
+
+.filter-card .filter-bar {
+  border-bottom: 0;
+}
+
 @media (min-width: 1025px) {
   .cols {
     grid-template-columns: minmax(600px, 1fr) minmax(0, 416px);
@@ -1084,6 +1111,11 @@ img {
 
   .ftable.full .trow.featured .c-team {
     background: var(--featured);
+  }
+
+  /* Just the manager and the numbers: the team names would only widen the scroll. */
+  .ftable.full .who-team {
+    display: none;
   }
 }
 
@@ -1898,6 +1930,26 @@ img {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Where each player's match stands in a live gameweek: minute, FT or kick-off. */
+.lp-state {
+  flex: none;
+  color: var(--text-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lp-state.is-live {
+  color: var(--green-text);
+  font-weight: 500;
+}
+
+.lineup-state {
+  padding: 6px 0 2px;
+  color: var(--text-2);
+  font-size: 12px;
 }
 
 .lp .ptsp {

@@ -1,20 +1,29 @@
-// The Stats tab: records, top and worst gameweeks, the heatmap and season leaders.
+// The Stats tab: the season (records, top and worst gameweeks, the heatmap, season
+// leaders) and, under Transfers, the transfer stats.
 
 import type { Decided } from '../../shared/data.ts';
 import { resultText } from '../cards.ts';
-import { avatar, card, crest, empty, listRow, photo, tag } from '../components.ts';
+import { avatar, card, chip, crest, empty, listRow, photo, tag } from '../components.ts';
 import { esc } from '../format.ts';
 import { first, mgr, player, seasonStat } from '../lookups.ts';
-import { D } from '../state.ts';
+import { D, state } from '../state.ts';
+import { transferStats } from './transfers.ts';
 
 const HEAT_STEPS = [35, 45, 55, 65]; // gameweek score bands for the heatmap
 
 export function viewStats() {
-  return `${recordsCard()}
+  const chips = [
+    chip('Season', 'stats-view', 'season', state.statsView === 'season'),
+    chip('Transfers', 'stats-view', 'transfers', state.statsView === 'transfers'),
+  ];
+  const filters = card({ body: `<div class="filter-bar">${chips.join('')}</div>`, cls: 'filter-card' });
+  if (state.statsView === 'transfers') return `${filters}${transferStats()}`;
+  // One column on phones, with the top gameweeks first (see .stats-layout).
+  return `<div class="stats-layout">${filters}${recordsCard()}
   <div class="cols">
     <div class="col">${topGameweeksCard(D.topGameweeks.length)}${heatmapCard()}</div>
     <div class="col">${mvpCard()}${worstGameweeksCard()}${benchCard()}</div>
-  </div>`;
+  </div></div>`;
 }
 
 function topGameweeksCard(limit: number) {
@@ -38,6 +47,7 @@ function topGameweeksCard(limit: number) {
     });
   });
   return card({
+    cls: 'top-gameweeks',
     title: 'Top gameweeks',
     sub: `−${D.meta.dgwPenalty} per double-gameweek player in the XI · earlier week wins a tie · every manager included`,
     body: `<div class="list">${rows.join('')}</div>`,

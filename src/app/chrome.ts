@@ -2,7 +2,7 @@
 
 import { avatar, crest, empty, photo, tag } from './components.ts';
 import { esc } from './format.ts';
-import { loadData, scheduleRefresh } from './live-scores.ts';
+import { applyLatestLive, loadData, scheduleRefresh } from './live-scores.ts';
 import { club, first, matchKey, seasonSlug } from './lookups.ts';
 import { placeTabIndicator, renderAll, renderView, syncSettings } from './render.ts';
 import { D, seasons, state, store, TABS } from './state.ts';
@@ -23,6 +23,7 @@ async function switchSeason(slug: string) {
   } catch {
     return; // keep the season we have
   }
+  applyLatestLive();
   renderAll();
   scheduleRefresh();
 }
@@ -31,6 +32,7 @@ export function readRoute() {
   const [tab, arg] = location.hash.slice(1).split('/');
   state.tab = TABS.some((t) => t.id === tab) ? tab : 'overview';
   if (state.tab === 'fixtures' && arg) state.gw = Number(arg) || state.gw;
+  if (state.tab === 'stats') state.statsView = arg === 'transfers' ? 'transfers' : 'season';
 }
 
 export function applyTheme() {
@@ -64,6 +66,10 @@ function onClick(event: MouseEvent) {
     if (state.tab === 'table') withRowMoves(renderView);
   } else if (action === 'gw') {
     goToGameweek(Number(value));
+  } else if (action === 'stats-view') {
+    state.statsView = value;
+    history.replaceState(null, '', value === 'transfers' ? '#stats/transfers' : '#stats');
+    renderView();
   } else if (action === 'log') {
     state.logManager = value;
     renderView();

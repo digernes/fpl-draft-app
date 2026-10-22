@@ -3,7 +3,8 @@
 // around it, and prices rounded down onto the UK fractional ladder.
 
 import type { Data, Match, MatchResult, Odds, Price } from '../shared/data.ts';
-import { FORM_WEIGHT, FRACTIONS, MIN_SCORE_SPREAD, ODDS_GAMEWEEKS, ODDS_OVERROUND, POSITIONS, PROJECTION_WEIGHT } from './config.ts';
+import { price as sharedPrice, winDrawWin } from '../shared/odds.ts';
+import { FORM_WEIGHT, MIN_SCORE_SPREAD, ODDS_GAMEWEEKS, ODDS_OVERROUND, POSITIONS, PROJECTION_WEIGHT } from './config.ts';
 import type { Season } from './season.ts';
 import type { Results } from './tables.ts';
 import { round, sum } from './util.ts';
@@ -13,6 +14,7 @@ export type OddsModel = ReturnType<typeof oddsModel>;
 export function oddsModel(season: Season, managerIds: number[], results: Results, scoresByGw: Record<string, { pts: number }[]>) {
   const { elements, ownerNow, fplBoot, boot, nextGw } = season;
   const epByCode = new Map((fplBoot?.elements ?? []).map((el) => [el.code, Number(el.ep_next)]));
+  const epNowByCode = new Map((fplBoot?.elements ?? []).map((el) => [el.code, Number(el.ep_this)]));
   const expected = (pid: number) => {
     const el = elements.get(pid);
     if (!el) return 0;
@@ -44,7 +46,13 @@ export function oddsModel(season: Season, managerIds: number[], results: Results
     (gw === nextGw && hasProjections ? PROJECTION_WEIGHT * (projections[id].pts - meanProjection) : 0);
   const spreadFor = (gw: number) => sigma * (gw === nextGw ? 1 : 1.1);
 
-  return { expected, projections, leagueMean, sigma, hasProjections, expectedScore, spreadFor };
+  // This gameweek's expected points, for the live odds while it is being played.
+  const expectedNow = (pid: number) => {
+    const ep = epNowByCode.get(elements.get(pid)?.code ?? -1);
+    return Number.isFinite(ep) ? (ep as number) : expected(pid);
+  };
+
+  return { expected, expectedNow, projections, leagueMean, sigma, hasProjections, expectedScore, spreadFor };
 }
 
 // Prices every match in the next ODDS_GAMEWEEKS gameweeks. A started match keeps the
@@ -135,27 +143,8 @@ export function rating(results: MatchResult[], leagueMean: number, decay = 0.85,
   return weighted / weights;
 }
 
-// Both scores ~ Normal(mu, sigma); a draw is the two landing on the same integer.
-export function winDrawWin(muHome: number, muAway: number, sigma: number) {
-  const spread = Math.SQRT2 * sigma;
-  const diff = muHome - muAway;
-  const home = 1 - normalCdf((0.5 - diff) / spread);
-  const away = normalCdf((-0.5 - diff) / spread);
-  return { home, draw: 1 - home - away, away };
-}
-
-export function normalCdf(x: number): number {
-  // Abramowitz & Stegun 7.1.26
-  const z = Math.abs(x) / Math.SQRT2;
-  const t = 1 / (1 + 0.3275911 * z);
-  const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
-  const erf = 1 - poly * Math.exp(-z * z);
-  return x >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
-}
+export { normalCdf, winDrawWin } from '../shared/odds.ts';
 
 export function price(probability: number): Price {
-  const fair = 1 / (probability * ODDS_OVERROUND);
-  let [num, den] = FRACTIONS[0];
-  for (const [n, d] of FRACTIONS) if (1 + n / d <= fair + 1e-9) [num, den] = [n, d];
-  return { dec: round(1 + num / den, 2), frac: `${num}/${den}` };
+  return sharedPrice(probability, ODDS_OVERROUND);
 }

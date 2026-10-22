@@ -21,6 +21,7 @@ export function ordinal(n: number) {
 const dateFormat = (options: Intl.DateTimeFormatOptions) => new Intl.DateTimeFormat(undefined, options);
 export const fmtDay = dateFormat({ weekday: 'long', day: 'numeric', month: 'long' });
 export const fmtShortDay = dateFormat({ weekday: 'short', day: 'numeric', month: 'short' });
+export const fmtWeekday = dateFormat({ weekday: 'short' });
 export const fmtTime = dateFormat({ hour: '2-digit', minute: '2-digit' });
 export const fmtStamp = dateFormat({ day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 const relative = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });

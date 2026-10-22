@@ -3,6 +3,7 @@ import { describe, it } from 'node:test';
 
 import { bestXi, normalCdf, price, rating, winDrawWin } from '../src/build/odds.ts';
 import { gaussian, mulberry32 } from '../src/build/simulation.ts';
+import { liveOdds } from '../src/shared/odds.ts';
 import { matchResult, streaks } from '../src/build/tables.ts';
 
 describe('prices', () => {
@@ -92,5 +93,20 @@ describe('streaks', () => {
     const results = [60, 60, 40, 60, 60, 60, 50].map((pf, i) => matchResult(i + 1, 0, pf, 50));
     assert.deepEqual(streaks(results), { bestWin: 3, current: 'D1' });
     assert.deepEqual(streaks([]), { bestWin: 0, current: null });
+  });
+});
+
+describe('live odds', () => {
+  it('favour the side ahead, more so as the gameweek runs out', () => {
+    const early = liveOdds({ mean: 50, variance: 90 }, { mean: 45, variance: 90 }, 1.05);
+    const late = liveOdds({ mean: 50, variance: 4 }, { mean: 45, variance: 4 }, 1.05);
+    assert.ok(early.p[0] > early.p[2] && late.p[0] > early.p[0]);
+  });
+  it('settle once nothing is left to play', () => {
+    const over = liveOdds({ mean: 52, variance: 0 }, { mean: 48, variance: 0 }, 1.05);
+    assert.deepEqual(over.p, [1, 0, 0]);
+    assert.equal(over.prices[0].dec, 1.01);
+    const level = liveOdds({ mean: 50, variance: 0 }, { mean: 50, variance: 0 }, 1.05);
+    assert.deepEqual(level.p, [0, 1, 0]);
   });
 });

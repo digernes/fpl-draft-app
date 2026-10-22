@@ -1,10 +1,12 @@
 // Head-to-head matches: the list, odds and the expanded match.
 
-import type { Match } from '../shared/data.ts';
+import type { Match, Odds } from '../shared/data.ts';
+import { clubState, liveProjection, type PlayerState } from '../shared/live.ts';
+import { liveOdds } from '../shared/odds.ts';
 import { avatar, crest, empty, ptsPill, seg, tag } from './components.ts';
-import { esc, fmtShortDay, fmtTime, pct, plural, priceText, sum } from './format.ts';
+import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, plural, priceText, sum } from './format.ts';
 import { first, gwInfo, gwPoints, isLive, lineupFor, matchKey, mgr, player, slotOf } from './lookups.ts';
-import { D, LIVE_URL, state } from './state.ts';
+import { D, live, LIVE_URL, state } from './state.ts';
 
 const POS_ORDER = { GKP: 0, DEF: 1, MID: 2, FWD: 3 };
 
@@ -22,6 +24,7 @@ export function matchList(list: Match[]) {
 function matchBlock(m: Match) {
   const key = matchKey(m);
   const open = state.openMatch === key;
+  const inPlay = m.started && !m.finished ? inPlayOdds(m) : null;
   const deadline = gwInfo(m.gw)?.deadline;
   const center = m.started
     ? `<span class="score${m.finished ? '' : ' is-live'}">${m.homePts} - ${m.awayPts}</span>${m.finished ? '' : '<span class="live-label">Live</span>'}`
@@ -32,22 +35,44 @@ function matchBlock(m: Match) {
     <button type="button" class="match" data-action="match" data-value="${key}" aria-expanded="${open}">
       ${side(m.home, 'home')}<span class="mid">${center}</span>${side(m.away, 'away')}
     </button>
-    ${m.odds && !m.started ? oddsRow(m) : ''}
+    ${m.odds && !m.started ? oddsRow(m.odds, m) : inPlay ? oddsRow(inPlay, m, null, true) : ''}
     ${open ? matchDetail(m) : ''}
   </div>`;
 }
 
 // `outcome` (0 home, 1 draw, 2 away) settles the row the way fotmob.com does after full
 // time: the losing selections go grey with their price struck through.
-function oddsRow(m: Match, outcome: number | null = null) {
+function oddsRow(odds: Pick<Odds, 'p' | 'prices'>, m: Match, outcome: number | null = null, inPlay = false) {
   const labels = ['1', 'X', '2'];
   const who = [`${mgr(m.home)!.first} to win`, 'Draw', `${mgr(m.away)!.first} to win`];
-  return `<div class="odds">${m
-    .odds!.prices.map(
+  return `<div class="odds${inPlay ? ' in-play' : ''}">${odds.prices
+    .map(
       (price, i) =>
-        `<span class="odd${outcome !== null && i !== outcome ? ' lost' : ''}" data-tip="${esc(who[i])} · ${pct(m.odds!.p[i])} chance"><span class="odd-label">${labels[i]}</span><span class="odd-price">${priceText(price)}</span></span>`,
+        `<span class="odd${outcome !== null && i !== outcome ? ' lost' : ''}" data-tip="${esc(who[i])} · ${pct(odds.p[i])} chance${inPlay ? ' (live)' : ''}"><span class="odd-label">${labels[i]}</span><span class="odd-price">${priceText(price)}</span></span>`,
     )
     .join('')}</div>`;
+}
+
+const playerInfo = (pid: number) => player(pid) ?? { pos: undefined, club: undefined };
+
+// Live odds for a match in play: both scores so far, plus FPL's expected points for
+// whatever each XI still has to play, with the uncertainty shrinking as games finish.
+function inPlayOdds(m: Match) {
+  const home = live?.gw === m.gw ? live.lineups[m.home] : undefined;
+  const away = live?.gw === m.gw ? live.lineups[m.away] : undefined;
+  if (!live || !home || !away) return null;
+  const ep = (pid: number) => D.live?.ep[pid] ?? player(pid)?.ep ?? 0;
+  return liveOdds(liveProjection(home, live.feed, playerInfo, ep), liveProjection(away, live.feed, playerInfo, ep), D.meta.oddsOverround);
+}
+
+// FotMob-style match state next to each player in a live gameweek.
+function stateLabel(s: PlayerState) {
+  if (s.state === 'live') return `<span class="lp-state is-live" data-tip="Playing now">${Math.max(1, s.min)}'</span>`;
+  if (s.state === 'done') return `<span class="lp-state" data-tip="Match over">FT</span>`;
+  if (s.state === 'blank') return `<span class="lp-state" data-tip="No match this gameweek">–</span>`;
+  const ko = s.ko ? new Date(s.ko) : null;
+  // Phones only have room for the time.
+  return `<span class="lp-state" data-tip="Still to play">${ko ? `<span class="wide-only">${fmtWeekday.format(ko)} </span>${fmtTime.format(ko)}` : 'TBC'}</span>`;
 }
 
 function preMatchOdds(m: Match) {
@@ -58,7 +83,7 @@ function preMatchOdds(m: Match) {
   const tip = m.odds.afterwards
     ? `Worked out afterwards from form before the gameweek; from GW ${keptFrom} on, the odds are the ones at the deadline`
     : 'The odds at the deadline';
-  return `<div class="detail-odds"><div class="detail-label">Pre-match odds <span class="muted" data-tip="${tip}">${m.odds.afterwards ? '· worked out afterwards' : '· at the deadline'}</span></div>${oddsRow(m, outcome)}</div>`;
+  return `<div class="detail-odds"><div class="detail-label">Pre-match odds <span class="muted" data-tip="${tip}">${m.odds.afterwards ? '· worked out afterwards' : '· at the deadline'}</span></div>${oddsRow(m.odds, m, outcome)}</div>`;
 }
 
 function matchDetail(m: Match) {
@@ -69,6 +94,7 @@ function matchDetail(m: Match) {
 function lineupColumn(id: number, gw: number) {
   const l = lineupFor(id, gw);
   if (!l) return `<div class="lineup">${empty('No lineup')}</div>`;
+  const feed = live?.gw === gw ? live.feed : null;
   const doubles = new Set(gwInfo(gw)?.doubles ?? []);
   const byPosition = (ids: number[]) => [...ids].sort((a, b) => POS_ORDER[player(a).pos] - POS_ORDER[player(b).pos]);
   const row = (pid: number, benched: boolean) => {
@@ -77,13 +103,26 @@ function lineupColumn(id: number, gw: number) {
       l.subs.includes(pid) ? tag('Sub', 'Came on as an automatic substitute', 'tag-sub') : '',
       doubles.has(p.club) ? tag('DGW', 'Plays twice this gameweek', 'tag-dgw') : '',
     ].join('');
-    return `<div class="lp${benched ? ' benched' : ''}"><span class="lp-pos">${p.pos}</span>${crest(p.club, 16)}<span class="lp-name">${esc(p.name)}${flags}</span>${ptsPill(gwPoints(pid, gw))}</div>`;
+    const status = feed ? stateLabel(clubState(feed, p.club)) : '';
+    return `<div class="lp${benched ? ' benched' : ''}"><span class="lp-pos">${p.pos}</span>${crest(p.club, 16)}<span class="lp-name">${esc(p.name)}${flags}</span>${status}${ptsPill(gwPoints(pid, gw))}</div>`;
   };
+  // How far through the gameweek the scoring XI is.
+  const states = feed ? l.xi.map((pid) => clubState(feed, player(pid).club).state) : [];
+  const count = (...wanted: PlayerState['state'][]) => states.filter((s) => wanted.includes(s)).length;
+  const progress = feed
+    ? `<div class="lineup-state">${[
+        count('live') && `${count('live')} playing`,
+        count('due') && `${count('due')} to play`,
+        count('done', 'blank') && `${count('done', 'blank')} done`,
+      ]
+        .filter(Boolean)
+        .join(' · ')}</div>`
+    : '';
   const adjusted = l.dgw
     ? ` <span class="muted" data-tip="${D.meta.dgwPenalty} off per double-gameweek player in the XI">(${l.adj} adj.)</span>`
     : '';
   return `<div class="lineup">
-    <div class="lineup-head">${avatar(id, 24)}<span class="lineup-name">${first(id)}</span><span class="lineup-total">${l.pts}${adjusted}</span></div>
+    <div class="lineup-head">${avatar(id, 24)}<span class="lineup-name">${first(id)}</span><span class="lineup-total">${l.pts}${adjusted}</span></div>${progress}
     ${byPosition(l.xi)
       .map((pid) => row(pid, false))
       .join('')}
@@ -127,6 +166,21 @@ export function roundSubtitle(gw: number) {
     parts.push(`waivers ${fmtShortDay.format(new Date(D.meta.nextWaivers))}, ${fmtTime.format(new Date(D.meta.nextWaivers))}`);
   }
   return parts.join(' · ');
+}
+
+// The Fixtures tab's date row already says the day, so it only needs the deadline's
+// time; the waivers (also in the header) are left out on phones.
+export function deadlineNote(gw: number) {
+  const info = gwInfo(gw);
+  if (isLive() && gw === D.meta.currentGw)
+    return `Live now<span class="wide-only"> · scores update every ${LIVE_URL ? '30 seconds' : '10 minutes'}</span>`;
+  if (!info?.deadline || info.finished) return roundSubtitle(gw);
+  const waivers = gw === D.meta.nextGw && D.meta.nextWaivers ? new Date(D.meta.nextWaivers) : null;
+  const waiverNote =
+    waivers && waivers.getTime() > Date.now()
+      ? `<span class="wide-only"> · waivers ${fmtShortDay.format(waivers)}, ${fmtTime.format(waivers)}</span>`
+      : '';
+  return `Deadline ${fmtTime.format(new Date(info.deadline))}${waiverNote}`;
 }
 
 // Phones get the odds format from the settings menu only, to keep the card header clear.

@@ -5,7 +5,7 @@ import { avatar, card, listRow } from '../components.ts';
 import { esc, fmtDay } from '../format.ts';
 import { chevronSvg } from '../icons.ts';
 import { club, first, gwInfo } from '../lookups.ts';
-import { featuredGw, matchList, oddsToggle, roundSubtitle } from '../matches.ts';
+import { deadlineNote, featuredGw, matchList, oddsToggle } from '../matches.ts';
 import { D, state } from '../state.ts';
 
 export function viewFixtures() {
@@ -24,7 +24,7 @@ export function viewFixtures() {
     <button type="button" class="icon-btn" data-action="gw" data-value="${gw + 1}" ${gw >= meta.lastGw ? 'disabled' : ''} aria-label="Next gameweek">${chevronSvg('right')}</button>
   </div>`;
   const day = info?.deadline ? fmtDay.format(new Date(info.deadline)) : '';
-  const groupHead = `<div class="date-head"><span>${day}</span><span class="muted">${roundSubtitle(gw)}</span></div>`;
+  const groupHead = `<div class="date-head"><span>${day}</span><span class="muted">${deadlineNote(gw)}</span></div>`;
   const doubles = info?.doubles?.length
     ? `<div class="table-note">Double gameweek for ${info.doubles.map((c) => esc(club(c).name)).join(', ')}</div>`
     : '';
