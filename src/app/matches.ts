@@ -103,8 +103,15 @@ function lineupColumn(id: number, gw: number) {
       l.subs.includes(pid) ? tag('Sub', 'Came on as an automatic substitute', 'tag-sub') : '',
       doubles.has(p.club) ? tag('DGW', 'Plays twice this gameweek', 'tag-dgw') : '',
     ].join('');
-    const status = feed ? stateLabel(clubState(feed, p.club)) : '';
-    return `<div class="lp${benched ? ' benched' : ''}"><span class="lp-pos">${p.pos}</span>${crest(p.club, 16)}<span class="lp-name">${esc(p.name)}${flags}</span>${status}${ptsPill(gwPoints(pid, gw))}</div>`;
+    const match = feed ? clubState(feed, p.club) : null;
+    const pts = gwPoints(pid, gw);
+    // Before kick-off a 0 says nothing, so players still to play show what FPL expects instead.
+    const ep = D.live?.ep[pid] ?? p.ep;
+    const pill =
+      match?.state === 'due' && pts === 0
+        ? `<span class="ptsp xp" data-tip="Expected points (not played yet)">${ep.toFixed(1)}</span>`
+        : ptsPill(pts);
+    return `<div class="lp${benched ? ' benched' : ''}"><span class="lp-pos">${p.pos}</span>${crest(p.club, 16)}<span class="lp-name">${esc(p.name)}${flags}</span>${match ? stateLabel(match) : ''}${pill}</div>`;
   };
   // How far through the gameweek the scoring XI is.
   const states = feed ? l.xi.map((pid) => clubState(feed, player(pid).club).state) : [];
