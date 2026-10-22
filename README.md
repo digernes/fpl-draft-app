@@ -40,8 +40,10 @@ stays browsable from the season picker. `--archive` freezes the current season b
 
 Live scores already update with `data.json`, every 10 minutes during matches. For near
 real-time, the page can poll a tiny Cloudflare Worker (`worker/`) that relays the FPL live
-feed, which browsers can't call themselves. It only answers `/live/<gameweek>`, slims the
-feed from ~450 KB to ~5 KB and shares one fetch per 20 seconds between everyone watching.
+feed, which browsers can't call themselves. It answers only two things: `/live/<gameweek>`
+(the live feed, slimmed from ~450 KB to ~5 KB, one fetch per 20 seconds shared by everyone
+watching) and `/transfers` (this league's moves, trades and owners, refreshed every minute), so
+new transfers show up within a couple of minutes instead of at the next build.
 The page, the Worker and the build all score with `src/shared/live.ts`, which adds provisional
 bonus and provisional auto-subs.
 

@@ -9,3 +9,5 @@ public/assets/app.js
 public/assets/app.js.map
 public/sw.js
 public/sw.js.map
+# wrangler dev state
+.wrangler/

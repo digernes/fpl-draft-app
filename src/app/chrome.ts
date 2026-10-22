@@ -2,7 +2,7 @@
 
 import { avatar, crest, empty, photo, tag } from './components.ts';
 import { esc } from './format.ts';
-import { applyLatestLive, loadData, scheduleRefresh } from './live-scores.ts';
+import { applyLatestLive, applyLatestTransfers, loadData, pollTransfers, scheduleRefresh } from './live-scores.ts';
 import { club, first, matchKey, seasonSlug } from './lookups.ts';
 import { placeTabIndicator, renderAll, renderView, syncSettings } from './render.ts';
 import { D, seasons, state, store, TABS } from './state.ts';
@@ -24,8 +24,10 @@ async function switchSeason(slug: string) {
     return; // keep the season we have
   }
   applyLatestLive();
+  applyLatestTransfers();
   renderAll();
   scheduleRefresh();
+  pollTransfers();
 }
 
 export function readRoute() {

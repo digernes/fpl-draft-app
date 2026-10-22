@@ -20,6 +20,7 @@ export const LIVE_REFRESH_MS = 2 * 60 * 1000; // data.json itself changes about 
 export const LIVE_URL: string = 'https://fpl-draft-live.digernes.workers.dev';
 export const LIVE_POLL_MS = 30 * 1000; // while Premier League matches are on
 export const LIVE_IDLE_MS = 5 * 60 * 1000; // between the match days of a live gameweek
+export const TRANSFERS_POLL_MS = 2 * 60 * 1000; // new moves between builds, from the relay
 
 export const store = {
   get(key: string, fallback: string): string {

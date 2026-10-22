@@ -1,7 +1,8 @@
-// Loading data.json, refreshing it, and live scores from the relay.
+// Loading data.json, refreshing it, and live scores and new transfers from the relay.
 
 import type { Data, SeasonEntry } from '../shared/data.ts';
 import { scoreLineup, type SlimLive } from '../shared/live.ts';
+import { mergeTransfers, type SlimTransfers } from '../shared/transfers.ts';
 import { gwInfo, isArchive, isLive, player, seasonEntry, seasonSlug } from './lookups.ts';
 import { renderAll, renderView } from './render.ts';
 import {
@@ -17,6 +18,7 @@ import {
   setLive,
   setSeasons,
   state,
+  TRANSFERS_POLL_MS,
   type LiveLineup,
 } from './state.ts';
 import { withRowMoves } from './table.ts';
@@ -24,6 +26,8 @@ import { withRowMoves } from './table.ts';
 let lastFetch = 0;
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 let liveTimer: ReturnType<typeof setTimeout> | undefined;
+let transfersTimer: ReturnType<typeof setTimeout> | undefined;
+let latestTransfers: SlimTransfers | null = null;
 
 export async function loadSeasons() {
   try {
@@ -104,6 +108,28 @@ export async function pollLive() {
   liveTimer = setTimeout(pollLive, playing ? LIVE_POLL_MS : LIVE_IDLE_MS);
 }
 
+// Moves made since data.json was built, so the feed and "Who owns…?" keep up between builds.
+export function applyLatestTransfers() {
+  return latestTransfers && !isArchive() ? mergeTransfers(D, latestTransfers) : false;
+}
+
+export async function pollTransfers() {
+  clearTimeout(transfersTimer);
+  if (!LIVE_URL || isArchive()) return;
+  if (!document.hidden) {
+    try {
+      const res = await fetch(`${LIVE_URL}/transfers`, { cache: 'no-store' });
+      if (res.ok) {
+        latestTransfers = (await res.json()) as SlimTransfers;
+        if (applyLatestTransfers()) renderView();
+      }
+    } catch {
+      // The next build brings them anyway.
+    }
+  }
+  transfersTimer = setTimeout(pollTransfers, TRANSFERS_POLL_MS);
+}
+
 export function scheduleRefresh() {
   clearTimeout(refreshTimer);
   if (isArchive()) return; // archived seasons never change
@@ -121,6 +147,7 @@ export async function refresh() {
   try {
     if (await loadData()) {
       applyLatestLive();
+      applyLatestTransfers();
       renderAll();
       pollLive();
     }

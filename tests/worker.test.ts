@@ -44,4 +44,17 @@ describe('live relay', () => {
     mock.method(globalThis, 'fetch', async () => new Response('busy', { status: 503 }));
     assert.equal((await call('/live/7')).status, 502);
   });
+
+  it("relays this league's transfers", async () => {
+    const answers: Record<string, unknown> = {
+      transactions: { transactions: [] },
+      trades: { trades: [] },
+      'element-status': { element_status: [{ element: 5, owner: 10 }] },
+    };
+    const upstream = mock.method(globalThis, 'fetch', async (url: string) => Response.json(answers[url.split('/').at(-1)!]));
+    const res = await call('/transfers');
+    assert.equal(res.status, 200);
+    assert.deepEqual((await res.json()).owners, { 5: 10 });
+    assert.ok(upstream.mock.calls.every((c) => String(c.arguments[0]).includes('/23793/')));
+  });
 });

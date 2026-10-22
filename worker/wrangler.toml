@@ -1,3 +1,7 @@
 name = "fpl-draft-live"
 main = "index.ts"
 compatibility_date = "2026-09-01"
+
+[vars]
+# The league /transfers relays.
+LEAGUE_ID = "23793"
