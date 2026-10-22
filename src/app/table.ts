@@ -71,10 +71,11 @@ export function dataTable<R extends Keyed>(
     })
     .join('');
   // Wide enough for the desktop layout: fixed columns, 12px gaps, 24px end padding and
-  // ~150px for the manager column; never under 560px so the form pills get desktop gaps.
+  // ~100px for the manager column (avatar and first name: phones leave the team name
+  // out); never under 560px so the form pills get desktop gaps.
   const minWidth = Math.max(
     560,
-    sum(cols.map((c) => (/^\d+px$/.test(c.w as string) ? parseInt(c.w as string, 10) : 150))) + 12 * (cols.length - 1) + 24,
+    sum(cols.map((c) => (/^\d+px$/.test(c.w as string) ? parseInt(c.w as string, 10) : 100))) + 12 * (cols.length - 1) + 24,
   );
   const table = `<div class="ftable${full ? ' full' : ''}" style="${templates}${full ? `;min-width:${minWidth}px` : ''}"><div class="trow thead">${head}</div>${body}</div>`;
   return full ? `<div class="table-scroll">${table}</div>` : table;

@@ -98,7 +98,7 @@ function latestMovesCard() {
   return card({
     title: 'Latest transfers',
     body: items.length ? `<div class="list">${items.map(feedRow).join('')}</div>` : empty('No transfers yet'),
-    footer: { href: '#transfers', label: 'All transfer stats' },
+    footer: { href: '#transfers', label: 'All transfers' },
   });
 }
 

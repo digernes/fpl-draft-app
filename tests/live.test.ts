@@ -3,7 +3,16 @@ import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
 import type { Position } from '../src/shared/data.ts';
-import { provisionalBonus, scoreLineup, slimLive, type SlimFixture, type SlimLive } from '../src/shared/live.ts';
+import {
+  clubState,
+  liveProjection,
+  provisionalBonus,
+  scoreLineup,
+  shareToCome,
+  slimLive,
+  type SlimFixture,
+  type SlimLive,
+} from '../src/shared/live.ts';
 
 interface Replay {
   players: Record<string, { pos: Position; club: number }>;
@@ -149,7 +158,16 @@ describe('scoreLineup live', () => {
 
 describe('slimLive', () => {
   it('keeps points and minutes, and the BPS only while the bonus is out', () => {
-    const fixture = { id: 9, team_h: 1, team_a: 2, finished: false, finished_provisional: false, team_h_score: 1, team_a_score: 0 };
+    const fixture = {
+      id: 9,
+      team_h: 1,
+      team_a: 2,
+      finished: false,
+      finished_provisional: false,
+      team_h_score: 1,
+      team_a_score: 0,
+      minutes: 55,
+    };
     const stat = (s: string, h: [number, number][]) => ({ s, h: h.map(([element, value]) => ({ element, value })), a: [] });
     const slim = slimLive({
       elements: {
@@ -162,7 +180,42 @@ describe('slimLive', () => {
       ],
     });
     assert.deepEqual(slim.elements, { 5: [6, 90] });
-    assert.deepEqual(slim.fixtures[0], { id: 9, h: 1, a: 2, started: true, done: false, bps: [[5, 30]] });
+    assert.deepEqual(slim.fixtures[0], { id: 9, h: 1, a: 2, started: true, done: false, min: 55, bps: [[5, 30]] });
     assert.equal(slim.fixtures[1].bps, undefined);
+  });
+});
+
+describe('who is still to play', () => {
+  const feed: SlimLive = {
+    elements: {},
+    fixtures: [
+      { id: 1, h: 1, a: 2, started: true, done: true },
+      { id: 2, h: 3, a: 4, started: true, done: false, min: 60 },
+      { id: 3, h: 5, a: 6, started: false, done: false, ko: '2026-10-25T14:00:00Z' },
+      // club 7 plays twice: once done, once to come
+      { id: 4, h: 7, a: 8, started: true, done: true },
+      { id: 5, h: 9, a: 7, started: false, done: false, ko: '2026-10-27T19:30:00Z' },
+    ],
+  };
+  it('tells live, done, due and blank apart', () => {
+    assert.deepEqual(clubState(feed, 1), { state: 'done' });
+    assert.deepEqual(clubState(feed, 4), { state: 'live', min: 60 });
+    assert.deepEqual(clubState(feed, 6), { state: 'due', ko: '2026-10-25T14:00:00Z' });
+    assert.deepEqual(clubState(feed, 7), { state: 'due', ko: '2026-10-27T19:30:00Z' });
+    assert.deepEqual(clubState(feed, 10), { state: 'blank' });
+  });
+  it('counts how much of the gameweek is left', () => {
+    assert.equal(shareToCome(feed, 1), 0);
+    assert.ok(Math.abs(shareToCome(feed, 3) - 1 / 3) < 1e-12);
+    assert.equal(shareToCome(feed, 5), 1);
+    assert.equal(shareToCome(feed, 7), 0.5);
+    assert.equal(shareToCome(feed, 10), 0);
+  });
+  it('projects the final score from what is left', () => {
+    const info = (id: number) => ({ pos: 'MID' as const, club: id });
+    const scored = { xi: [1, 3, 5], bench: [], subs: [], pts: 20, points: () => 0 };
+    const { mean, variance } = liveProjection(scored, feed, info, () => 6);
+    assert.ok(Math.abs(mean - (20 + 6 / 3 + 6)) < 1e-9);
+    assert.ok(Math.abs(variance - (1 / 3 + 1) * 9) < 1e-9);
   });
 });

@@ -10,6 +10,10 @@ export interface SlimFixture {
   a: number;
   started: boolean;
   done: boolean;
+  /** Kick-off time. */
+  ko?: string;
+  /** Minutes played, while the match is on. */
+  min?: number;
   /** [element, BPS] while the bonus is still to be awarded. */
   bps?: [number, number][];
 }
@@ -51,6 +55,8 @@ export function slimLive(raw: Partial<LiveFeed>): SlimLive {
       a: f.team_a,
       started: Boolean(f.started),
       done: Boolean(f.finished || f.finished_provisional),
+      ...(f.kickoff_time ? { ko: f.kickoff_time } : {}),
+      ...(f.started && !(f.finished || f.finished_provisional) ? { min: f.minutes ?? 0 } : {}),
       ...(f.started && !bonusIn && bps ? { bps: [...bps.h, ...bps.a].map((b): [number, number] => [b.element, b.value]) } : {}),
     };
   });
@@ -111,4 +117,46 @@ export function scoreLineup(order: number[], feed: SlimLive, info: PlayerInfo, f
     }
   }
   return { xi, bench, subs, pts: xi.reduce((total, id) => total + points(id), 0), points };
+}
+
+// --- Who is still to play ------------------------------------------------------
+
+export type PlayerState =
+  | { state: 'live'; min: number } // his club's match is on
+  | { state: 'done' } // all his club's matches are over
+  | { state: 'due'; ko?: string } // still to kick off (the next one, in a double gameweek)
+  | { state: 'blank' }; // his club has no match this gameweek
+
+export function clubState(feed: SlimLive, club: number | undefined): PlayerState {
+  const fixtures = feed.fixtures.filter((f) => f.h === club || f.a === club);
+  if (!fixtures.length) return { state: 'blank' };
+  const playing = fixtures.find((f) => f.started && !f.done);
+  if (playing) return { state: 'live', min: playing.min ?? 0 };
+  const next = fixtures.filter((f) => !f.started).sort((a, b) => (a.ko ?? '').localeCompare(b.ko ?? ''))[0];
+  return next ? { state: 'due', ko: next.ko } : { state: 'done' };
+}
+
+// How much of a player's gameweek is still to come: 1 before kick-off, falling to 0 at
+// full time, split evenly over a double gameweek's two matches.
+export function shareToCome(feed: SlimLive, club: number | undefined): number {
+  const fixtures = feed.fixtures.filter((f) => f.h === club || f.a === club);
+  if (!fixtures.length) return 0;
+  const left = (f: SlimFixture) => (f.done ? 0 : f.started ? Math.max(0, 1 - (f.min ?? 0) / 90) : 1);
+  return fixtures.reduce((total, f) => total + left(f), 0) / fixtures.length;
+}
+
+/** Spread of one player's points over a full gameweek, for the live odds. */
+export const PLAYER_POINTS_SD = 3;
+
+// Where a lineup's score is heading: the points so far plus each scoring player's
+// expected points (`ep`, for the whole gameweek) for what is still to come.
+export function liveProjection(scored: Scored, feed: SlimLive, info: PlayerInfo, ep: (id: number) => number) {
+  let mean = scored.pts;
+  let variance = 0;
+  for (const id of scored.xi) {
+    const share = shareToCome(feed, info(id).club);
+    mean += share * ep(id);
+    variance += share * PLAYER_POINTS_SD ** 2;
+  }
+  return { mean, variance };
 }

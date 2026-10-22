@@ -1,4 +1,6 @@
-// The Transfers tab: the market at a glance, per-manager numbers, the log and awards.
+// The Transfers tab is the feed of moves, with the waiver order and trade offers. The
+// transfer stats (the market at a glance, per-manager numbers and awards) live on the
+// Stats tab, under Transfers.
 
 import type { TransferSummary } from '../../shared/data.ts';
 import { feed, feedRow, type FeedItem } from '../cards.ts';
@@ -10,6 +12,13 @@ import { D, state } from '../state.ts';
 import { dataTable, managerCol, posCol, type Column } from '../table.ts';
 
 export function viewTransfers() {
+  return `<div class="cols">
+    <div class="col">${transferLogCard()}</div>
+    <div class="col">${waiverOrderCard()}${tradesCard()}</div>
+  </div>`;
+}
+
+export function transferStats() {
   const t = D.transfers;
   const count = (type: string) => t.moves.filter((mv) => mv.type === type).length;
   const busiest = t.byGw.reduce((a, b) => (b.waiver + b.free + b.trade > a.waiver + a.free + a.trade ? b : a), t.byGw[0]);
@@ -28,8 +37,8 @@ export function viewTransfers() {
     .join('');
   return `${card({ title: 'Transfer market', body: `<div class="tiles">${tileHtml}</div>` })}
   <div class="cols">
-    <div class="col">${transferTableCard()}${movesByGwCard()}${transferLogCard()}</div>
-    <div class="col">${awardsCard()}${bestPickupsCard()}${regretsCard()}${contestedCard()}${tradesCard()}${waiverOrderCard()}${hotPotatoesCard()}</div>
+    <div class="col">${transferTableCard()}${movesByGwCard()}${bestPickupsCard()}${regretsCard()}</div>
+    <div class="col">${awardsCard()}${contestedCard()}${hotPotatoesCard()}</div>
   </div>`;
 }
 

@@ -66,6 +66,9 @@ export const Fixture = z.object({
   finished_provisional: z.boolean(),
   team_h_score: z.number().nullable(),
   team_a_score: z.number().nullable(),
+  kickoff_time: z.string().nullish(),
+  /** Minutes played so far. */
+  minutes: z.number().nullish(),
 });
 
 const positionLimits = Object.fromEntries(
@@ -212,7 +215,7 @@ export const EntryPicks = z.object({
 // --- Main FPL game: bootstrap-static (projections only) -----------------------
 
 export const FplBootstrap = z.object({
-  elements: z.array(z.object({ code: id, ep_next: numeric.nullable() })),
+  elements: z.array(z.object({ code: id, ep_next: numeric.nullable(), ep_this: numeric.nullish() })),
 });
 
 export type LeagueDetails = z.infer<typeof LeagueDetails>;

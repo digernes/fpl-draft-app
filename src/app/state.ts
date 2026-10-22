@@ -17,7 +17,7 @@ export const LIVE_REFRESH_MS = 2 * 60 * 1000; // data.json itself changes about 
 // Near real-time scores while a gameweek is being played come from a small Cloudflare
 // Worker (worker/), because browsers can't call the FPL API. Leave empty to rely on
 // data.json, which the scheduled job refreshes every 10 minutes during matches.
-export const LIVE_URL: string = '';
+export const LIVE_URL: string = 'https://fpl-draft-live.digernes.workers.dev';
 export const LIVE_POLL_MS = 30 * 1000; // while Premier League matches are on
 export const LIVE_IDLE_MS = 5 * 60 * 1000; // between the match days of a live gameweek
 
@@ -47,6 +47,7 @@ export const state = {
   gw: null as number | null, // gameweek shown on the Fixtures tab
   openMatch: null as string | null, // "gw:home:away" of the expanded match
   logManager: 'all', // transfer log filter
+  statsView: 'season', // the Stats tab's 'season' or 'transfers'
   openSquad: null as string | null, // manager whose original squad is expanded
   season: null as string | null, // slug of an archived season being viewed, e.g. "2025-26"; null = current
 };
@@ -76,6 +77,6 @@ export function setSeasons(list: SeasonEntry[]) {
   seasons = list;
 }
 
-export function setLive(value: LiveState) {
+export function setLive(value: LiveState | null) {
   live = value;
 }

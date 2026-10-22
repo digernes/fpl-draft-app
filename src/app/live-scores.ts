@@ -74,6 +74,15 @@ function applyLive(feed: SlimLive) {
   }
 }
 
+// The freshest feed for the gameweek being played: the relay's, if it runs, otherwise
+// the one data.json came with.
+export function applyLatestLive() {
+  const gw = D.meta.currentGw;
+  const feed = LIVE_URL && live?.gw === gw ? live.feed : D.live?.gw === gw ? D.live : null;
+  if (feed && !isArchive()) applyLive(feed);
+  else if (isArchive()) setLive(null); // an archived season has nothing live
+}
+
 const liveScores = () => JSON.stringify(D.matches.filter((m) => m.gw === D.meta.currentGw).map((m) => [m.homePts, m.awayPts]));
 
 export async function pollLive() {
@@ -111,7 +120,7 @@ export async function refresh() {
   if (document.hidden || isArchive() || Date.now() - lastFetch < 60 * 1000) return;
   try {
     if (await loadData()) {
-      if (live?.gw === D.meta.currentGw) applyLive(live.feed);
+      applyLatestLive();
       renderAll();
       pollLive();
     }

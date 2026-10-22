@@ -4,7 +4,7 @@
 import { applyTheme, bindChrome, readRoute } from './chrome.ts';
 import { card, empty } from './components.ts';
 import { esc } from './format.ts';
-import { loadData, loadSeasons, pollLive, refresh, scheduleRefresh } from './live-scores.ts';
+import { applyLatestLive, loadData, loadSeasons, pollLive, refresh, scheduleRefresh } from './live-scores.ts';
 import { renderAll, seasonChip, statusChips } from './render.ts';
 import { live } from './state.ts';
 
@@ -23,6 +23,7 @@ async function init() {
     });
     return;
   }
+  applyLatestLive();
   readRoute();
   renderAll();
   scheduleRefresh();

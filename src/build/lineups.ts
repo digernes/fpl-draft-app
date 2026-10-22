@@ -1,7 +1,7 @@
 // Managers, their head-to-head matches, and every lineup they have put out: points,
 // the double-gameweek adjustment, bench points and expected points.
 
-import type { ById, Lineup, Manager, Match } from '../shared/data.ts';
+import type { ById, LiveData, Lineup, Manager, Match } from '../shared/data.ts';
 import { scoreLineup, slimLive, type SlimLive } from '../shared/live.ts';
 import { DGW_PENALTY } from './config.ts';
 import type { Season } from './season.ts';
@@ -96,6 +96,16 @@ export function buildLineups(season: Season, matches: Match[]) {
     for (const [gw, l] of Object.entries(byGw)) l.xpf = round(sum(l.xi.map((pid) => expectedPointsIn(season, pid, Number(gw)))), 1);
   }
   return lineups;
+}
+
+// The gameweek being played, as the page needs it to show who is still to play and
+// to price the matches in play. Nothing once it is over.
+export function buildLiveData(season: Season, lineups: Lineups, expectedNow: (pid: number) => number): LiveData | undefined {
+  const { currentGw: gw, finishedGws, live } = season;
+  if (!gw || finishedGws.includes(gw) || !live[gw]) return undefined;
+  const ids = new Set(Object.values(lineups).flatMap((byGw) => byGw[gw]?.picks ?? []));
+  const ep = Object.fromEntries([...ids].sort((a, b) => a - b).map((pid) => [pid, round(expectedNow(pid), 1)]));
+  return { gw, ...slimLive(live[gw]), ep };
 }
 
 /** A manager's lineup in a gameweek, if they had one. */

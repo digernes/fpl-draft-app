@@ -1,6 +1,8 @@
 // The shape of data.json (and the season archives), written by the build and read by
 // the page. Ids are FPL ids: managers by entry id, players by element id, clubs by team id.
 
+import type { SlimLive } from './live.ts';
+
 export type Position = 'GKP' | 'DEF' | 'MID' | 'FWD';
 export type Result = 'W' | 'D' | 'L';
 export type Formation = Record<'DEF' | 'MID' | 'FWD', number>;
@@ -18,6 +20,8 @@ export interface Data {
   plTwins: PlTwin[];
   /** entry id → gameweek → lineup */
   lineups: ById<ById<Lineup>>;
+  /** While a gameweek is being played: its live feed, so the page can tell who is still to play. */
+  live?: LiveData;
   topGameweeks: TopGameweek[];
   worstGameweeks: GameweekScore[];
   seasonStats: SeasonStat[];
@@ -235,6 +239,12 @@ export interface Lineup {
   /** Picks in order, for weeks still being played (the page re-scores them live). */
   picks?: number[];
   xpf: number;
+}
+
+export interface LiveData extends SlimLive {
+  gw: number;
+  /** FPL's expected points for this gameweek, for everyone in a lineup. */
+  ep: ById<number>;
 }
 
 export interface GameweekScore {
