@@ -12,6 +12,9 @@ top gameweeks, transfer stats, original squads and each manager's Premier League
 - **Transfers**: per-manager table, awards, best pickups, the ones that got away, most-contested waivers, trades, waiver order, hot potatoes, full log.
 - **Draft**: how much of each original squad is left and how many points it produced, the draft board, steals and busts.
 - Search ("Who owns…?") in the top bar, light/dark theme and decimal/fractional odds under the cog.
+- The header counts down to the waiver run and the deadline, and shows "Live" while a gameweek is being played.
+- During a gameweek the table gets fotmob.com's Live column and live positions, with rows sliding as they change. With the live relay set up (below), scores update every 30 seconds.
+- Installable: on Android Chrome use the menu → Install app (on iPhone, Share → Add to Home Screen).
 - The table marks the prize places (1st and 2nd) and last place, whose penalty is still to be announced. Managers appear by first name only, since the page is public.
 - Finished seasons are kept: the season chip becomes a picker once there is more than one.
 
@@ -32,6 +35,27 @@ in both BST and GMT). Games at odd times, like Boxing Day, still get the hourly 
 When a season's last gameweek finishes, the build freezes it into `seasons/2026-27.json` and lists
 it in `seasons/index.json`. For next season, point `LEAGUE_ID` at the new league and the old one
 stays browsable from the season picker. `--archive` freezes the current season by hand.
+
+## Live scores (optional, free)
+
+Live scores already update with `data.json`, every 10 minutes during matches. For near
+real-time, the page can poll a tiny Cloudflare Worker (`worker/`) that relays the FPL live
+feed, which browsers can't call themselves. It only answers `/live/<gameweek>`, slims the
+feed from ~450 KB to ~5 KB and shares one fetch per 20 seconds between everyone watching.
+The page, the Worker and the build all score with `assets/live.js`, which adds provisional
+bonus and provisional auto-subs.
+
+1. Deploy it once, with a free Cloudflare account:
+
+   ```bash
+   cd worker
+   npx wrangler login
+   npx wrangler deploy
+   ```
+
+2. Put the URL it prints (like `https://fpl-draft-live.<you>.workers.dev`) in `LIVE_URL` at the top of `assets/app.js` and push.
+
+The free plan allows 100,000 requests a day; a busy matchday here uses a few thousand.
 
 ## Run locally
 
@@ -66,6 +90,7 @@ private. Any other static host (Cloudflare Pages, Netlify) works too, as long as
 - **Top gameweeks and the highest-gameweek prize**: the score minus 4 for every player in the scoring XI (after auto-subs) whose club has two fixtures that gameweek. The best adjusted score holds the prize; on a tie the earlier week wins, and two managers level in the same week share it. Only finished gameweeks count. The list gives every manager's best week a place and fills the rest with the highest remaining scores; weeks only there because of that get a "Best GW" tag.
 - **Odds**: a manager's expected score is the league average, plus 60% of how far their recency-weighted form sits from it, plus (next gameweek only) 30% of how far their best projected XI sits from the league's average projection (FPL's own expected points). The spread comes from this season's scores (at least 13 points). A draw is both sides landing on the same integer. Prices carry a 5% margin and are rounded down onto the standard fractional ladder, so decimal and fractional always agree.
 - **Luck**: every week is played against the league average, and scoring above it is a win. Beating the league average is the same as beating everyone else's average. Luck is your real table points minus those points: what the fixture list gave or took.
+- **Live scores**: each scoring XI's live points plus provisional bonus (the top three BPS in a match get 3, 2 and 1 until the real bonus is in; ties share). A starter who got no minutes once all his club's matches are over makes way for the first bench player who played and keeps the formation legal, as FPL does at the end of the gameweek. A bench player whose match is still to come holds the queue. Replaying GW1–7 this way reproduces every official score and all 22 automatic substitutions. The live table ranks everyone as if the live scores were final.
 - **Simulated season**: every unfinished match is played 10,000 times with the odds model. Each score is drawn around the manager's expected score with this season's spread, plus a per-run offset (±3 points a week, typically) for how good they really are, since a few weeks of form is only a rough guide. Ties on points go to points scored, as in the real table. The random numbers are seeded, so the same data always gives the same percentages and the scheduled job only commits real changes. A match still being played is simulated from scratch.
 - **xG table**: each player's points with goals, assists, clean sheets and goals conceded swapped for what their xG, xA and xGC were worth (a clean sheet counts as e^−xGC per full game). Minutes, bonus, saves, cards and defensive contributions stay as scored. xPF adds that up over each scoring XI and xPA does the same for your opponents. xPTS decides every match with a normal model around both expected scores, with the spread of actual minus expected (about 7 points). Sorted by xPTS, as FotMob does.
 - **PL twin**: the Premier League club on the same points (or the closest). Managers level on points share out the level clubs in table order. The PL table is rebuilt from the same API's fixtures.

@@ -1,5 +1,7 @@
 // FotMob Draft League: renders data.json (built by scripts/build-data.mjs) with
-// fotmob.com's look. Plain JS, no build step.
+// fotmob.com's look. Plain JS modules, no build step.
+
+import { scoreLineup } from './live.js';
 
 const TABS = [
   { id: 'overview', label: 'Overview' },
@@ -12,9 +14,15 @@ const TABS = [
 const COLOR_SLOTS = 8; // --m1 … --m8 in styles.css; any later manager gets grey
 const REFRESH_MS = 10 * 60 * 1000;
 const LIVE_REFRESH_MS = 2 * 60 * 1000; // data.json itself changes about every 10 minutes during matches
+// Near real-time scores while a gameweek is being played come from a small Cloudflare
+// Worker (worker/), because browsers can't call the FPL API. Leave empty to rely on
+// data.json, which the scheduled job refreshes every 10 minutes during matches.
+const LIVE_URL = '';
+const LIVE_POLL_MS = 30 * 1000; // while Premier League matches are on
+const LIVE_IDLE_MS = 5 * 60 * 1000; // between the match days of a live gameweek
 const POS_ORDER = { GKP: 0, DEF: 1, MID: 2, FWD: 3 };
 const HEAT_STEPS = [35, 45, 55, 65]; // gameweek score bands for the heatmap
-const photoUrl = (code) => `https://resources.premierleague.com/premierleague25/photos/players/40x40/${code}.png`;
+const photoUrl = (code) => `https://resources.premierleague.com/premierleague25/photos/players/40x40/${Number(code)}.png`;
 
 const store = {
   get(key, fallback) {
@@ -51,6 +59,8 @@ let managers = new Map();
 let seasons = []; // from seasons/index.json; the current season's file is data.json
 let lastFetch = 0;
 let refreshTimer = null;
+let live = null; // latest scores from the live relay: { gw, feed, lineups, points }
+let liveTimer = null;
 
 // --- Lookups and formatting ----------------------------------------------------
 
@@ -59,7 +69,8 @@ const first = (id) => esc(mgr(id)?.first ?? '?');
 const player = (id) => D.players[id];
 const club = (id) => D.clubs[id];
 const gwInfo = (gw) => D.gameweeks.find((g) => g.id === gw);
-const gwPoints = (pid, gw) => player(pid)?.pts?.[gw - D.meta.firstGw] ?? 0;
+const gwPoints = (pid, gw) => (live?.gw === gw ? live.points(pid) : (player(pid)?.pts?.[gw - D.meta.firstGw] ?? 0));
+const lineupFor = (id, gw) => (live?.gw === gw && live.lineups[id]) || D.lineups[id]?.[gw];
 const seasonStat = (id) => D.seasonStats.find((s) => s.id === id);
 const slotOf = (id) => {
   const slot = mgr(id)?.slot ?? COLOR_SLOTS;
@@ -281,11 +292,40 @@ const FORM_WIDTH = { xs: '144px', sm: '144px', md: '168px', lg: '168px' };
 const managerCol = { label: '', w: 'minmax(0,1fr)', cls: 'c-team', cell: (r) => managerCell(r.id) };
 const numCol = (label, value, from, extra = {}) => ({ label, w: '27px', from, cell: value, ...extra });
 
+function livePill(match) {
+  if (!match) return '';
+  const res = match.pf > match.pa ? 'W' : match.pf < match.pa ? 'L' : 'D';
+  return `<span class="livep ${res}">${match.pf}-${match.pa}</span>`;
+}
+
+// The table as it would stand if every live score ended as it is now (fotmob.com's
+// live table): finished matches plus the ones being played.
+function liveStandings() {
+  const { win, draw, loss } = D.meta.scoring;
+  const rows = new Map(D.tables.overall.map((r) => [r.id, { ...r, played: 0, won: 0, drawn: 0, lost: 0, pf: 0, pa: 0, pts: 0 }]));
+  for (const m of D.matches.filter((x) => x.started)) {
+    for (const [id, pf, pa] of [[m.home, m.homePts, m.awayPts], [m.away, m.awayPts, m.homePts]]) {
+      const r = rows.get(id);
+      if (!r) continue;
+      r.played++;
+      r.pf += pf;
+      r.pa += pa;
+      if (pf > pa) [r.won, r.pts] = [r.won + 1, r.pts + win];
+      else if (pf === pa) [r.drawn, r.pts] = [r.drawn + 1, r.pts + draw];
+      else [r.lost, r.pts] = [r.lost + 1, r.pts + loss];
+      if (!m.finished) r.liveMatch = { pf, pa };
+    }
+  }
+  return [...rows.values()].sort((a, b) => b.pts - a.pts || b.pf - a.pf).map((r, i) => ({ ...r, rank: i + 1 }));
+}
+
 const standingsCols = () => {
   const formMode = state.tableMode === 'form';
+  const liveCol = { label: 'Live', w: '52px', tip: 'This gameweek’s score so far', cell: (r) => livePill(r.liveMatch) };
   return [
     posCol,
     managerCol,
+    ...(state.tableView === 'overall' && isLive() ? [liveCol] : []),
     numCol('PL', (r) => r.played, formMode ? 'md' : 'xs'),
     numCol('W', (r) => r.won, 'lg'),
     numCol('D', (r) => r.drawn, 'lg'),
@@ -303,7 +343,7 @@ const tableModeToggle = (cls = '') => `<div class="narrow-only ${cls}">${seg('ta
 const TABLE_VIEWS = {
   overall: {
     label: 'All',
-    rows: () => D.tables.overall,
+    rows: () => (isLive() ? liveStandings() : D.tables.overall),
     cols: standingsCols,
     qual: (r, rows) => (r.rank === 1 ? 'var(--qual-top)' : r.rank === 2 ? 'var(--qual-europe)' : r.rank === rows.length ? 'var(--qual-bottom)' : null),
     legend: [['var(--qual-top)', '1st prize'], ['var(--qual-europe)', '2nd prize'], ['var(--qual-bottom)', 'Penalty to be announced']],
@@ -487,7 +527,7 @@ function matchDetail(m) {
 }
 
 function lineupColumn(id, gw) {
-  const l = D.lineups[id]?.[gw];
+  const l = lineupFor(id, gw);
   if (!l) return `<div class="lineup">${empty('No lineup')}</div>`;
   const doubles = new Set(gwInfo(gw)?.doubles ?? []);
   const byPosition = (ids) => [...ids].sort((a, b) => POS_ORDER[player(a).pos] - POS_ORDER[player(b).pos]);
@@ -535,7 +575,7 @@ function upcomingDetail(m) {
 
 function roundSubtitle(gw) {
   const info = gwInfo(gw);
-  if (isLive() && gw === D.meta.currentGw) return 'Live now';
+  if (isLive() && gw === D.meta.currentGw) return `Live now · scores update every ${LIVE_URL ? '30 seconds' : '10 minutes'}`;
   if (info?.finished) return 'Final scores';
   const parts = [];
   if (info?.deadline) parts.push(`Deadline ${fmtShortDay.format(new Date(info.deadline))}, ${fmtTime.format(new Date(info.deadline))}`);
@@ -626,7 +666,7 @@ function gwPrizeCard() {
   // would lose to the earlier week, so it has to be strictly higher).
   const record = holders[0].adj;
   const threats = isLive()
-    ? D.managers.map((m) => ({ id: m.id, l: D.lineups[m.id]?.[D.meta.currentGw] })).filter((x) => x.l && x.l.adj > record)
+    ? D.managers.map((m) => ({ id: m.id, l: lineupFor(m.id, D.meta.currentGw) })).filter((x) => x.l && x.l.adj > record)
     : [];
   const live = threats.length
     ? `<div class="prize-live">${threats.map((x) => `<span>${avatar(x.id)} ${first(x.id)} is on ${x.l.adj} in GW ${D.meta.currentGw}, live</span>`).join('')}</div>`
@@ -1168,14 +1208,24 @@ function draftHaulCard() {
 
 // --- Page chrome -----------------------------------------------------------------
 
+// Between rounds the waiver run comes first, then the deadline; during a live
+// gameweek the live chip replaces the deadline.
+function statusChips() {
+  const { meta } = D;
+  const at = (iso) => `${fmtShortDay.format(new Date(iso))}, ${fmtTime.format(new Date(iso))}`;
+  const waivers = meta.nextWaivers && countdown(meta.nextWaivers);
+  const deadline = meta.nextDeadline && countdown(meta.nextDeadline);
+  return [
+    isLive() && `<span class="status-chip live"><i></i>Live · GW ${meta.currentGw}</span>`,
+    waivers && `<span class="status-chip" data-tip="GW ${meta.nextGw} waivers process ${at(meta.nextWaivers)}">Waivers in <strong>${waivers}</strong></span>`,
+    !isLive() && deadline && `<span class="status-chip" data-tip="GW ${meta.nextGw} deadline ${at(meta.nextDeadline)}">GW ${meta.nextGw} deadline in <strong>${deadline}</strong></span>`,
+  ]
+    .filter(Boolean)
+    .join('');
+}
+
 function leagueHeader() {
   const { meta } = D;
-  const deadline = meta.nextDeadline && countdown(meta.nextDeadline);
-  const status = isLive()
-    ? `<span class="status-chip live"><i></i>Live · GW ${meta.currentGw}</span>`
-    : deadline
-      ? `<span class="status-chip" data-tip="${esc(roundSubtitle(meta.nextGw))}">GW ${meta.nextGw} deadline in <strong>${deadline}</strong></span>`
-      : '';
   return `<section class="league-header">
     <div class="poster">
       <div class="league-logo">${trophySvg}</div>
@@ -1183,7 +1233,7 @@ function leagueHeader() {
         <h1 class="league-name">${esc(meta.name)}</h1>
         <div class="league-sub">Premier League Draft · ${plural(D.managers.length, 'manager')}${isArchive() ? ' · final standings' : ''}</div>
       </div>
-      <div class="poster-side">${status}${seasonChip()}</div>
+      <div class="poster-side">${statusChips()}${seasonChip()}</div>
     </div>
     <nav class="tabs" role="tablist">
       ${TABS.map((t) => `<a class="tab" role="tab" href="#${t.id}" data-tab="${t.id}" aria-selected="${state.tab === t.id}">${t.label}</a>`).join('')}
@@ -1193,7 +1243,7 @@ function leagueHeader() {
 }
 
 const seasonSlug = (season) => season.replace('/', '-');
-const seasonLabel = (season) => `${season.slice(0, 4)}/${Number(season.slice(0, 4)) + 1}`;
+const seasonLabel = (season) => `${Number(season.slice(0, 4))}/${Number(season.slice(0, 4)) + 1}`;
 const seasonEntry = () => seasons.find((s) => seasonSlug(s.season) === state.season);
 const isArchive = () => Boolean(seasonEntry() && !seasonEntry().current);
 
@@ -1201,7 +1251,7 @@ const isArchive = () => Boolean(seasonEntry() && !seasonEntry().current);
 function seasonChip() {
   if (seasons.length < 2) return `<span class="season-chip">${seasonLabel(D.meta.season)}</span>`;
   const options = seasons
-    .map((s) => `<option value="${seasonSlug(s.season)}"${s.season === D.meta.season ? ' selected' : ''}>${seasonLabel(s.season)}</option>`)
+    .map((s) => `<option value="${esc(seasonSlug(s.season))}"${s.season === D.meta.season ? ' selected' : ''}>${seasonLabel(s.season)}</option>`)
     .join('');
   return `<label class="season-chip season-select"><select data-action="season" aria-label="Season">${options}</select>${chevronSvg('down')}</label>`;
 }
@@ -1255,6 +1305,8 @@ function readRoute() {
 function applyTheme() {
   const dark = state.theme === 'dark' || (state.theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
   document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+  // The installed app's status bar follows the top bar.
+  document.querySelector('meta[name="theme-color"]')?.setAttribute('content', dark ? '#1a1a1a' : '#ffffff');
 }
 
 function syncSettings() {
@@ -1473,6 +1525,49 @@ async function loadData() {
   return changed;
 }
 
+// Re-scores every live lineup from the relay's feed and patches the live matches.
+function applyLive(feed) {
+  const gw = D.meta.currentGw;
+  const doubles = new Set(gwInfo(gw)?.doubles ?? []);
+  const lineups = {};
+  let points = () => 0;
+  for (const m of D.managers) {
+    const l = D.lineups[m.id]?.[gw];
+    if (!l?.picks) continue;
+    const scored = scoreLineup(l.picks, feed, (pid) => player(pid) ?? {}, D.meta.formation);
+    const dgw = scored.xi.filter((pid) => doubles.has(player(pid)?.club)).length;
+    points = scored.points;
+    lineups[m.id] = { ...l, ...scored, dgw, adj: scored.pts - D.meta.dgwPenalty * dgw, benchPts: scored.bench.reduce((t, pid) => t + scored.points(pid), 0) };
+  }
+  live = { gw, feed, lineups, points };
+  for (const m of D.matches) {
+    if (m.gw !== gw || !m.started || m.finished) continue;
+    m.homePts = lineups[m.home]?.pts ?? m.homePts;
+    m.awayPts = lineups[m.away]?.pts ?? m.awayPts;
+  }
+}
+
+const liveScores = () => JSON.stringify(D.matches.filter((m) => m.gw === D.meta.currentGw).map((m) => [m.homePts, m.awayPts]));
+
+async function pollLive() {
+  clearTimeout(liveTimer);
+  if (!LIVE_URL || isArchive() || !isLive()) return;
+  if (!document.hidden) {
+    try {
+      const res = await fetch(`${LIVE_URL}/live/${D.meta.currentGw}`, { cache: 'no-store' });
+      if (res.ok) {
+        const before = liveScores();
+        applyLive(await res.json());
+        if (liveScores() !== before) withRowMoves(renderView);
+      }
+    } catch {
+      // Keep the last scores; data.json still refreshes on its own.
+    }
+  }
+  const playing = live?.feed.fixtures.some((f) => f.started && !f.done);
+  liveTimer = setTimeout(pollLive, playing ? LIVE_POLL_MS : LIVE_IDLE_MS);
+}
+
 function scheduleRefresh() {
   clearTimeout(refreshTimer);
   if (isArchive()) return; // archived seasons never change
@@ -1485,7 +1580,11 @@ function scheduleRefresh() {
 async function refresh() {
   if (document.hidden || isArchive() || Date.now() - lastFetch < 60 * 1000) return;
   try {
-    if (await loadData()) renderAll();
+    if (await loadData()) {
+      if (live?.gw === D.meta.currentGw) applyLive(live.feed);
+      renderAll();
+      pollLive();
+    }
   } catch {
     // Keep showing the data we already have.
   }
@@ -1494,6 +1593,7 @@ async function refresh() {
 async function init() {
   applyTheme();
   bindChrome();
+  navigator.serviceWorker?.register('sw.js').catch(() => {}); // makes it installable; optional
   try {
     await loadSeasons();
     await loadData();
@@ -1506,7 +1606,15 @@ async function init() {
   readRoute();
   renderAll();
   scheduleRefresh();
-  document.addEventListener('visibilitychange', refresh);
+  pollLive();
+  setInterval(() => {
+    const side = document.querySelector('.poster-side');
+    if (side && !document.hidden) side.innerHTML = statusChips() + seasonChip();
+  }, 30 * 1000);
+  document.addEventListener('visibilitychange', () => {
+    refresh();
+    if (!document.hidden && live) pollLive();
+  });
 }
 
 // --- Icons -------------------------------------------------------------------------

@@ -15,10 +15,7 @@ on:
     branches: [main]
     paths-ignore: [data.json]
 
-permissions:
-  contents: write # commit data.json back
-  pages: write
-  id-token: write
+permissions: {} # each job asks for what it needs
 
 concurrency:
   group: pages
@@ -28,6 +25,8 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    permissions:
+      contents: write # commit data.json back
     outputs:
       deploy: ${{ steps.commit.outputs.changed == 'true' || github.event_name != 'schedule' }}
     steps:
@@ -61,7 +60,7 @@ jobs:
 
       - name: Stage the site
         if: steps.commit.outputs.changed == 'true' || github.event_name != 'schedule'
-        run: mkdir _site && cp -r index.html assets data.json seasons _site/
+        run: mkdir _site && cp -r index.html manifest.webmanifest sw.js assets data.json seasons _site/
 
       - uses: actions/upload-pages-artifact@v3
         if: steps.commit.outputs.changed == 'true' || github.event_name != 'schedule'
@@ -72,6 +71,9 @@ jobs:
     needs: build
     if: needs.build.outputs.deploy == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}

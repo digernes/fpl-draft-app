@@ -15,6 +15,8 @@
 import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
+import { scoreLineup, slimLive } from '../assets/live.js';
+
 const args = parseArgs(process.argv.slice(2));
 const LEAGUE_ID = Number(args.league ?? process.env.LEAGUE_ID ?? 23793);
 const OUT_FILE = args.out ?? 'data.json';
@@ -153,22 +155,31 @@ async function main() {
     matchPoints.set(`${m.away}:${m.gw}`, m.awayPts);
   }
 
+  const formation = Object.fromEntries(['DEF', 'MID', 'FWD'].map((pos) => [pos, boot.settings.squad[`min_play_${pos}`]]));
+  const playerInfo = (id) => ({ pos: POSITIONS[elements.get(id)?.element_type], club: clubOf(id) });
+  const liveFeeds = {};
   const lineups = {};
   let lineupMismatches = 0;
   for (const [entry, byGw] of Object.entries(picks)) {
     for (const [gw, res] of Object.entries(byGw)) {
       const order = [...res.picks].sort((a, b) => a.position - b.position).map((p) => p.element);
+      const finished = finishedGws.includes(Number(gw));
       let xi = order.slice(0, 11);
       let bench = order.slice(11);
-      for (const sub of res.subs ?? []) {
-        xi = xi.map((id) => (id === sub.element_out ? sub.element_in : id));
-        bench = bench.map((id) => (id === sub.element_in ? sub.element_out : id));
+      let subs = (res.subs ?? []).map((s) => s.element_in);
+      let pts;
+      if (finished) {
+        // Finished weeks come back with the auto-subs already made.
+        const xiPoints = sum(xi.map((id) => pointsIn(id, gw)));
+        pts = matchPoints.get(`${entry}:${gw}`) ?? xiPoints;
+        if (pts !== xiPoints) lineupMismatches++;
+      } else {
+        // Still being played: score it as the page does live (provisional bonus and
+        // auto-subs) rather than wait for the draft site's own head-to-head numbers.
+        ({ xi, bench, subs, pts } = scoreLineup(order, (liveFeeds[gw] ??= slimLive(live[gw])), playerInfo, formation));
       }
       const doubles = new Set(doubleClubs[gw]);
       const dgw = xi.filter((id) => doubles.has(clubOf(id))).length;
-      const xiPoints = sum(xi.map((id) => pointsIn(id, gw)));
-      const pts = matchPoints.get(`${entry}:${gw}`) ?? xiPoints;
-      if (pts !== xiPoints && finishedGws.includes(Number(gw))) lineupMismatches++;
       (lineups[entry] ??= {})[gw] = {
         pts,
         adj: pts - DGW_PENALTY * dgw,
@@ -176,13 +187,18 @@ async function main() {
         benchPts: sum(bench.map((id) => pointsIn(id, gw))),
         xi,
         bench,
-        subs: (res.subs ?? []).map((s) => s.element_in),
+        subs,
+        ...(finished ? {} : { picks: order }), // the page re-scores live weeks from the picks
       };
     }
   }
   if (lineupMismatches) console.warn(`! ${lineupMismatches} lineups do not add up to their H2H score`);
 
   const lineup = (entry, gw) => lineups[entry]?.[gw];
+  for (const m of matches.filter((x) => x.started && !x.finished)) {
+    m.homePts = lineup(m.home, m.gw)?.pts ?? m.homePts;
+    m.awayPts = lineup(m.away, m.gw)?.pts ?? m.awayPts;
+  }
   const squadAt = (entry, gw) => {
     const l = lineup(entry, gw);
     return l ? new Set([...l.xi, ...l.bench]) : null;
@@ -710,6 +726,7 @@ async function main() {
       formLength: FORM_LENGTH,
       oddsOverround: ODDS_OVERROUND,
       hasProjections,
+      formation,
     },
     managers,
     clubs,
