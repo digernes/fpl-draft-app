@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
 
 import worker from '../worker/index.ts';
+import { buildDue } from '../worker/timer.ts';
 
 const ctx = { waitUntil() {} };
 const call = (path: string, method = 'GET') => worker.fetch(new Request(`https://relay.example${path}`, { method }), {}, ctx);
@@ -56,5 +57,40 @@ describe('live relay', () => {
     assert.equal(res.status, 200);
     assert.deepEqual((await res.json()).owners, { 5: 10 });
     assert.ok(upstream.mock.calls.every((c) => String(c.arguments[0]).includes('/23793/')));
+  });
+});
+
+describe('build timer', () => {
+  afterEach(() => mock.restoreAll());
+  const at = (iso: string) => new Date(iso);
+  const fire = (iso: string, env: object) =>
+    new Promise<void>((done) => {
+      const waits: Promise<unknown>[] = [];
+      worker.scheduled({ scheduledTime: Date.parse(iso) }, env, { waitUntil: (p) => void waits.push(p) });
+      Promise.all(waits).then(() => done());
+    });
+
+  it('builds every 10 minutes in the match windows and hourly otherwise', () => {
+    assert.equal(buildDue(at('2026-10-24T15:40:00Z')), true); // Saturday afternoon
+    assert.equal(buildDue(at('2026-10-27T19:20:00Z')), true); // Tuesday evening
+    assert.equal(buildDue(at('2026-10-27T09:20:00Z')), false); // Tuesday morning…
+    assert.equal(buildDue(at('2026-10-27T09:00:00Z')), true); // …except on the hour
+    assert.equal(buildDue(at('2026-10-25T21:30:00Z')), false); // Sunday night
+  });
+
+  it('starts the GitHub workflow with the token', async () => {
+    const github = mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }));
+    await fire('2026-10-24T15:40:00Z', { GITHUB_TOKEN: 'test-token', GITHUB_REPO: 'owner/repo' });
+    const [url, init] = github.mock.calls[0].arguments as [string, RequestInit];
+    assert.equal(url, 'https://api.github.com/repos/owner/repo/actions/workflows/update.yml/dispatches');
+    assert.equal((init.headers as Record<string, string>).Authorization, 'Bearer test-token');
+    assert.deepEqual(JSON.parse(init.body as string), { ref: 'main', inputs: { trigger: 'timer' } });
+  });
+
+  it('does nothing without a token, or between builds', async () => {
+    const github = mock.method(globalThis, 'fetch', async () => new Response(null, { status: 204 }));
+    await fire('2026-10-24T15:40:00Z', { GITHUB_REPO: 'owner/repo' });
+    await fire('2026-10-27T09:20:00Z', { GITHUB_TOKEN: 'test-token', GITHUB_REPO: 'owner/repo' });
+    assert.equal(github.mock.callCount(), 0);
   });
 });

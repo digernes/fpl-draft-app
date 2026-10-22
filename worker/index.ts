@@ -5,13 +5,15 @@
 //   /live/<gameweek>   live scores, slimmed from ~450 KB to a few KB
 //   /transfers         this league's moves, trades and owners, between builds
 //
-// Deploy with `npx wrangler deploy` from this folder.
+// It also starts the data build on a timer (timer.ts). Deploy with `npx wrangler deploy`
+// from this folder.
 
 import type { z } from 'zod';
 
 import { ElementStatus, LiveFeed, Trades, Transactions } from '../src/shared/fpl-api.ts';
 import { slimLive } from '../src/shared/live.ts';
 import { slimTransfers } from '../src/shared/transfers.ts';
+import { buildDue, startBuild, type TimerEnv } from './timer.ts';
 
 const API = 'https://draft.premierleague.com/api';
 const LIVE_SECONDS = 20; // everyone watching shares one fetch per 20 seconds
@@ -21,7 +23,7 @@ const HEADERS = {
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
 };
 
-interface Env {
+interface Env extends TimerEnv {
   /** The one league /transfers answers for (wrangler.toml). */
   LEAGUE_ID?: string;
 }
@@ -29,6 +31,15 @@ interface Env {
 class Upstream extends Error {}
 
 export default {
+  async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
+    if (!buildDue(new Date(controller.scheduledTime))) return;
+    ctx.waitUntil(
+      startBuild(env).then((res) => {
+        if (res && !res.ok) console.error(`GitHub answered ${res.status} when starting the build`);
+      }),
+    );
+  },
+
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === 'OPTIONS') return new Response(null, { headers: HEADERS });
     const url = new URL(request.url);

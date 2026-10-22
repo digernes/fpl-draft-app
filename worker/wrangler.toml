@@ -5,3 +5,10 @@ compatibility_date = "2026-09-01"
 [vars]
 # The league /transfers relays.
 LEAGUE_ID = "23793"
+# The repo whose data build the timer starts. Its token is a secret:
+#   npx wrangler secret put GITHUB_TOKEN
+GITHUB_REPO = "digernes/fpl-draft-app"
+
+# Every 10 minutes; timer.ts decides which firings start a build.
+[triggers]
+crons = ["*/10 * * * *"]

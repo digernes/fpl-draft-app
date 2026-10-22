@@ -1,19 +1,18 @@
 name: Update data and deploy
 
+# The data build is started by the relay's timer on Cloudflare (worker/timer.ts): every
+# 10 minutes while Premier League matches are usually on, hourly otherwise. GitHub's own
+# schedule below is only a fallback, as it runs late and pauses after 60 days without commits.
 on:
-  # All times UTC; GitHub can start scheduled runs a few minutes late.
-  schedule:
-    # Hourly, for transfers, waivers and projections.
-    - cron: '7 * * * *'
-    # Every 10 minutes while Premier League matches are usually on, in both BST and GMT:
-    # Saturday, Sunday, and weekday evenings (Friday/Monday games and midweek rounds).
-    - cron: '*/10 11-21 * * 6'
-    - cron: '*/10 11-20 * * 0'
-    - cron: '*/10 18-21 * * 1-5'
   workflow_dispatch:
+    inputs:
+      trigger:
+        description: What started the run ("timer" from the relay)
+        default: manual
+  schedule:
+    - cron: '23 */3 * * *'
   push:
     branches: [main]
-    paths-ignore: [public/data.json, 'public/seasons/**']
 
 permissions: {} # each job asks for what it needs
 
@@ -21,14 +20,18 @@ concurrency:
   group: pages
   cancel-in-progress: false
 
+env:
+  # Timer and scheduled runs only refresh the data, and only deploy when it changed.
+  UNATTENDED: ${{ github.event_name == 'schedule' || inputs.trigger == 'timer' }}
+
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
-      contents: write # commit public/data.json back
+      contents: write # commit a finished season's archive, once a season
     outputs:
-      deploy: ${{ steps.commit.outputs.changed == 'true' || github.event_name != 'schedule' }}
+      deploy: ${{ steps.data.outputs.changed == 'true' || env.UNATTENDED != 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -39,39 +42,41 @@ jobs:
 
       - run: npm ci
 
-      # Scheduled runs only refresh the data; code was checked when it was pushed.
       - name: Type-check, lint and test
-        if: github.event_name != 'schedule'
+        if: env.UNATTENDED != 'true'
         run: npm run check
 
+      # data.json isn't kept in git: the build starts from the copy on the live site, for
+      # the pre-match odds it froze and to tell whether anything changed.
       - name: Build data.json from the FPL Draft API
-        run: npm run data
+        id: data
+        run: |
+          site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
+          curl -fsS "$site/data.json?v=$(date +%s)" -o public/data.json || echo "No data.json on the site yet"
+          before=$(sha256sum public/data.json 2>/dev/null || true)
+          npm run data
+          after=$(sha256sum public/data.json)
+          echo "changed=$([ "$before" != "$after" ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
         env:
           LEAGUE_ID: ${{ vars.LEAGUE_ID || '23793' }}
 
-      # Committing keeps a history of the data (and the season archive in seasons/), and
-      # keeps the repo "active" so GitHub does not switch the schedule off after 60 quiet days.
-      - name: Commit the data if it changed
-        id: commit
+      # A season that has just finished is frozen into public/seasons/<2026-27>.json.
+      - name: Commit a new season archive
         run: |
-          if [ -z "$(git status --porcelain -- public/data.json public/seasons)" ]; then
-            echo "changed=false" >> "$GITHUB_OUTPUT"
-            exit 0
-          fi
+          git add -- public/seasons # index.json is generated each time and ignored
+          if git diff --cached --quiet; then exit 0; fi
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add public/data.json public/seasons
-          git commit -m "Update data $(date -u '+%Y-%m-%d %H:%M') UTC"
+          git commit -m "Archive the season"
           git pull --rebase origin main # in case code was pushed while this ran
           git push
-          echo "changed=true" >> "$GITHUB_OUTPUT"
 
       - name: Bundle the page and the service worker into public/
-        if: steps.commit.outputs.changed == 'true' || github.event_name != 'schedule'
+        if: steps.data.outputs.changed == 'true' || env.UNATTENDED != 'true'
         run: npm run build
 
       - uses: actions/upload-pages-artifact@v3
-        if: steps.commit.outputs.changed == 'true' || github.event_name != 'schedule'
+        if: steps.data.outputs.changed == 'true' || env.UNATTENDED != 'true'
         with:
           path: public
 

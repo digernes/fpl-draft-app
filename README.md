@@ -22,18 +22,25 @@ top gameweeks, transfer stats, original squads and each manager's Premier League
 
 ```
 FPL Draft API ──► scripts/build-data.ts ──► public/data.json ──► GitHub Pages
-                  (GitHub Actions: hourly, and every 10 min while matches are on)
+                  (GitHub Actions, started by the Worker's timer:
+                   hourly, and every 10 min while matches are on)
 ```
 
-The browser can't call the FPL API itself (no CORS), so a scheduled job builds `data.json` and the
-page is a static site in `public/`. While it's open, the page re-checks `data.json` every
+The browser can't call the FPL API itself (no CORS), so a GitHub Actions job builds `data.json`
+and the page is a static site in `public/`. While it's open, the page re-checks `data.json` every
 2 minutes during a live gameweek and every 10 minutes otherwise.
 
-The 10-minute runs follow the usual Premier League slots (Saturday, Sunday and weekday evenings, UTC,
-in both BST and GMT). Games at odd times, like Boxing Day, still get the hourly run.
+The job is started by the Worker's timer on Cloudflare (`worker/timer.ts`), because GitHub's own
+schedule runs late, skips runs and pauses after 60 days without commits; a GitHub schedule every
+3 hours stays as a fallback. The 10-minute runs follow the usual Premier League slots (Saturday,
+Sunday and weekday evenings, UTC, in both BST and GMT). Games at odd times, like Boxing Day, still
+get the hourly run.
+
+`data.json` isn't kept in git. Each run starts from the copy on the live site (for the pre-match
+odds it froze), builds a new one and deploys only if something changed.
 
 When a season's last gameweek finishes, the build freezes it into `public/seasons/2026-27.json` and
-lists it in `public/seasons/index.json`. For next season, point `LEAGUE_ID` at the new league and the old one
+lists it in `public/seasons/index.json`; that archive is the one data file the job commits. For next season, point `LEAGUE_ID` at the new league and the old one
 stays browsable from the season picker. `--archive` freezes the current season by hand.
 
 ## Live scores (optional, free)
@@ -56,6 +63,16 @@ bonus and provisional auto-subs.
    ```
 
 2. Put the URL it prints (like `https://fpl-draft-live.<you>.workers.dev`) in `LIVE_URL` in `src/app/state.ts` and push. (This league's relay runs at `https://fpl-draft-live.digernes.workers.dev`.)
+3. For the timer that starts the data build: create a fine-grained GitHub token (Settings →
+   Developer settings → Fine-grained tokens) for just this repository, with **Actions: Read and
+   write**, and store it in the Worker:
+
+   ```bash
+   npx wrangler secret put GITHUB_TOKEN
+   ```
+
+   Set `GITHUB_REPO` in `worker/wrangler.toml` if your repo has another name. Without the token,
+   only GitHub's 3-hourly fallback builds the data.
 
 The free plan allows 100,000 requests a day; a busy matchday here uses a few thousand.
 
