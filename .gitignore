@@ -1,0 +1,5 @@
+.cache/
+_site/
+.DS_Store
+# local preview config for Claude Code
+.claude/

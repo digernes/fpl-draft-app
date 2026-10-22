@@ -1,0 +1,80 @@
+name: Update data and deploy
+
+on:
+  # All times UTC; GitHub can start scheduled runs a few minutes late.
+  schedule:
+    # Hourly, for transfers, waivers and projections.
+    - cron: '7 * * * *'
+    # Every 10 minutes while Premier League matches are usually on, in both BST and GMT:
+    # Saturday, Sunday, and weekday evenings (Friday/Monday games and midweek rounds).
+    - cron: '*/10 11-21 * * 6'
+    - cron: '*/10 11-20 * * 0'
+    - cron: '*/10 18-21 * * 1-5'
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths-ignore: [data.json]
+
+permissions:
+  contents: write # commit data.json back
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      deploy: ${{ steps.commit.outputs.changed == 'true' || github.event_name != 'schedule' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Build data.json from the FPL Draft API
+        run: node scripts/build-data.mjs
+        env:
+          LEAGUE_ID: ${{ vars.LEAGUE_ID || '23793' }}
+
+      # Committing keeps a history of the data (and the season archive in seasons/), and
+      # keeps the repo "active" so GitHub does not switch the schedule off after 60 quiet days.
+      - name: Commit the data if it changed
+        id: commit
+        run: |
+          if [ -z "$(git status --porcelain -- data.json seasons)" ]; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add data.json seasons
+          git commit -m "Update data $(date -u '+%Y-%m-%d %H:%M') UTC"
+          git pull --rebase origin main # in case code was pushed while this ran
+          git push
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - name: Stage the site
+        if: steps.commit.outputs.changed == 'true' || github.event_name != 'schedule'
+        run: mkdir _site && cp -r index.html assets data.json seasons _site/
+
+      - uses: actions/upload-pages-artifact@v3
+        if: steps.commit.outputs.changed == 'true' || github.event_name != 'schedule'
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    if: needs.build.outputs.deploy == 'true'
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

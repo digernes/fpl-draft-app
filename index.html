@@ -1,0 +1,77 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>FotMob Draft League</title>
+  <meta name="description" content="Table, form, fixtures with odds, top gameweeks and transfer stats for the FotMob FPL Draft League.">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2300985f'/%3E%3Cpath d='M10 8h12v4h-8v3h7v4h-7v5h-4z' fill='%23fff'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap">
+  <link rel="stylesheet" href="assets/styles.css">
+  <script>
+    // Pick the theme before first paint so dark mode never flashes white.
+    (function () {
+      var theme = 'system';
+      try { theme = localStorage.getItem('draft.theme') || 'system'; } catch (e) {}
+      var dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
+      document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+    })();
+  </script>
+  <script src="assets/app.js" defer></script>
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-inner">
+      <a class="logo" href="#overview" aria-label="FotMob Draft home">
+        <span class="logo-word">FOTMOB</span><span class="logo-badge">DRAFT</span>
+      </a>
+      <div class="search" role="search">
+        <svg class="search-icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M7 1.5a5.5 5.5 0 0 1 4.38 8.83l3.15 3.14-1.06 1.06-3.14-3.15A5.5 5.5 0 1 1 7 1.5Zm0 1.5a4 4 0 1 0 0 8 4 4 0 0 0 0-8Z" fill="currentColor"/></svg>
+        <input id="search" type="search" placeholder="Who owns…?" autocomplete="off" spellcheck="false" aria-label="Search players">
+        <div class="popover search-results" id="search-results" hidden></div>
+      </div>
+      <nav class="topnav" aria-label="Sections">
+        <a href="#table">Table</a>
+        <a href="#fixtures">Fixtures</a>
+        <a href="#transfers">Transfers</a>
+      </nav>
+      <div class="settings">
+        <button class="icon-btn" id="settings-btn" type="button" aria-haspopup="true" aria-expanded="false" aria-label="Settings">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M19.4 13c.04-.33.06-.66.06-1s-.02-.67-.06-1l2.1-1.65a.5.5 0 0 0 .12-.64l-2-3.46a.5.5 0 0 0-.6-.22l-2.49 1a7.3 7.3 0 0 0-1.73-1l-.38-2.65A.5.5 0 0 0 13.93 2h-4a.5.5 0 0 0-.5.42l-.37 2.65c-.63.26-1.2.6-1.73 1l-2.5-1a.5.5 0 0 0-.6.22l-2 3.46a.5.5 0 0 0 .12.64L4.47 11c-.04.33-.07.66-.07 1s.03.67.07 1l-2.1 1.65a.5.5 0 0 0-.12.64l2 3.46c.12.22.38.3.6.22l2.5-1c.52.4 1.1.74 1.72 1l.38 2.65c.04.24.25.42.5.42h4c.25 0 .46-.18.5-.42l.37-2.65c.63-.26 1.2-.6 1.73-1l2.49 1c.23.08.48 0 .6-.22l2-3.46a.5.5 0 0 0-.12-.64L19.4 13ZM11.93 15.5a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7Z" fill="currentColor"/></svg>
+        </button>
+        <div class="popover settings-menu" id="settings-menu" hidden>
+          <div class="menu-section">
+            <div class="menu-title">Theme</div>
+            <div class="seg" role="group" aria-label="Theme">
+              <button type="button" data-action="theme" data-value="system">System</button>
+              <button type="button" data-action="theme" data-value="light">Light</button>
+              <button type="button" data-action="theme" data-value="dark">Dark</button>
+            </div>
+          </div>
+          <div class="menu-section">
+            <div class="menu-title">Odds format</div>
+            <div class="seg" role="group" aria-label="Odds format">
+              <button type="button" data-action="odds" data-value="decimal">Decimal</button>
+              <button type="button" data-action="odds" data-value="fractional">Fractional</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="page" id="app">
+    <div class="card empty">Loading the league…</div>
+  </main>
+
+  <footer class="footer">
+    <span>Data from the official FPL Draft API</span>
+    <span id="updated"></span>
+    <span>Odds are for bragging rights only</span>
+  </footer>
+
+  <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
+</body>
+</html>
