@@ -191,6 +191,54 @@ function withDiff(value, diff, tip, { lowerIsGood = false } = {}) {
   return `<span class="xv" data-tip="${esc(tip)}">${value}<sup class="diff ${tone}">${d > 0 ? '+' : ''}${d}</sup></span>`;
 }
 
+// A simulated finishing chance, shaded by how likely it is.
+function simCell(p) {
+  const label = p === 0 ? '–' : p < 0.005 ? '<1%' : p > 0.995 && p < 1 ? '>99%' : `${Math.round(p * 100)}%`;
+  const shade = Math.sqrt(p); // lifts the small chances off the background
+  return `<span class="simp${shade >= 0.6 ? ' strong' : ''}" style="--shade:${(shade * 100).toFixed(0)}%">${label}</span>`;
+}
+
+const PRIZE_MARKS = { 1: 'var(--qual-top)', 2: 'var(--qual-europe)' };
+const markedHeader = (label, color) => (color ? `<span class="qmark" style="--q:${color}">${label}</span>` : label);
+
+// The simulation's formula with this season's numbers, for the (i) by the legend.
+function simulationFormula() {
+  const m = D.simulation.model;
+  const share = (w) => `${Math.round(w * 100)}%`;
+  return [
+    'Each simulated week, a manager scores:',
+    `league average (${m.leagueAverage})`,
+    `+ ${share(m.formWeight)} × (their form − league average)`,
+    m.projectionWeight ? `+ ${share(m.projectionWeight)} × (projected XI − average projected XI), next gameweek only` : null,
+    `+ their level for this run (typically ±${m.levelSpread} a week)`,
+    `+ that week’s randomness (typically ±${m.spread}, ±${m.laterSpread} after next week)`,
+    '',
+    'Form is this season’s average score, weighting recent weeks more and pulled towards the league average while there are few weeks. Higher score wins 3 points, level scores draw. Equal points split on points scored.',
+  ]
+    .filter((line) => line !== null)
+    .join('\n');
+}
+
+function simulationCols() {
+  const positions = D.simulation.rows[0]?.positions.length ?? 0;
+  return [
+    posCol,
+    managerCol,
+    { label: 'PTS', w: '44px', cls: 'c-pts', tip: 'Average final points across the simulations', cell: (r) => Math.round(r.pts) },
+    ...Array.from({ length: positions }, (_, i) => ({
+      label: markedHeader(ordinal(i + 1), PRIZE_MARKS[i + 1] ?? (i === positions - 1 ? 'var(--qual-bottom)' : null)),
+      w: '44px',
+      from: 'md',
+      tip: `How often they finish ${ordinal(i + 1)}`,
+      cell: (r) => simCell(r.positions[i]),
+    })),
+    // Narrow tables get the three that matter instead of the full grid.
+    { label: markedHeader('1st', 'var(--qual-top)'), w: '48px', until: 'sm', tip: 'How often they win the league', cell: (r) => simCell(r.positions[0]) },
+    { label: 'Top 2', w: '52px', until: 'sm', tip: 'How often they finish in the prize places', cell: (r) => simCell(r.positions[0] + r.positions[1]) },
+    { label: markedHeader('Last', 'var(--qual-bottom)'), w: '48px', until: 'sm', tip: 'How often they finish last', cell: (r) => simCell(r.positions.at(-1)) },
+  ];
+}
+
 // Real table position against the expected one, as in FotMob's xG table.
 function rankDelta(r) {
   const d = r.tableRank - r.rank;
@@ -209,10 +257,13 @@ const BREAKPOINTS = ['xs', 'sm', 'md', 'lg']; // <380, ≥380, ≥550, ≥768px 
 const rowKey = (row) => (row.type === 'club' ? `club-${row.club}` : `m-${row.id}`);
 
 function dataTable(cols, rows, { rowClass = () => '', qual = () => null } = {}) {
-  const visible = (col, bp) => BREAKPOINTS.indexOf(col.from ?? 'xs') <= BREAKPOINTS.indexOf(bp);
+  const visible = (col, bp) => {
+    const i = BREAKPOINTS.indexOf(bp);
+    return BREAKPOINTS.indexOf(col.from ?? 'xs') <= i && i <= BREAKPOINTS.indexOf(col.until ?? 'lg');
+  };
   const width = (col, bp) => (typeof col.w === 'object' ? col.w[bp] : col.w);
   const templates = BREAKPOINTS.map((bp) => `--cols-${bp}:${cols.filter((c) => visible(c, bp)).map((c) => width(c, bp)).join(' ')}`).join(';');
-  const cell = (col, content) => `<div class="tc ${col.cls ?? ''} from-${col.from ?? 'xs'}">${content}</div>`;
+  const cell = (col, content) => `<div class="tc ${col.cls ?? ''} from-${col.from ?? 'xs'}${col.until ? ` until-${col.until}` : ''}">${content}</div>`;
   const head = cols.map((col) => cell(col, col.tip ? `<span data-tip="${esc(col.tip)}">${col.label}</span>` : col.label)).join('');
   const body = rows
     .map((row) => {
@@ -319,6 +370,17 @@ const TABLE_VIEWS = {
     note: () =>
       'Every week played against the league average: score above it for a win. The small number is your real points minus these, green when the fixture list helped you.',
   },
+  sim: {
+    label: 'Simulated',
+    rows: () => D.simulation.rows,
+    cols: simulationCols,
+    legend: [['var(--qual-top)', '1st prize'], ['var(--qual-europe)', '2nd prize'], ['var(--qual-bottom)', 'Penalty to be announced']],
+    info: simulationFormula,
+    note: () =>
+      D.simulation.gameweeksLeft
+        ? `The rest of the season played ${D.simulation.runs.toLocaleString()} times: ${plural(D.simulation.gameweeksLeft, 'gameweek')} to go. Each week’s scores are drawn around current form, the same way the odds are made, and ties on points go to points scored.`
+        : 'The season is over, so these are the final positions.',
+  },
   points: {
     label: 'Total points',
     rows: () => D.tables.points,
@@ -364,9 +426,13 @@ function standingsTable(viewId) {
   const view = TABLE_VIEWS[viewId];
   const rows = view.rows();
   const table = dataTable(view.cols(), rows, { rowClass: view.rowClass, qual: (r) => view.qual?.(r, rows) });
-  const legend = view.legend
-    ? `<div class="legend">${view.legend.map(([color, label]) => `<span class="legend-item"><i style="background:${color}"></i>${label}</span>`).join('')}</div>`
+  const info = view.info
+    ? `<button type="button" class="info-btn" data-tip="${esc(view.info())}" aria-label="How this is worked out">${infoSvg}</button>`
     : '';
+  const legend =
+    view.legend || info
+      ? `<div class="legend">${(view.legend ?? []).map(([color, label]) => `<span class="legend-item"><i style="background:${color}"></i>${label}</span>`).join('')}${info}</div>`
+      : '';
   const note = view.note ? `<div class="table-note">${view.note()}</div>` : '';
   return table + legend + note;
 }
@@ -1371,9 +1437,16 @@ function bindTooltips() {
     const el = event.target.closest('[data-tip]');
     if (event.pointerType !== 'touch' || !el) return hide();
     show(el);
-    hideTimer = setTimeout(hide, 2500);
+    hideTimer = setTimeout(hide, el.classList.contains('info-btn') ? 10000 : 2500);
   });
-  window.addEventListener('scroll', hide, { passive: true });
+  document.addEventListener('focusin', (event) => event.target.matches?.('[data-tip]') && show(event.target));
+  document.addEventListener('focusout', (event) => event.target.matches?.('[data-tip]') && hide());
+  // Scrolling hides a hover tip, but a focused element (keyboard) keeps its tip in place.
+  window.addEventListener(
+    'scroll',
+    () => (!tip.hidden && document.activeElement?.matches?.('[data-tip]') ? show(document.activeElement) : hide()),
+    { passive: true },
+  );
 }
 
 // --- Data loading ------------------------------------------------------------------
@@ -1440,6 +1513,7 @@ async function init() {
 
 const trophySvg = `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="24" fill="var(--brand-solid)"/><path d="M16 13h16v3h4v3a6 6 0 0 1-5.2 5.95A8 8 0 0 1 25.5 30v3H30v3H18v-3h4.5v-3a8 8 0 0 1-5.3-5.05A6 6 0 0 1 12 19v-3h4v-3Zm0 6v-.5h-1.5V19a3 3 0 0 0 1.6 2.66A8 8 0 0 1 16 21v-2Zm16 2c0 .23-.01.45-.03.67A3 3 0 0 0 33.5 19v-.5H32V21Z" fill="#fff"/></svg>`;
 const swapSvg = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2 1 5.5 4.5 9V6.5H11v-2H4.5V2Zm7 5v2.5H5v2h6.5V14L15 10.5 11.5 7Z" fill="currentColor"/></svg>`;
+const infoSvg = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.25" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg>`;
 const triangleSvg = `<svg class="tri" viewBox="0 0 8 8" aria-hidden="true"><path d="M4 1.5 7.5 6.5h-7Z" fill="currentColor"/></svg>`;
 const arrowSvg = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 10.5 7H7.5v3.5h-3V7h-3L6 1.5Z" fill="currentColor"/></svg>`;
 function chevronSvg(direction) {

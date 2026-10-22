@@ -1194,6 +1194,39 @@ img {
 }
 
 @container (min-width: 380px) {
+  .until-xs {
+    display: none;
+  }
+}
+
+@container (min-width: 550px) {
+  .until-sm {
+    display: none;
+  }
+}
+
+/* Simulated finishing chances: brand green, stronger the likelier it is. */
+.simp {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 26px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand-solid) var(--shade), transparent);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.simp.strong {
+  color: #fff;
+}
+
+.qmark {
+  padding-bottom: 3px;
+  box-shadow: inset 0 -2px 0 var(--q);
+}
+
+@container (min-width: 380px) {
   .ftable .trow {
     grid-template-columns: var(--cols-sm);
     column-gap: 12px;
@@ -1307,6 +1340,25 @@ img {
   width: 6px;
   height: 6px;
   border-radius: 2px;
+}
+
+.info-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--text-2);
+}
+
+.info-btn:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.info-btn svg {
+  width: 16px;
+  height: 16px;
 }
 
 .table-note {
@@ -2296,6 +2348,7 @@ img {
   color: #fff;
   font-size: 12px;
   line-height: 16px;
+  white-space: pre-line; /* multi-line tips, like the simulation formula */
   pointer-events: none;
   transform: translate(-50%, calc(-100% - 10px));
 }

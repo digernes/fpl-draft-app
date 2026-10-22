@@ -40,6 +40,12 @@ const ODDS_GAMEWEEKS = 3;
 const FORM_WEIGHT = 0.6;
 const PROJECTION_WEIGHT = 0.3;
 const MIN_SCORE_SPREAD = 13;
+// Season simulation: runs of the remaining fixtures, and how far a manager's true
+// level may sit from their form (points a week), drawn once per run. Seeded, so the
+// same data always gives the same percentages.
+const SIM_RUNS = 10000;
+const SIM_SKILL_SPREAD = 3;
+const SIM_SEED = 20262027;
 
 const POSITIONS = { 1: 'GKP', 2: 'DEF', 3: 'MID', 4: 'FWD' };
 // FotMob team ids keyed by the Premier League's club code (stable across seasons).
@@ -575,21 +581,70 @@ async function main() {
   const hasProjections = epByCode.size > 0 && meanProjection > 0;
 
   const nextGw = game.next_event ?? currentGw + 1;
+  const expectedScore = (id, gw) =>
+    leagueMean +
+    FORM_WEIGHT * (ratings[id] - leagueMean) +
+    (gw === nextGw && hasProjections ? PROJECTION_WEIGHT * (projections[id].pts - meanProjection) : 0);
+  const spreadFor = (gw) => sigma * (gw === nextGw ? 1 : 1.1);
   for (const m of matches) {
     if (m.started || m.gw < nextGw || m.gw >= nextGw + ODDS_GAMEWEEKS) continue;
-    const isNext = m.gw === nextGw;
-    const mu = (id) =>
-      leagueMean +
-      FORM_WEIGHT * (ratings[id] - leagueMean) +
-      (isNext && hasProjections ? PROJECTION_WEIGHT * (projections[id].pts - meanProjection) : 0);
-    const p = winDrawWin(mu(m.home), mu(m.away), sigma * (isNext ? 1 : 1.1));
+    const p = winDrawWin(expectedScore(m.home, m.gw), expectedScore(m.away, m.gw), spreadFor(m.gw));
     m.odds = {
       p: [round(p.home, 3), round(p.draw, 3), round(p.away, 3)],
       prices: [price(p.home), price(p.draw), price(p.away)],
-      expected: [round(mu(m.home), 1), round(mu(m.away), 1)],
+      expected: [round(expectedScore(m.home, m.gw), 1), round(expectedScore(m.away, m.gw), 1)],
     };
-    if (isNext && hasProjections) m.odds.xi = [projections[m.home].ids, projections[m.away].ids];
+    if (m.gw === nextGw && hasProjections) m.odds.xi = [projections[m.home].ids, projections[m.away].ids];
   }
+
+  // --- Season simulation ------------------------------------------------------
+  // Every unfinished match is played SIM_RUNS times with the odds model: each score
+  // drawn around the manager's expected score with this season's spread, plus a
+  // per-run offset for how good they really are. Ties on points split on points
+  // scored, as in the real table. A match still being played starts from scratch.
+  const remaining = matches
+    .filter((m) => !m.finished)
+    .map((m) => ({ ...m, muHome: expectedScore(m.home, m.gw), muAway: expectedScore(m.away, m.gw), spread: spreadFor(m.gw) }));
+  const finishCounts = Object.fromEntries(managerIds.map((id) => [id, new Array(managerIds.length).fill(0)]));
+  const pointsTotal = Object.fromEntries(managerIds.map((id) => [id, 0]));
+  const normal = gaussian(mulberry32(SIM_SEED));
+  for (let run = 0; run < SIM_RUNS; run++) {
+    const level = Object.fromEntries(managerIds.map((id) => [id, normal() * SIM_SKILL_SPREAD]));
+    const table = new Map(overall.map((r) => [r.id, { id: r.id, pts: r.pts, pf: r.pf }]));
+    for (const m of remaining) {
+      const home = table.get(m.home);
+      const away = table.get(m.away);
+      const homePts = Math.round(m.muHome + level[m.home] + normal() * m.spread);
+      const awayPts = Math.round(m.muAway + level[m.away] + normal() * m.spread);
+      home.pf += homePts;
+      away.pf += awayPts;
+      home.pts += homePts > awayPts ? scoring.h2h_win : homePts === awayPts ? scoring.h2h_draw : scoring.h2h_lose;
+      away.pts += awayPts > homePts ? scoring.h2h_win : homePts === awayPts ? scoring.h2h_draw : scoring.h2h_lose;
+    }
+    [...table.values()]
+      .sort((a, b) => b.pts - a.pts || b.pf - a.pf)
+      .forEach((row, position) => {
+        finishCounts[row.id][position]++;
+        pointsTotal[row.id] += row.pts;
+      });
+  }
+  const simulation = {
+    runs: SIM_RUNS,
+    gameweeksLeft: new Set(remaining.map((m) => m.gw)).size,
+    // The numbers behind the model, for the formula shown on the page.
+    model: {
+      leagueAverage: round(leagueMean, 1),
+      formWeight: FORM_WEIGHT,
+      projectionWeight: hasProjections ? PROJECTION_WEIGHT : 0,
+      levelSpread: SIM_SKILL_SPREAD,
+      spread: round(sigma, 1),
+      laterSpread: round(spreadFor(nextGw + 1), 1),
+    },
+    rows: managerIds
+      .map((id) => ({ id, pts: round(pointsTotal[id] / SIM_RUNS, 1), positions: finishCounts[id].map((n) => round(n / SIM_RUNS, 4)) }))
+      .sort((a, b) => b.pts - a.pts)
+      .map((row, i) => ({ ...row, rank: i + 1 })),
+  };
 
   // --- Players referenced anywhere -------------------------------------------
 
@@ -661,6 +716,7 @@ async function main() {
     gameweeks: events.map((e) => ({ id: e.id, deadline: e.deadline_time, finished: e.finished, doubles: doubleClubs[e.id] ?? [] })),
     matches,
     tables: { overall, form: formTable, xg: xgTable, luck: luckTable, points: pointsTable, premierLeague: plTable },
+    simulation,
     plTwins,
     lineups,
     topGameweeks,
@@ -854,6 +910,26 @@ function normalCdf(x) {
   const poly = t * (0.254829592 + t * (-0.284496736 + t * (1.421413741 + t * (-1.453152027 + t * 1.061405429))));
   const erf = 1 - poly * Math.exp(-z * z);
   return x >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
+}
+
+// Small seeded PRNG (mulberry32) and a Box-Muller normal on top of it.
+function mulberry32(seed) {
+  let a = seed >>> 0;
+  return () => {
+    a = (a + 0x6d2b79f5) >>> 0;
+    let t = a;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+function gaussian(random) {
+  return () => {
+    let u = 0;
+    while (u === 0) u = random();
+    return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * random());
+  };
 }
 
 function price(probability) {
