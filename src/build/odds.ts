@@ -3,6 +3,7 @@
 // around it, and prices rounded down onto the UK fractional ladder.
 
 import type { Data, Match, MatchResult, Odds, Price } from '../shared/data.ts';
+import { bestXi } from '../shared/best-xi.ts';
 import { price as sharedPrice, winDrawWin } from '../shared/odds.ts';
 import { FORM_WEIGHT, MIN_SCORE_SPREAD, ODDS_GAMEWEEKS, ODDS_OVERROUND, POSITIONS, PROJECTION_WEIGHT } from './config.ts';
 import type { Season } from './season.ts';
@@ -12,7 +13,7 @@ import { round, sum } from './util.ts';
 export type OddsModel = ReturnType<typeof oddsModel>;
 
 export function oddsModel(season: Season, managerIds: number[], results: Results, scoresByGw: Record<string, { pts: number }[]>) {
-  const { elements, ownerNow, fplBoot, boot, nextGw } = season;
+  const { elements, ownerNow, fplBoot, boot, nextGw, xiLimits } = season;
   const epByCode = new Map((fplBoot?.elements ?? []).map((el) => [el.code, Number(el.ep_next)]));
   const epNowByCode = new Map((fplBoot?.elements ?? []).map((el) => [el.code, Number(el.ep_this)]));
   const expected = (pid: number) => {
@@ -26,7 +27,8 @@ export function oddsModel(season: Season, managerIds: number[], results: Results
   const projections = Object.fromEntries(
     managerIds.map((id) => {
       const squad = [...ownerNow].filter(([, owner]) => owner === id).map(([pid]) => pid);
-      return [id, bestXi(squad, expected, (pid) => elements.get(pid)?.element_type, boot.settings.squad)];
+      const xi = bestXi(squad, expected, (pid) => POSITIONS[elements.get(pid)?.element_type ?? 0], xiLimits, boot.settings.squad.play);
+      return [id, { ids: xi.ids, pts: round(xi.pts, 1) }];
     }),
   );
 
@@ -100,35 +102,6 @@ export function priceMatches(
     m.odds = priced(expectedScore(m.home, m.gw), expectedScore(m.away, m.gw), spreadFor(m.gw));
     if (m.gw === nextGw && hasProjections) m.odds.xi = [projections[m.home].ids, projections[m.away].ids];
   }
-}
-
-// Best legal XI by expected points, honouring the league's formation limits.
-export function bestXi(
-  squad: number[],
-  expected: (pid: number) => number,
-  positionOf: (pid: number) => number | undefined,
-  rules: Season['boot']['settings']['squad'],
-): { ids: number[]; pts: number } {
-  const byPos: Record<number, number[]> = { 1: [], 2: [], 3: [], 4: [] };
-  for (const pid of squad) byPos[positionOf(pid) ?? 0]?.push(pid);
-  for (const list of Object.values(byPos)) list.sort((a, b) => expected(b) - expected(a));
-  const limits = [1, 2, 3, 4].map((t) => {
-    const key = POSITIONS[t];
-    return [rules[`min_play_${key}`], Math.min(rules[`max_play_${key}`], byPos[t].length)];
-  });
-  let best = { ids: [] as number[], pts: 0 };
-  const choose = (t: number, counts: number[]) => {
-    if (t === 4) {
-      if (sum(counts) !== rules.play) return;
-      const ids = counts.flatMap((n, i) => byPos[i + 1].slice(0, n));
-      const pts = sum(ids.map(expected));
-      if (pts > best.pts) best = { ids, pts };
-      return;
-    }
-    for (let n = limits[t][0]; n <= limits[t][1]; n++) choose(t + 1, [...counts, n]);
-  };
-  choose(0, []);
-  return { ids: best.ids, pts: round(best.pts, 1) };
 }
 
 // Recency-weighted average score, shrunk towards the league mean early in the season.

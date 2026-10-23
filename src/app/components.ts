@@ -48,9 +48,10 @@ export function photo(pid: number | string, size = 32) {
   return `<span class="photo" style="--s:${size}px">${kitSvg(p?.club)}${img}</span>`;
 }
 
+export const pointsTier = (pts: number) => (pts >= 10 ? 'p4' : pts >= 6 ? 'p3' : pts >= 3 ? 'p2' : pts >= 1 ? 'p1' : 'p0');
+
 export function ptsPill(pts: number) {
-  const tier = pts >= 10 ? 'p4' : pts >= 6 ? 'p3' : pts >= 3 ? 'p2' : pts >= 1 ? 'p1' : 'p0';
-  return `<span class="ptsp ${tier}">${pts}</span>`;
+  return `<span class="ptsp ${pointsTier(pts)}">${pts}</span>`;
 }
 
 export function tag(text: string, tip = '', cls = '') {

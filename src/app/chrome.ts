@@ -83,6 +83,9 @@ function onClick(event: MouseEvent) {
     state.squadId = Number(value);
     history.replaceState(null, '', `#squads/${value}`);
     renderView();
+  } else if (action === 'lineup-view') {
+    state.lineupView = value;
+    renderView();
   } else if (action === 'squad-scope') {
     state.squadScope = value;
     renderView();

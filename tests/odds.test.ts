@@ -1,7 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { bestXi, normalCdf, price, rating, winDrawWin } from '../src/build/odds.ts';
+import { normalCdf, price, rating, winDrawWin } from '../src/build/odds.ts';
+import { bestXi } from '../src/shared/best-xi.ts';
+import type { Position } from '../src/shared/data.ts';
 import { gaussian, mulberry32 } from '../src/build/simulation.ts';
 import { liveOdds } from '../src/shared/odds.ts';
 import { matchResult, streaks } from '../src/build/tables.ts';
@@ -44,32 +46,48 @@ describe('rating', () => {
 });
 
 describe('bestXi', () => {
-  const rules = {
-    play: 11,
-    ...{
-      min_play_GKP: 1,
-      max_play_GKP: 1,
-      min_play_DEF: 3,
-      max_play_DEF: 5,
-      min_play_MID: 2,
-      max_play_MID: 5,
-      min_play_FWD: 1,
-      max_play_FWD: 3,
-    },
-  };
+  const limits: Record<Position, [number, number]> = { GKP: [1, 1], DEF: [3, 5], MID: [2, 5], FWD: [1, 3] };
   // 2 GKP, 5 DEF, 5 MID, 3 FWD; the forwards project best, the defenders worst.
-  const types = [1, 1, 2, 2, 2, 2, 2, 3, 3, 3, 3, 3, 4, 4, 4];
+  const positions: Position[] = ['GKP', 'GKP', 'DEF', 'DEF', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'MID', 'MID', 'FWD', 'FWD', 'FWD'];
   const ep = [5, 1, 1, 1, 1, 1, 1, 4, 4, 4, 4, 4, 6, 6, 6];
-  const squad = types.map((_, i) => i);
+  const squad = positions.map((_, i) => i);
   it('picks the best legal XI', () => {
     const xi = bestXi(
       squad,
       (pid) => ep[pid],
-      (pid) => types[pid],
-      rules,
+      (pid) => positions[pid],
+      limits,
     );
     assert.equal(xi.ids.length, 11);
     assert.equal(xi.pts, 5 + 3 * 1 + 4 * 4 + 3 * 6); // 3-4-3: three forwards is the most allowed
+  });
+
+  it('keeps every position within its limits', () => {
+    // One goalkeeper, three defenders, six midfielders and a forward: the only way to
+    // eleven is six midfielders, one over the maximum, so there is no legal XI.
+    const short: Position[] = ['GKP', 'DEF', 'DEF', 'DEF', 'MID', 'MID', 'MID', 'MID', 'MID', 'MID', 'FWD'];
+    const ids = (list: Position[]) => list.map((_, i) => i);
+    assert.deepEqual(
+      bestXi(
+        ids(short),
+        () => 1,
+        (pid) => short[pid],
+        limits,
+      ).ids,
+      [],
+    );
+    // A second forward, even one worth nothing, makes 1-3-5-2 possible.
+    const fixed: Position[] = [...short, 'FWD'];
+    const xi = bestXi(
+      ids(fixed),
+      (pid) => (pid === 11 ? 0 : 1),
+      (pid) => fixed[pid],
+      limits,
+    );
+    assert.deepEqual(
+      xi.ids.sort((a, b) => a - b),
+      [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11],
+    );
   });
 });
 
