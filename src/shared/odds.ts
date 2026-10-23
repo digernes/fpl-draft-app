@@ -1,10 +1,10 @@
 // The odds maths shared by the build (pre-match odds) and the page (live odds): a
-// normal model of the score difference, and prices on the UK fractional ladder.
+// normal model of the score difference, and prices in decimal and fractional.
 
 import type { Price } from './data.ts';
 
-// The usual UK fractional ladder. Prices are rounded down onto it, so decimal and
-// fractional always show the same price.
+// The usual UK fractional ladder. It is coarse near evens (10/11 covers every chance from
+// 47.6% to 49.9%), so decimal prices step on their own, finer ladder (DECIMAL_STEPS).
 // prettier-ignore
 const FRACTIONS: [number, number][] = [
   [1, 100], [1, 50], [1, 33], [1, 25], [1, 20], [1, 16], [1, 14], [1, 12], [1, 10], [1, 9], [1, 8],
@@ -15,6 +15,10 @@ const FRACTIONS: [number, number][] = [
   [15, 2], [8, 1], [17, 2], [9, 1], [10, 1], [11, 1], [12, 1], [14, 1], [16, 1], [18, 1], [20, 1],
   [22, 1], [25, 1], [28, 1], [33, 1], [40, 1], [50, 1], [66, 1], [80, 1], [100, 1],
 ];
+
+// Decimal prices step as on a betting exchange: by 0.01 up to 2, then by more as they lengthen.
+// prettier-ignore
+const DECIMAL_STEPS: [number, number][] = [[2, 0.01], [3, 0.02], [4, 0.05], [6, 0.1], [10, 0.2], [20, 0.5], [30, 1], [50, 2], [100, 5]];
 
 /** Home win, draw and away win when the home side's lead ends up ~ Normal(diff, spread). A draw is both sides on the same integer. */
 export function outcomeProbabilities(diff: number, spread: number) {
@@ -37,12 +41,19 @@ export function normalCdf(x: number): number {
   return x >= 0 ? (1 + erf) / 2 : (1 - erf) / 2;
 }
 
-// The fair price less the bookmaker's margin, rounded down onto the ladder.
+// The fair price less the bookmaker's margin, rounded down onto each ladder.
 export function price(probability: number, overround: number): Price {
   const fair = 1 / (probability * overround);
   let [num, den] = FRACTIONS[0];
   for (const [n, d] of FRACTIONS) if (1 + n / d <= fair + 1e-9) [num, den] = [n, d];
-  return { dec: Math.round((1 + num / den) * 100) / 100, frac: `${num}/${den}` };
+  return { dec: decimalPrice(fair), frac: `${num}/${den}` };
+}
+
+function decimalPrice(fair: number) {
+  const band = DECIMAL_STEPS.find(([upTo]) => fair < upTo);
+  if (!band) return 100;
+  const stepped = Math.floor(fair / band[1] + 1e-9) * band[1];
+  return Math.max(1.01, Math.round(stepped * 100) / 100);
 }
 
 // In-play odds from two live projections (see liveProjection in live.ts).

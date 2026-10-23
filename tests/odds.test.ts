@@ -9,10 +9,18 @@ import { liveOdds } from '../src/shared/odds.ts';
 import { matchResult, streaks } from '../src/build/tables.ts';
 
 describe('prices', () => {
-  it('rounds down onto the fractional ladder, with the overround', () => {
-    assert.deepEqual(price(0.5), { dec: 1.83, frac: '5/6' }); // fair 1.90 after the 5% margin
-    assert.deepEqual(price(0.25), { dec: 3.75, frac: '11/4' });
+  it('rounds down onto each ladder, with the overround', () => {
+    assert.deepEqual(price(0.5), { dec: 1.9, frac: '5/6' }); // fair 1.905 after the 5% margin
+    assert.deepEqual(price(0.25), { dec: 3.8, frac: '11/4' });
+    assert.deepEqual(price(0.022), { dec: 42, frac: '40/1' });
     assert.deepEqual(price(0.999), { dec: 1.01, frac: '1/100' }); // never below the shortest price
+    assert.deepEqual(price(0), { dec: 100, frac: '100/1' }); // nor above the longest
+  });
+
+  it('tells close chances apart in decimal, where the fractional ladder cannot', () => {
+    const [a, b] = [price(0.482), price(0.497)];
+    assert.equal(a.frac, b.frac);
+    assert.deepEqual([a.dec, b.dec], [1.97, 1.91]);
   });
 
   it('gives home, draw and away probabilities that add up to one', () => {
