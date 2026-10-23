@@ -98,7 +98,7 @@ doesn't replace it with the real scores), and `node scripts/fake-live.ts --resto
 ## Code
 
 TypeScript throughout, in strict mode. Node 24 runs the build scripts as they are; esbuild bundles
-the page, its styles and the service worker; Wrangler bundles the Worker.
+the page, its styles and the service worker; Wrangler bundles the Worker. CLAUDE.md has the working notes.
 
 ```
 scripts/build-data.ts   builds data.json (entry point)
