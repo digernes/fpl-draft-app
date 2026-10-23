@@ -8,6 +8,9 @@ import { first, gwPoints, lineupFor, player, slotOf, type Played } from './looku
 import { D } from './state.ts';
 import { tableFrom } from './table.ts';
 
+// The prize's small print, last in both its rules tips.
+export const dgwRule = () => `−${D.meta.dgwPenalty} per DGW player in the XI.`;
+
 export const resultText = (g: TopGameweek) => {
   const oppPts = g.oppPts as number;
   return g.opp ? `${g.pts > oppPts ? 'Won' : g.pts < oppPts ? 'Lost' : 'Drew'} ${g.pts}-${g.oppPts} vs ${first(g.opp)}` : '';

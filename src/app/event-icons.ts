@@ -18,12 +18,15 @@ export interface EventSlots {
 
 const icon = (svg: string, tip: string) => `<span class="ev" data-tip="${tip}">${svg}</span>`;
 const times = (n: number | undefined, svg: string, tip: string) => icon(svg, tip).repeat(n ?? 0);
+// A substitution with its minute, over the arrow on a pitch and in front of it in a row.
+const sub = (on: boolean, minute: number | undefined, tip: string) =>
+  `<span class="ev-sub ${on ? 'on' : 'off'}">${minute ? `<span class="ev-min">${minute}'</span>` : ''}${icon(subSvg(on), tip)}</span>`;
 
 function icons(ev: PlayerEvents) {
   return {
     subs:
-      (ev.on ? icon(subSvg(true), `Came on · played ${plural(ev.min ?? 0, 'minute')}`) : '') +
-      (ev.off ? icon(subSvg(false), `Taken off after ${plural(ev.min ?? 0, 'minute')}`) : ''),
+      (ev.on ? sub(true, ev.onAt, `Came on · played ${plural(ev.min ?? 0, 'minute')}`) : '') +
+      (ev.off ? sub(false, ev.min, `Taken off after ${plural(ev.min ?? 0, 'minute')}`) : ''),
     cards: times(ev.yellow, cardSvg(false), 'Yellow card') + times(ev.red, cardSvg(true), 'Red card'),
     assists: times(ev.assists, bootSvg(), 'Assist'),
     goals: times(ev.goals, ballSvg(), 'Goal') + times(ev.ownGoals, ownGoalSvg, 'Own goal') + times(ev.pensSaved, gloveSvg, 'Penalty saved'),

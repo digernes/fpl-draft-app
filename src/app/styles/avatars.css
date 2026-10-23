@@ -183,6 +183,11 @@
   white-space: nowrap;
 }
 
+/* A kick-off's day stays in line with its time (a pill is a grid, which would stack it). */
+.ko-day {
+  display: contents;
+}
+
 .tag {
   display: inline-flex;
   align-items: center;

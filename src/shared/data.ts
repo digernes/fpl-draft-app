@@ -10,6 +10,20 @@ export type Formation = Record<'DEF' | 'MID' | 'FWD', number>;
 export type XiLimits = Record<Position, [number, number]>;
 /** Keyed by id; JSON object keys are strings, but numeric lookups work. */
 export type ById<T> = Record<string, T>;
+/** The site's expected points taken apart: expected minutes, then the points from each part, in src/model/points.ts's order. */
+export type XpParts = [
+  minutes: number,
+  playing: number,
+  goals: number,
+  penalties: number,
+  assists: number,
+  cleanSheet: number,
+  conceded: number,
+  defcon: number,
+  saves: number,
+  bonus: number,
+  cards: number,
+];
 
 export interface Data {
   meta: Meta;
@@ -100,7 +114,7 @@ export interface Odds {
   p: [number, number, number];
   prices: [Price, Price, Price];
   expected: [number, number];
-  /** Projected XIs behind the next gameweek's prices. */
+  /** Projected XIs behind the prices, for the gameweeks that show them. */
   xi?: [number[], number[]];
   /** Worked out after kick-off from the form before the gameweek. */
   afterwards?: true;
@@ -268,8 +282,8 @@ export interface LiveData extends SlimLive {
   gw: number;
   /** Expected points for this gameweek, for everyone in a lineup. */
   ep: ById<number>;
-  /** Of those, the appearance and clean-sheet points, which FPL hands out at 1 and 60 minutes (from the site's model only). */
-  milestones?: ById<[appearance: number, cleanSheet: number]>;
+  /** Those taken apart (from the site's model only): the live odds take the appearance and clean-sheet points from them, which FPL hands out at 1 and 60 minutes. */
+  parts?: ById<XpParts>;
   /** Points for a clean sheet, by position. */
   cleanSheet?: Partial<Record<Position, number>>;
   /** FPL's own expected points as they were at the deadline, for the setting that shows them; left out when `ep` is FPL's already. */
@@ -439,6 +453,10 @@ export interface Player {
   ep: number;
   /** FPL's own, its form, for the setting that shows them instead; left out when `ep` is FPL's already. */
   fpl?: number;
+  /** The site's taken apart, in tenths, for its tooltip: only for players in a squad (the only ones the page shows xP for) it expects something of. */
+  parts?: XpParts;
+  /** The site's for the gameweeks after the next that show projected XIs, in order, for players in a squad. */
+  ahead?: { ep: number; parts?: XpParts }[];
 }
 
 export interface SeasonIndex {

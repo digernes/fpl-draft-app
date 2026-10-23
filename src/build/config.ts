@@ -14,6 +14,8 @@ export const FORM_LENGTH = 5;
 // plus how far their best projected XI that gameweek sits from the league's average one.
 export const ODDS_OVERROUND = 1.05;
 export const ODDS_GAMEWEEKS = 3;
+// Of those, how many show their projected XIs and xP on the page (the rest use them only in the odds).
+export const PROJECTED_GAMEWEEKS = 3;
 export const MIN_SCORE_SPREAD = 13;
 // Season simulation: runs of the remaining fixtures, and how far a manager's true
 // level may sit from their projections (points a week), drawn once per run. Seeded, so

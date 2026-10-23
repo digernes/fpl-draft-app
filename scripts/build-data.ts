@@ -107,7 +107,7 @@ const data: Data = {
   live: buildLiveData(
     season,
     lineups,
-    { now: model.expectedNow, fromFpl: model.fromFpl, fplNow: model.fplNow, milestones: model.milestones },
+    { now: model.expectedNow, fromFpl: model.fromFpl, fplNow: model.fplNow, parts: model.partsNow },
     previous,
   ),
   topGameweeks,
@@ -122,6 +122,8 @@ const data: Data = {
     lineups,
     model.expected,
     model.fromFpl ? undefined : model.fplExpected,
+    model.parts,
+    model.ahead,
   ),
 };
 

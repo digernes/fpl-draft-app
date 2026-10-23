@@ -2,7 +2,7 @@
 // the double-gameweek adjustment, bench points and expected points, and what the
 // players in it did.
 
-import type { ById, Data, LiveData, Lineup, Manager, Match, Underlying } from '../shared/data.ts';
+import type { ById, Data, LiveData, Lineup, Manager, Match, Underlying, XpParts } from '../shared/data.ts';
 import { scoreLineup, slimLive, type PlayerEvents, type SlimLive } from '../shared/live.ts';
 import { readScoring } from '../model/points.ts';
 import { DGW_PENALTY } from './config.ts';
@@ -128,8 +128,8 @@ export interface LiveExpected {
   fromFpl: boolean;
   /** FPL's own for it. */
   fplNow: (pid: number) => number;
-  /** Of the site's, the appearance and clean-sheet points. */
-  milestones?: (pid: number) => [number, number] | undefined;
+  /** The site's taken apart. */
+  parts?: (pid: number) => XpParts | undefined;
 }
 
 // The gameweek being played, as the page needs it to show who is still to play and
@@ -154,15 +154,15 @@ export function buildLiveData(season: Season, lineups: Lineups, x: LiveExpected,
     round(x.fplNow(pid), 1);
   const feed = { gw, ...slimLive(live[gw]) };
   if (x.fromFpl) return { ...feed, ep: Object.fromEntries(ids.map((pid) => [pid, fpl(pid)])) };
-  const milestones: ById<[number, number]> = {};
+  const parts: ById<XpParts> = {};
   for (const pid of ids) {
-    const m = x.milestones?.(pid);
-    if (m) milestones[pid] = [round(m[0], 2), round(m[1], 2)];
+    const p = x.parts?.(pid);
+    if (p) parts[pid] = p.map((v) => round(v, 2)) as XpParts;
   }
   return {
     ...feed,
     ep: Object.fromEntries(ids.map((pid) => [pid, round(x.now(pid), 1)])),
-    milestones,
+    parts,
     cleanSheet: readScoring(season.boot.settings.scoring).cleanSheet,
     fplEp: Object.fromEntries(ids.map((pid) => [pid, fpl(pid)])),
   };

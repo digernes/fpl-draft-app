@@ -146,8 +146,9 @@
   gap: 2px;
 }
 
+/* Anchored at the bottom, so a substitution's minute stacks upwards from the arrow. */
 .pp-ev.top-left {
-  top: -8px;
+  bottom: 34px;
   right: 32px;
 }
 
@@ -185,6 +186,33 @@
 
 .ev + .ev {
   margin-left: -11px;
+}
+
+/* A substitution's minute, over the arrow as on fotmob.com, in front of it in a row. */
+.ev-sub {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.ev-min {
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 14px;
+}
+
+/* In the text colour on the pitch, as on fotmob.com; a bench row's go green and red. */
+.ev-row .ev-sub.on .ev-min {
+  color: var(--event-green);
+}
+
+.ev-row .ev-sub.off .ev-min {
+  color: var(--lose);
+}
+
+.ev-row .ev-sub {
+  flex-direction: row;
+  gap: 2px;
 }
 
 .ev svg {

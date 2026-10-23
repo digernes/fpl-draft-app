@@ -24,6 +24,8 @@ export interface Scoring {
   defcon: Record<Position, number>;
   defconLimit: Record<Position, number>;
   yellow: number;
+  penaltySaved: number;
+  penaltyMissed: number;
 }
 
 const POSITIONS: Position[] = ['GKP', 'DEF', 'MID', 'FWD'];
@@ -46,6 +48,8 @@ export function readScoring(rules: Record<string, unknown>): Scoring {
     defcon: byPosition('defensive_contribution'),
     defconLimit: byPosition('defensive_contribution_limit'),
     yellow: rule('yellow_cards'),
+    penaltySaved: rule('penalties_saved'),
+    penaltyMissed: rule('penalties_missed'),
   };
 }
 
@@ -65,20 +69,38 @@ export interface Match {
   /** The xG his club can expect, and the xG it can expect to concede, over 90 minutes. */
   xg: number;
   xga: number;
+  /**
+   * The penalties his club and its opponent can expect, and the chance he takes his
+   * club's: that nobody ahead of him in FPL's order is on the pitch (0 when he isn't on it).
+   */
+  penalties?: { for: number; against: number; first: number };
 }
 
-export const PARTS = ['appearance', 'goals', 'assists', 'cleanSheet', 'conceded', 'defcon', 'saves', 'bonus', 'cards'] as const;
+export const PARTS = [
+  'appearance',
+  'goals',
+  'penalties',
+  'assists',
+  'cleanSheet',
+  'conceded',
+  'defcon',
+  'saves',
+  'bonus',
+  'cards',
+] as const;
 export type Parts = Record<(typeof PARTS)[number], number>;
 
 /**
  * How the counts behave: how spread out goals and defensive actions are, as negative
- * binomial sizes (Infinity: Poisson), and a goalkeeper's saves per 90 as
- * `base + perXga × the xG his club concedes`.
+ * binomial sizes (Infinity: Poisson), a goalkeeper's saves per 90 as
+ * `base + perXga × the xG his club concedes`, and penalties: a club's per match at an
+ * average attack, and the shares scored (a penalty's xG) and saved.
  */
 export interface Counts {
   goals: number;
   defcon: number;
   saves: { base: number; perXga: number };
+  penalties: { perMatch: number; scored: number; saved: number };
 }
 
 export function matchParts(pos: Position, s: Scoring, r: Rates, minutes: number, m: Match, counts: Counts): Parts {
@@ -89,6 +111,14 @@ export function matchParts(pos: Position, s: Scoring, r: Rates, minutes: number,
   return {
     appearance: long ? s.longPlay : s.shortPlay,
     goals: s.goal[pos] * r.goalShare * m.xg * share,
+    // A penalty he takes: the goal when it goes in, the deduction when it doesn't; for a
+    // goalkeeper, the penalties he saves.
+    penalties:
+      share *
+      ((m.penalties?.first ?? 0) *
+        (m.penalties?.for ?? 0) *
+        (counts.penalties.scored * s.goal[pos] + (1 - counts.penalties.scored) * s.penaltyMissed) +
+        (pos === 'GKP' ? (m.penalties?.against ?? 0) * counts.penalties.saved * s.penaltySaved : 0)),
     assists: s.assist * r.assistShare * m.xg * share,
     cleanSheet: long ? s.cleanSheet[pos] * chances(against, counts.goals)[0] : 0,
     conceded: s.conceded[pos] * floorMean(against, s.concedeLimit, counts.goals),

@@ -6,10 +6,10 @@ import { buildLiveData } from '../src/build/lineups.ts';
 import type { Season } from '../src/build/season.ts';
 import type { Data, Position } from '../src/shared/data.ts';
 import {
-  clubState,
   liveProjection,
   provisionalBonus,
   scoreLineup,
+  playerState,
   shareToCome,
   slimLive,
   type SlimFixture,
@@ -242,10 +242,41 @@ describe('slimLive', () => {
     assert.deepEqual(slim.events, {
       1: { goals: 2, bonus: 3 },
       2: { assists: 1, yellow: 1, off: 1, min: 63 },
-      3: { on: 1, min: 27 },
+      3: { on: 1, onAt: 63, min: 27 },
       4: { red: 1 },
-      7: { on: 1, min: 120 },
+      7: { on: 1, onAt: 60, min: 120 },
     });
+  });
+
+  it('sees a starter go off while his match is on, from the minutes of those still on', () => {
+    const stats = { total_points: 2, minutes: 61, goals_scored: 0, assists: 0, clean_sheets: 0, goals_conceded: 0, starts: 1 };
+    const minutes = (value: number): [{ stat: string; value: number }[], number][] => [[[{ stat: 'minutes', value }], 10]];
+    const slim = slimLive({
+      elements: {
+        11: { stats, explain: minutes(61) }, // still on
+        12: { stats: { ...stats, minutes: 52 }, explain: minutes(52) }, // taken off
+        13: { stats: { ...stats, minutes: 9, starts: 0 }, explain: minutes(9) }, // came on for him
+        14: { stats: { ...stats, minutes: 40, red_cards: 1 }, explain: minutes(40) }, // sent off
+      },
+      fixtures: [
+        {
+          id: 10,
+          team_h: 1,
+          team_a: 2,
+          started: true,
+          finished: false,
+          finished_provisional: false,
+          team_h_score: 0,
+          team_a_score: 0,
+          minutes: 0,
+        },
+      ],
+    });
+    assert.deepEqual(slim.fixtures[0].off, [
+      [12, 52],
+      [14, 40],
+    ]);
+    assert.deepEqual(slim.events, { 12: { off: 1, min: 52 }, 13: { on: 1, onAt: 52, min: 9 }, 14: { red: 1 } });
   });
 });
 
@@ -262,18 +293,26 @@ describe('who is still to play', () => {
     ],
   };
   it('tells live, done, due and blank apart', () => {
-    assert.deepEqual(clubState(feed, 1), { state: 'done' });
-    assert.deepEqual(clubState(feed, 4), { state: 'live', min: 60 });
-    assert.deepEqual(clubState(feed, 6), { state: 'due', ko: '2026-10-25T14:00:00Z' });
-    assert.deepEqual(clubState(feed, 7), { state: 'due', ko: '2026-10-27T19:30:00Z' });
-    assert.deepEqual(clubState(feed, 10), { state: 'blank' });
+    assert.deepEqual(playerState(feed, 99, 1), { state: 'done' });
+    assert.deepEqual(playerState(feed, 99, 4), { state: 'live', min: 60 });
+    assert.deepEqual(playerState(feed, 99, 6), { state: 'due', ko: '2026-10-25T14:00:00Z', opp: 5, home: false });
+    assert.deepEqual(playerState(feed, 99, 7), { state: 'due', ko: '2026-10-27T19:30:00Z', opp: 9, home: false });
+    assert.deepEqual(playerState(feed, 99, 10), { state: 'blank' });
   });
   it('counts how much of the gameweek is left', () => {
-    assert.equal(shareToCome(feed, 1), 0);
-    assert.ok(Math.abs(shareToCome(feed, 3) - 1 / 3) < 1e-12);
-    assert.equal(shareToCome(feed, 5), 1);
-    assert.equal(shareToCome(feed, 7), 0.5);
-    assert.equal(shareToCome(feed, 10), 0);
+    assert.equal(shareToCome(feed, 99, 1), 0);
+    assert.ok(Math.abs(shareToCome(feed, 99, 3) - 1 / 3) < 1e-12);
+    assert.equal(shareToCome(feed, 99, 5), 1);
+    assert.equal(shareToCome(feed, 99, 7), 0.5);
+    assert.equal(shareToCome(feed, 99, 10), 0);
+  });
+  it('has nothing more to come from a player taken off', () => {
+    const on: SlimLive = { ...feed, fixtures: feed.fixtures.map((f) => (f.id === 2 ? { ...f, off: [[42, 59]] } : f)) };
+    assert.deepEqual(playerState(on, 42, 3), { state: 'off', min: 59 });
+    assert.deepEqual(playerState(on, 43, 3), { state: 'live', min: 60 });
+    assert.equal(shareToCome(on, 42, 3), 0);
+    const scored = { xi: [42], bench: [], subs: [], pts: 3, points: () => 3 };
+    assert.equal(liveProjection(scored, on, () => ({ pos: 'MID' as const, club: 3 }), { points: () => 6 }).mean, 3);
   });
   it('projects the final score from what is left', () => {
     const info = (id: number) => ({ pos: 'MID' as const, club: id });
@@ -323,7 +362,12 @@ describe('buildLiveData', () => {
   const fplNow = () => 2; // FPL's, after the deadline has cut everyone's form
   const fromFpl = (previous: Partial<Data> | null) => buildLiveData(season, lineups, { now: fplNow, fromFpl: true, fplNow }, previous);
   const fromModel = (previous: Partial<Data> | null) =>
-    buildLiveData(season, lineups, { now: () => 4, fromFpl: false, fplNow, milestones: () => [1.9, 1.2] }, previous);
+    buildLiveData(
+      season,
+      lineups,
+      { now: () => 4, fromFpl: false, fplNow, parts: () => [80.123, 1.9, 0.6, 0.4, 0.3, 1.2, -0.3, 0.2, 0, 0.2, -0.1] },
+      previous,
+    );
 
   it('keeps FPL’s expected points from the last build before the deadline', () => {
     const before = { meta: { nextGw: 8 }, players: { 5: { ep: 6, fpl: 5 }, 6: { ep: 4.5, fpl: 3 } } } as unknown as Partial<Data>;
@@ -331,7 +375,7 @@ describe('buildLiveData', () => {
     const model = fromModel(before);
     assert.deepEqual(model?.ep, { 5: 4, 6: 4, 7: 4 }); // the site's own, which don't drop
     assert.deepEqual(model?.fplEp, { 5: 5, 6: 3, 7: 2 });
-    assert.deepEqual(model?.milestones?.[5], [1.9, 1.2]);
+    assert.deepEqual(model?.parts?.[5], [80.12, 1.9, 0.6, 0.4, 0.3, 1.2, -0.3, 0.2, 0, 0.2, -0.1]);
     assert.equal(model?.cleanSheet?.DEF, 4);
   });
 

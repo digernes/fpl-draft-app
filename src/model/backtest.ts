@@ -117,7 +117,8 @@ function actualParts(season: Season, s: ReturnType<typeof readScoring>, pid: num
     const value = (stat: string) => stats.find((x) => x.stat === stat)?.value ?? 0;
     const minutes = value('minutes');
     if (minutes > 0) got.appearance += minutes >= s.longPlayLimit ? s.longPlay : s.shortPlay;
-    got.goals += s.goal[pos] * value('goals_scored');
+    got.goals += s.goal[pos] * value('goals_scored'); // FPL doesn't say which were penalties
+    got.penalties += s.penaltyMissed * value('penalties_missed') + s.penaltySaved * value('penalties_saved');
     got.assists += s.assist * value('assists');
     got.cleanSheet += s.cleanSheet[pos] * value('clean_sheets');
     got.conceded += s.conceded[pos] * Math.floor(value('goals_conceded') / s.concedeLimit);

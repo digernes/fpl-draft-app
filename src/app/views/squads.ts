@@ -5,11 +5,11 @@
 
 import { bestXi } from '../../shared/best-xi.ts';
 import type { Position } from '../../shared/data.ts';
-import { clubState } from '../../shared/live.ts';
-import { avatar, card, chip, crest, empty, formPills, listRow, photo, pointsTier, seg, tag, tile } from '../components.ts';
+import { playerState } from '../../shared/live.ts';
+import { avatar, card, chip, crest, empty, formPills, listRow, photo, pointsTier, seg, tag, tile, xpPill } from '../components.ts';
 import { totalSlots } from '../event-icons.ts';
 import { esc, ordinal, pct, plural, signed, sum } from '../format.ts';
-import { club, first, gwEvents, gwPoints, isArchive, lineupFor, mgr, nextXp, player, seasonStat, slotOf } from '../lookups.ts';
+import { club, first, gwEvents, gwPoints, isArchive, lineupFor, mgr, nextParts, nextXp, player, seasonStat, slotOf } from '../lookups.ts';
 import { closeCalls, gameIn, nemesis, pointsByPosition, rivalries, type Rivalry } from '../manager-stats.ts';
 import { pitchPill, roundPill, stateLabel } from '../matches.ts';
 import { dueFilters, lineupFilters, showsEvents, statBadge } from '../lineup-filters.ts';
@@ -121,13 +121,13 @@ function lastLineup(id: number) {
   if (!l) return { sub: '', body: empty('No lineup yet') };
   const feed = live?.gw === gw ? live.feed : null;
   const onPitch = (pid: number): PitchPlayer => {
-    const match = feed ? clubState(feed, player(pid).club) : null;
+    const match = feed ? playerState(feed, pid, player(pid).club) : null;
     return {
       pid,
       badge: statBadge(pid, gw) ?? pitchPill(pid, gw, match),
       events: showsEvents(gw) ? gwEvents(pid, gw) : undefined,
       mark: l.subs.includes(pid) ? subMark : '',
-      note: match?.state === 'live' ? stateLabel(match) : '',
+      note: match?.state === 'live' ? stateLabel(match) : '', // one taken off has his minute by the arrow
     };
   };
   return {
@@ -183,7 +183,7 @@ function squadCard(id: number) {
   // Grouped by position in lineup order, or one list sorted on a column, highest first,
   // with each player's position as a chip. Tapping the column again, or Position, groups
   // them again.
-  const matchOf = (pid: number) => (feed && role(pid) !== 'out' ? clubState(feed, player(pid).club) : null);
+  const matchOf = (pid: number) => (feed && role(pid) !== 'out' ? playerState(feed, pid, player(pid).club) : null);
   const dash = '<span class="muted">–</span>';
   const columns = [
     {
@@ -206,7 +206,7 @@ function squadCard(id: number) {
       label: 'xP',
       tip: `Expected points for GW ${nextGw}${state.xp === 'fpl' ? ' (FPL’s form)' : ''}`,
       value: (pid: number) => (owned.has(pid) ? nextXp(pid) : -1),
-      cell: (pid: number) => (owned.has(pid) ? `<span class="ptsp xp">${nextXp(pid).toFixed(1)}</span>` : dash),
+      cell: (pid: number) => (owned.has(pid) ? xpPill(nextXp(pid), nextParts(pid)) : dash),
     },
     {
       key: 'total',
@@ -248,9 +248,10 @@ function squadCard(id: number) {
       : `${crest(p.club, 14)}${esc(club(p.club).short)}`;
     const meta = [where, note].filter(Boolean).join(' · ');
     const flag = owned.has(pid) && p.status !== 'a' ? tag('!', p.news || 'Flagged', 'tag-flag') : '';
+    const state = match ? stateLabel(match) : ''; // by the name, or on a phone in a column of its own (squads.css)
     return `<div class="sq-row${r === 'bench' ? ' benched' : ''}${owned.has(pid) ? '' : ' gone'}">
       ${photo(pid, 32)}
-      <div class="sq-main"><div class="sq-name"><span>${esc(p.name)}</span>${flag}${match ? stateLabel(match) : ''}</div><div class="sq-meta">${meta}</div></div>
+      <div class="sq-main"><div class="sq-name"><span>${esc(p.name)}</span>${flag}${state}</div><div class="sq-meta">${meta}</div>${state}</div>
       ${columns.map((c) => `<span class="sq-num ${c.cls ?? ''}">${c.cell(pid)}</span>`).join('')}
     </div>`;
   };

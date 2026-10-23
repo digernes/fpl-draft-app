@@ -16,6 +16,26 @@
   transform: translate(-50%, calc(-100% - 10px));
 }
 
+/* A tip with rows (the xP breakdown): a heading, then labels and values in two columns. */
+.tip-head {
+  font-weight: 600;
+}
+
+.tip-rows {
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 16px;
+  margin-top: 2px;
+  font-size: 11px;
+  line-height: 15px;
+  white-space: nowrap;
+}
+
+.tip-rows span:nth-child(even) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
 .tooltip.below {
   transform: translate(-50%, 10px);
 }

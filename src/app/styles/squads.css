@@ -127,6 +127,38 @@
   font-weight: 400;
 }
 
+/* On a phone it gets a column of its own beside the name and the line under it, with a
+   kick-off's day over its time, so a long name isn't cut short. */
+.sq-main > .lp-state {
+  display: none;
+}
+
+@media (max-width: 599px) {
+  .sq-main {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 4px;
+  }
+
+  .sq-name .lp-state {
+    display: none;
+  }
+
+  .sq-main > .lp-state {
+    display: block;
+    grid-column: 2;
+    grid-row: 1 / span 2;
+    align-self: center;
+    font-weight: 400;
+    line-height: 14px;
+    text-align: right;
+  }
+
+  .sq-main > .lp-state .ko-day {
+    display: block;
+  }
+}
+
 .sq-meta {
   display: flex;
   align-items: center;

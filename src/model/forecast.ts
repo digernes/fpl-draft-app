@@ -36,7 +36,7 @@ export const DEFAULT_OPTIONS: ModelOptions = {
     flagPower: 1.25,
   },
   standIns: { start: { GKP: 90, DEF: 85, MID: 80, FWD: 78 }, share: 1, unseen: 0.2, likeness: 10 },
-  counts: { goals: 10, defcon: 6, saves: { base: 1.41, perXga: 0.99 } },
+  counts: { goals: 10, defcon: 6, saves: { base: 1.41, perXga: 0.99 }, penalties: { perMatch: 0.12, scored: 0.79, saved: 0.15 } },
   finishing: { GKP: 1, DEF: 0.85, MID: 1, FWD: 1 },
   assists: { perXa: { GKP: 1.37, DEF: 1.29, MID: 1.33, FWD: 2.11 }, prior: 10 },
 };
@@ -62,7 +62,12 @@ export function forecast(input: ModelInput, gw: number, fixtures: { team_h: numb
   const teams = fitTeams(history.matches, { atGw: gw, ...o.teams });
   const scoring = readScoring(input.scoring);
   const assists = assistFactors(history, input.players, o.assists);
-  const rates = playerRates(history, input.players, o.players, gw, { finishing: o.finishing, assists, saves: o.counts.saves });
+  const rates = playerRates(history, input.players, o.players, gw, {
+    finishing: o.finishing,
+    assists,
+    saves: o.counts.saves,
+    penalties: o.counts.penalties,
+  });
   const scenarios = minutesScenarios(history, o.players);
 
   // FPL's chance of playing scales him, and the minutes it takes away go to his stand-ins
@@ -73,25 +78,52 @@ export function forecast(input: ModelInput, gw: number, fixtures: { team_h: numb
     if (fixtures.some((f) => f.team_h === p.club || f.team_a === p.club))
       plans.set(pid, { scenarios: scenarios(pid, p.club), chance: flag(p) });
   const starts = standIns(input.players, plans, rates, o.standIns);
+  // Each player's minutes scenarios for a match, with a stand-in's chance of starting, and
+  // `absent`: the chance that even an unflagged regular misses out.
+  const minutesFor = new Map(
+    [...plans].map(([pid, plan]) => {
+      const q = starts.get(pid) ?? 0;
+      const start = o.standIns.start[input.players.get(pid)!.pos];
+      const options = q
+        ? [...plan.scenarios.map((s) => ({ ...s, weight: (1 - q) * s.weight })), { minutes: start, weight: q }]
+        : plan.scenarios;
+      return [pid, { options, chance: plan.chance * (1 - o.players.absent) }];
+    }),
+  );
+  const onPitch = (pid: number) => {
+    const m = minutesFor.get(pid)!;
+    return Math.min(1, (m.chance * m.options.reduce((t, s) => t + s.weight * s.minutes, 0)) / 90);
+  };
+  // Penalties: a club's go to its takers in FPL's order, each when nobody ahead of him is
+  // on the pitch. How many it wins follows its attack, from the xG it can expect.
+  const order = (pid: number) => input.players.get(pid)!.penalties ?? Infinity;
+  const first = new Map<number, number>();
+  const nobodyYet = new Map<number, number>();
+  for (const pid of [...plans.keys()].filter((id) => input.players.get(id)!.penalties).sort((a, b) => order(a) - order(b))) {
+    const club = input.players.get(pid)!.club;
+    const left = nobodyYet.get(club) ?? 1;
+    first.set(pid, left);
+    nobodyYet.set(club, left * (1 - onPitch(pid)));
+  }
+  const expectedXg = fixtures.flatMap((f) => [teams.rate(f.team_h, f.team_a, true), teams.rate(f.team_a, f.team_h, false)]);
+  const averageXg = expectedXg.reduce((t, x) => t + x, 0) / Math.max(1, expectedXg.length);
+  const penaltiesAt = (xg: number) => (o.counts.penalties.perMatch * xg) / averageXg;
 
   const points = new Map<number, number>();
   const parts = new Map<number, Parts>();
   const minutes = new Map<number, number>();
-  for (const [pid, plan] of plans) {
+  for (const [pid] of plans) {
     const p = input.players.get(pid)!;
     const r = rates.get(pid)!;
-    const q = starts.get(pid) ?? 0;
-    const options = q
-      ? [...plan.scenarios.map((s) => ({ ...s, weight: (1 - q) * s.weight })), { minutes: o.standIns.start[p.pos], weight: q }]
-      : plan.scenarios;
-    // `absent`: the chance that even an unflagged regular misses out.
-    const chance = plan.chance * (1 - o.players.absent);
+    const { options, chance } = minutesFor.get(pid)!;
     const mine = Object.fromEntries(PARTS.map((part) => [part, 0])) as Parts;
     let mins = 0;
     for (const f of fixtures.filter((x) => x.team_h === p.club || x.team_a === p.club)) {
       const home = f.team_h === p.club;
       const opp = home ? f.team_a : f.team_h;
-      const match = { xg: teams.rate(p.club, opp, home), xga: teams.rate(opp, p.club, !home) };
+      const xg = teams.rate(p.club, opp, home);
+      const xga = teams.rate(opp, p.club, !home);
+      const match = { xg, xga, penalties: { for: penaltiesAt(xg), against: penaltiesAt(xga), first: first.get(pid) ?? 0 } };
       for (const s of options) {
         const got = matchParts(p.pos, scoring, r, s.minutes, match, o.counts);
         for (const part of PARTS) mine[part] += chance * s.weight * got[part];

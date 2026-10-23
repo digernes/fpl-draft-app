@@ -39,3 +39,11 @@ export const isArchive = () => Boolean(seasonEntry() && !seasonEntry()!.current)
 // next gameweek and for the one being played.
 export const nextXp = (pid: number) => (state.xp === 'fpl' ? (player(pid).fpl ?? player(pid).ep) : player(pid).ep);
 export const liveXp = (pid: number) => (state.xp === 'fpl' ? D.live?.fplEp?.[pid] : undefined) ?? D.live?.ep[pid] ?? nextXp(pid);
+// The site's taken apart, when the setting shows the site's.
+export const nextParts = (pid: number) => (state.xp === 'fpl' ? undefined : player(pid).parts);
+export const liveParts = (pid: number) => (state.xp === 'fpl' ? undefined : D.live?.parts?.[pid]);
+// Any gameweek still to come that shows projections: the site's from `ahead` after the next,
+// or FPL's form, which is the same every week.
+const ahead = (pid: number, gw: number) => player(pid).ahead?.[gw - D.meta.nextGw - 1];
+export const xpAt = (pid: number, gw: number) => (gw <= D.meta.nextGw || state.xp === 'fpl' ? nextXp(pid) : (ahead(pid, gw)?.ep ?? 0));
+export const partsAt = (pid: number, gw: number) => (gw <= D.meta.nextGw || state.xp === 'fpl' ? nextParts(pid) : ahead(pid, gw)?.parts);

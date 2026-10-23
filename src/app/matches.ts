@@ -2,10 +2,10 @@
 
 import { bestXi } from '../shared/best-xi.ts';
 import type { Lineup, Match, Odds } from '../shared/data.ts';
-import { clubState, liveProjection, type Expected, type PlayerState, type Scored, type SlimLive } from '../shared/live.ts';
+import { liveProjection, playerState, type Expected, type PlayerState, type Scored, type SlimLive } from '../shared/live.ts';
 import { liveOdds } from '../shared/odds.ts';
-import { avatar, empty, ptsPill, seg } from './components.ts';
-import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, priceText, sum } from './format.ts';
+import { avatar, empty, ptsPill, seg, xpPill } from './components.ts';
+import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, plural, priceText, sum } from './format.ts';
 import {
   club,
   first,
@@ -15,12 +15,14 @@ import {
   gwPoints,
   isLive,
   lineupFor,
+  liveParts,
   liveXp,
   matchKey,
   mgr,
-  nextXp,
+  partsAt,
   player,
   slotOf,
+  xpAt,
 } from './lookups.ts';
 import { dueFilters, dueShows, lineupFilters, showsEvents, statBadge } from './lineup-filters.ts';
 import { matchPitch, subMark, type PitchPlayer, type PitchSide } from './pitch.ts';
@@ -82,7 +84,12 @@ function inPlayOdds(m: Match) {
   const ours = state.xp !== 'fpl'; // the appearance and clean-sheet parts are the model's
   const expected: Expected = {
     points: (pid) => (player(pid) ? liveXp(pid) : 0),
-    milestones: ours ? (pid) => D.live?.milestones?.[pid] : undefined,
+    milestones: ours
+      ? (pid) => {
+          const parts = D.live?.parts?.[pid];
+          return parts && [parts[1], parts[5]];
+        }
+      : undefined,
     cleanSheet: D.live?.cleanSheet,
   };
   const projection = (scored: Scored) => liveProjection(scored, feed, playerInfo, expected, D.meta.formation);
@@ -92,18 +99,18 @@ function inPlayOdds(m: Match) {
 // FotMob-style match state next to each player in a live gameweek.
 export function stateLabel(s: PlayerState) {
   if (s.state === 'live') return `<span class="lp-state is-live" data-tip="Playing now">${Math.max(1, s.min)}'</span>`;
+  if (s.state === 'off') return `<span class="lp-state" data-tip="Off after ${plural(s.min, 'minute')}">${s.min}'</span>`;
   if (s.state === 'done') return `<span class="lp-state" data-tip="Match over">FT</span>`;
   if (s.state === 'blank') return `<span class="lp-state" data-tip="No match this gameweek">–</span>`;
-  return `<span class="lp-state" data-tip="Still to play">${kickoffTime(s.ko)}</span>`;
+  return `<span class="lp-state" data-tip="${esc(fixtureTip(s.ko, s.opp, s.home))}">${kickoffTime(s.ko)}</span>`;
 }
 
-// A kick-off's day and time, or just the time when it is today (phones only have room for
-// the time).
+// A kick-off's day and time, or just the time when it is today.
 function kickoffTime(ko: string | null | undefined) {
   if (!ko) return 'TBC';
   const at = new Date(ko);
   const today = at.toDateString() === new Date().toDateString();
-  return `${today ? '' : `<span class="wide-only">${fmtWeekday.format(at)} </span>`}${fmtTime.format(at)}`;
+  return `${today ? '' : `<span class="ko-day">${fmtWeekday.format(at)}</span> `}${fmtTime.format(at)}`;
 }
 
 function preMatchOdds(m: Match) {
@@ -114,7 +121,8 @@ function preMatchOdds(m: Match) {
   const tip = m.odds.afterwards
     ? `Worked out afterwards from each side’s projected XI, with only the gameweeks before it to go on; from GW ${keptFrom} on, the odds are the ones at the deadline`
     : 'The odds at the deadline';
-  return `<div class="detail-odds"><div class="detail-label">Pre-match odds <span class="muted" data-tip="${tip}">${m.odds.afterwards ? '· worked out afterwards' : '· at the deadline'}</span></div>${oddsRow(m.odds, m, outcome)}</div>`;
+  // Faded while the match is on, under the live odds.
+  return `<div class="detail-odds${m.started && !m.finished ? ' faded' : ''}"><div class="detail-label">Pre-match odds <span class="muted" data-tip="${tip}">${m.odds.afterwards ? '· worked out afterwards' : '· at the deadline'}</span></div>${oddsRow(m.odds, m, outcome)}</div>`;
 }
 
 function matchDetail(m: Match) {
@@ -151,14 +159,14 @@ function matchLineups(m: Match) {
     (l: Lineup) =>
     (pid: number): PitchPlayer => {
       const p = player(pid);
-      const match = feed ? clubState(feed, p.club) : null;
+      const match = feed ? playerState(feed, pid, p.club) : null;
       const twice = doubles.has(p.club) ? '<span data-tip="Plays twice this gameweek">×2</span>' : '';
       return {
         pid,
         badge: statBadge(pid, m.gw) ?? pitchPill(pid, m.gw, match),
         events: showsEvents(m.gw) ? gwEvents(pid, m.gw) : undefined,
         mark: l.subs.includes(pid) ? subMark : '',
-        note: match?.state === 'live' ? stateLabel(match) : twice,
+        note: match?.state === 'live' ? stateLabel(match) : twice, // one taken off has his minute by the arrow
       };
     };
   const side = (id: number, l: Lineup): PitchSide => ({ id, xi: l.xi.map(onPitch(l)), note: lineupNote(l, feed) });
@@ -168,12 +176,12 @@ function matchLineups(m: Match) {
 
 // How far through the gameweek the XI is, and the score after any double-gameweek penalty.
 function lineupNote(l: Lineup, feed: SlimLive | null) {
-  const states = feed ? l.xi.map((pid) => clubState(feed, player(pid).club).state) : [];
+  const states = feed ? l.xi.map((pid) => playerState(feed, pid, player(pid).club).state) : [];
   const count = (...wanted: PlayerState['state'][]) => states.filter((s) => wanted.includes(s)).length;
   return [
     count('live') && `${count('live')} playing`,
     count('due') && `${count('due')} to play`,
-    count('done', 'blank') && `${count('done', 'blank')} done`,
+    count('done', 'off', 'blank') && `${count('done', 'off', 'blank')} done`,
     l.dgw && `<span data-tip="${D.meta.dgwPenalty} off per double-gameweek player in the XI">${l.adj} adj.</span>`,
   ]
     .filter(Boolean)
@@ -184,7 +192,7 @@ function lineupNote(l: Lineup, feed: SlimLive | null) {
 // the filter (lineup-filters.ts).
 export function pitchPill(pid: number, gw: number, match: PlayerState | null) {
   if (match?.state !== 'due' || gwPoints(pid, gw) !== 0 || dueShows(gw) !== 'ko') return roundPill(pid, gw, match);
-  return kickoffPill(match.ko, when(match.ko));
+  return kickoffPill(match.ko, fixtureTip(match.ko, match.opp, match.home));
 }
 
 // A player's points in a gameweek. Before kick-off a 0 says nothing, so players still
@@ -192,7 +200,7 @@ export function pitchPill(pid: number, gw: number, match: PlayerState | null) {
 export function roundPill(pid: number, gw: number, match: PlayerState | null) {
   const pts = gwPoints(pid, gw);
   if (match?.state !== 'due' || pts !== 0) return ptsPill(pts, gwBonus(pid, gw));
-  return `<span class="ptsp xp" data-tip="Expected points (not played yet)">${liveXp(pid).toFixed(1)}</span>`;
+  return xpPill(liveXp(pid), liveParts(pid), ' (not played yet)');
 }
 
 function upcomingDetail(m: Match) {
@@ -207,7 +215,12 @@ function upcomingDetail(m: Match) {
     const squad = Object.keys(D.players)
       .map(Number)
       .filter((pid) => player(pid).owner === id);
-    return bestXi(squad, nextXp, (pid) => player(pid).pos, D.meta.xiLimits).ids;
+    return bestXi(
+      squad,
+      (pid) => xpAt(pid, m.gw),
+      (pid) => player(pid).pos,
+      D.meta.xiLimits,
+    ).ids;
   };
   const projected = (id: number, priced: number[]): PitchSide => {
     const ids = xiOf(id, priced);
@@ -217,11 +230,13 @@ function upcomingDetail(m: Match) {
         const p = player(pid);
         return {
           pid,
-          badge: showXp ? `<span class="ptsp xp">${nextXp(pid).toFixed(1)}</span>` : kickoffBadge(pid, m.gw),
+          badge: showXp ? xpPill(xpAt(pid, m.gw), partsAt(pid, m.gw)) : kickoffBadge(pid, m.gw),
           mark: p.status !== 'a' ? `<span class="pp-flag" data-tip="${esc(p.news || 'Flagged')}">!</span>` : '',
         };
       }),
-      note: showXp ? `<span data-tip="Best legal XI by expected points">${sum(ids.map(nextXp)).toFixed(1)} xP</span>` : '',
+      note: showXp
+        ? `<span data-tip="Best legal XI by expected points">${sum(ids.map((pid) => xpAt(pid, m.gw))).toFixed(1)} xP</span>`
+        : '',
     };
   };
   return `<div class="match-detail">
@@ -240,6 +255,10 @@ const when = (ko: string | null | undefined) => {
   return `${at.toDateString() === new Date().toDateString() ? 'Today' : fmtWeekday.format(at)} ${fmtTime.format(at)}`;
 };
 
+// When a match kicks off and who against, for a tip: "Sat 18:30, v Arsenal".
+const fixtureTip = (ko: string | null | undefined, opp: number, home: boolean) =>
+  `${when(ko)}, ${home ? 'v' : 'at'} ${club(opp)?.name ?? '?'}`;
+
 // When a player kicks off.
 function kickoffPill(ko: string | null | undefined, tip: string) {
   return `<span class="ptsp ko" data-tip="${esc(tip)}">${kickoffTime(ko)}</span>`;
@@ -250,7 +269,7 @@ function kickoffBadge(pid: number, gw: number) {
   const team = player(pid).club;
   const games = (gwInfo(gw)?.fixtures ?? []).filter(([h, a]) => h === team || a === team);
   if (!games.length) return `<span class="ptsp ko" data-tip="No match this gameweek">–</span>`;
-  const tip = games.map(([h, a, ko]) => `${when(ko)}, ${h === team ? 'v' : 'at'} ${club(h === team ? a : h)?.short ?? '?'}`).join(' · ');
+  const tip = games.map(([h, a, ko]) => fixtureTip(ko, h === team ? a : h, h === team)).join(' · ');
   return kickoffPill(games[0][2], tip);
 }
 

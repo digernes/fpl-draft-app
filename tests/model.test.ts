@@ -153,6 +153,16 @@ describe('forecast', () => {
     close(minutes.get(1)!, ((90 * decay) / (decay + weight)) * playing);
   });
 
+  it('gives a club’s penalties to the first of its takers on the pitch', () => {
+    const takers = new Map(players).set(1, { club: 1, pos: 'FWD', penalties: 1 }).set(2, { club: 1, pos: 'DEF', penalties: 2 });
+    const penalties = (p: Map<number, ModelPlayer>) => forecast({ ...input, players: p }, 3, [{ team_h: 2, team_a: 1 }]).parts;
+    const fit = penalties(takers);
+    assert.ok(fit.get(1)!.penalties > 0);
+    assert.ok(fit.get(2)!.penalties < fit.get(1)!.penalties / 10); // only when the striker is off
+    const out = penalties(new Map(takers).set(1, { club: 1, pos: 'FWD', penalties: 1, chance: 0 }));
+    assert.ok(out.get(2)!.penalties > fit.get(1)!.penalties); // the defender takes them, and his goals are worth more
+  });
+
   it('leaves out clubs without a match, and scales by the chance of playing', () => {
     const flagged = (chance: number) =>
       forecast({ ...input, players: new Map(players).set(1, { club: 1, pos: 'FWD', chance }) }, 3, [{ team_h: 2, team_a: 1 }]).points.get(

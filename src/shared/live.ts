@@ -16,6 +16,8 @@ export interface SlimFixture {
   /** Minutes played and the score, while the match is on. */
   min?: number;
   score?: [number, number];
+  /** [element, minutes] for the starters no longer on the pitch (taken off or sent off), while the match is on. */
+  off?: [number, number][];
   /** [element, BPS] while the bonus is still to be awarded. */
   bps?: [number, number][];
 }
@@ -42,6 +44,8 @@ export interface PlayerEvents {
   /** Came on as a substitute, or was taken off. */
   on?: number;
   off?: number;
+  /** The minute he came on: his match's minute less his own. */
+  onAt?: number;
   /** Minutes played, for a substitution's tooltip. */
   min?: number;
 }
@@ -71,19 +75,23 @@ export function slimLive(raw: Partial<LiveFeed>): SlimLive {
   const elements: SlimLive['elements'] = {};
   const events: Record<string, PlayerEvents> = {};
   const over = new Set((raw.fixtures ?? []).filter((f) => f.finished || f.finished_provisional).map((f) => f.id));
-  for (const [id, el] of Object.entries(raw.elements ?? {})) {
-    const { total_points: points, minutes } = el.stats;
-    if (points || minutes) elements[id] = [points, minutes];
-    const did = playerEvents(el, over);
-    if (did) events[id] = did;
-  }
   // FPL's fixture minutes stay at 0 while a match is on; its players' minutes don't.
   const clock = new Map<number, number>();
   for (const el of Object.values(raw.elements ?? {}))
-    for (const [stats, fixture] of el.explain ?? []) {
-      const minutes = stats.find((x) => x.stat === 'minutes')?.value ?? 0;
-      if (minutes > (clock.get(fixture) ?? 0)) clock.set(fixture, minutes);
-    }
+    for (const { fixture, min } of minutesIn(el)) if (min > (clock.get(fixture) ?? 0)) clock.set(fixture, min);
+  const gone = new Map<number, [number, number][]>();
+  for (const [id, el] of Object.entries(raw.elements ?? {})) {
+    const { total_points: points, minutes } = el.stats;
+    if (points || minutes) elements[id] = [points, minutes];
+    const did = playerEvents(el, over, clock);
+    if (did) events[id] = did;
+    // A starter short of a match still on is off the pitch. Only when he started all his
+    // matches, since FPL counts starts for the gameweek, not the match.
+    const played = minutesIn(el).filter((m) => m.min > 0);
+    if ((el.stats.starts ?? 0) < played.length) continue;
+    for (const m of played)
+      if (!over.has(m.fixture) && short(m, over, clock)) gone.set(m.fixture, [...(gone.get(m.fixture) ?? []), [Number(id), m.min]]);
+  }
   const fixtures = (raw.fixtures ?? []).map((f): SlimFixture => {
     const stat = (name: string) => f.stats?.find((s) => s.s === name);
     const bonus = stat('bonus');
@@ -97,7 +105,11 @@ export function slimLive(raw: Partial<LiveFeed>): SlimLive {
       done: Boolean(f.finished || f.finished_provisional),
       ...(f.kickoff_time ? { ko: f.kickoff_time } : {}),
       ...(f.started && !(f.finished || f.finished_provisional)
-        ? { min: Math.max(f.minutes ?? 0, clock.get(f.id) ?? 0), score: [f.team_h_score ?? 0, f.team_a_score ?? 0] as [number, number] }
+        ? {
+            min: Math.max(f.minutes ?? 0, clock.get(f.id) ?? 0),
+            score: [f.team_h_score ?? 0, f.team_a_score ?? 0] as [number, number],
+            ...(gone.has(f.id) ? { off: gone.get(f.id) } : {}),
+          }
         : {}),
       ...(f.started && !bonusIn && bps ? { bps: [...bps.h, ...bps.a].map((b): [number, number] => [b.element, b.value]) } : {}),
     };
@@ -105,16 +117,28 @@ export function slimLive(raw: Partial<LiveFeed>): SlimLive {
   return { elements, events, fixtures };
 }
 
+type FeedElement = LiveFeed['elements'][string];
+
+const minutesIn = ({ explain = [] }: FeedElement) =>
+  explain.map(([stats, fixture]) => ({ fixture, min: stats.find((x) => x.stat === 'minutes')?.value ?? 0 }));
+
+// A match's minute: 90 once it is over, or while it's on the most anyone has played.
+const minuteOf = (fixture: number, over: Set<number>, clock: Map<number, number>) => (over.has(fixture) ? 90 : (clock.get(fixture) ?? 0));
+
+// Short of a match: under 90 minutes in one that is over, or, while it's on, more than a
+// minute behind the players still on the pitch, who all have its minute.
+const short = (m: { fixture: number; min: number }, over: Set<number>, clock: Map<number, number>) =>
+  m.min > 0 && m.min < minuteOf(m.fixture, over, clock) - (over.has(m.fixture) ? 0 : 1);
+
 // FPL doesn't list substitutions, so they come from the minutes in each match: a
-// player who played in more matches than he started came on, and a starter short of
-// 90 minutes in a match that is over went off, unless he was sent off. While a match
-// is on, nobody has 90 minutes yet, so going off waits for the final whistle.
-function playerEvents({ stats: s, explain = [] }: LiveFeed['elements'][string], over: Set<number>): PlayerEvents | undefined {
-  const minutes = explain.map(([stats, fixture]) => ({ fixture, min: stats.find((x) => x.stat === 'minutes')?.value ?? 0 }));
+// player who played in more matches than he started came on, and a starter short of a
+// match went off, unless he was sent off.
+function playerEvents(el: FeedElement, over: Set<number>, clock: Map<number, number>): PlayerEvents | undefined {
+  const { stats: s } = el;
+  const minutes = minutesIn(el);
   const played = minutes.filter((m) => m.min > 0).length;
   const on = s.starts === undefined ? 0 : Math.max(0, played - s.starts);
-  const short = minutes.filter((m) => m.min > 0 && m.min < 90 && over.has(m.fixture)).length;
-  const off = s.starts === undefined ? 0 : Math.max(0, short - on - (s.red_cards ?? 0));
+  const off = s.starts === undefined ? 0 : Math.max(0, minutes.filter((m) => short(m, over, clock)).length - on - (s.red_cards ?? 0));
   const counts: PlayerEvents = {
     goals: s.goals_scored,
     assists: s.assists,
@@ -126,6 +150,7 @@ function playerEvents({ stats: s, explain = [] }: LiveFeed['elements'][string], 
     bonus: s.bonus,
     on,
     off,
+    onAt: on ? Math.max(...minutes.filter((m) => m.min > 0).map((m) => minuteOf(m.fixture, over, clock) - m.min)) : 0,
     min: on || off ? s.minutes : 0,
   };
   const did = Object.entries(counts).filter(([, n]) => n);
@@ -196,26 +221,31 @@ export function scoreLineup(order: number[], feed: SlimLive, info: PlayerInfo, f
 // --- Who is still to play ------------------------------------------------------
 
 export type PlayerState =
-  | { state: 'live'; min: number } // his club's match is on
+  | { state: 'live'; min: number } // his club's match is on, and he's on the pitch or the bench
+  | { state: 'off'; min: number } // taken off or sent off in a match still on, after `min` minutes
   | { state: 'done' } // all his club's matches are over
-  | { state: 'due'; ko?: string } // still to kick off (the next one, in a double gameweek)
+  | { state: 'due'; ko?: string; opp: number; home: boolean } // still to kick off (the next one, in a double gameweek)
   | { state: 'blank' }; // his club has no match this gameweek
 
-export function clubState(feed: SlimLive, club: number | undefined): PlayerState {
+const offIn = (f: SlimFixture, id: number) => f.off?.find(([pid]) => pid === id);
+
+export function playerState(feed: SlimLive, id: number, club: number | undefined): PlayerState {
   const fixtures = feed.fixtures.filter((f) => f.h === club || f.a === club);
   if (!fixtures.length) return { state: 'blank' };
   const playing = fixtures.find((f) => f.started && !f.done);
-  if (playing) return { state: 'live', min: playing.min ?? 0 };
+  const off = playing && offIn(playing, id);
+  if (playing && !off) return { state: 'live', min: playing.min ?? 0 };
   const next = fixtures.filter((f) => !f.started).sort((a, b) => (a.ko ?? '').localeCompare(b.ko ?? ''))[0];
-  return next ? { state: 'due', ko: next.ko } : { state: 'done' };
+  if (next) return { state: 'due', ko: next.ko, opp: next.h === club ? next.a : next.h, home: next.h === club };
+  return off ? { state: 'off', min: off[1] } : { state: 'done' };
 }
 
 // How much of a player's gameweek is still to come: 1 before kick-off, falling to 0 at
-// full time, split evenly over a double gameweek's two matches.
-export function shareToCome(feed: SlimLive, club: number | undefined): number {
+// full time (or once he's off), split evenly over a double gameweek's two matches.
+export function shareToCome(feed: SlimLive, id: number, club: number | undefined): number {
   const fixtures = feed.fixtures.filter((f) => f.h === club || f.a === club);
   if (!fixtures.length) return 0;
-  const left = (f: SlimFixture) => (f.done ? 0 : f.started ? Math.max(0, 1 - (f.min ?? 0) / 90) : 1);
+  const left = (f: SlimFixture) => (f.done || offIn(f, id) ? 0 : f.started ? Math.max(0, 1 - (f.min ?? 0) / 90) : 1);
   return fixtures.reduce((total, f) => total + left(f), 0) / fixtures.length;
 }
 
@@ -247,7 +277,7 @@ const appearance = (minutes: number) => (minutes >= 60 ? 2 : minutes > 0 ? 1 : 0
 // on for him by scoreLineup's rules instead, ahead of the auto-sub itself (which waits
 // until that player has played).
 export function liveProjection(scored: Scored, feed: SlimLive, info: PlayerInfo, expected: Expected, formation = DEFAULT_FORMATION) {
-  const toCome = (id: number) => shareToCome(feed, info(id).club);
+  const toCome = (id: number) => shareToCome(feed, id, info(id).club);
   const minutes = (id: number) => Number(feed.elements[id]?.[1]) || 0;
   const out = (id: number) => !(minutes(id) > 0) && (toCome(id) === 0 || RULED_OUT.has(info(id).status ?? ''));
   const conceded = (club: number | undefined) => {

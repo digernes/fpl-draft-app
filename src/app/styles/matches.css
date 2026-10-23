@@ -132,6 +132,10 @@
   padding: 0;
 }
 
+.detail-odds.faded .odds {
+  opacity: 0.5;
+}
+
 /* A finished match's expected points, like a fotmob.com match's top stats. */
 .xg-row {
   display: flex;

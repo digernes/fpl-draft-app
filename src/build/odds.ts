@@ -6,7 +6,7 @@
 import type { Data, Match, Odds, Price } from '../shared/data.ts';
 import { bestXi } from '../shared/best-xi.ts';
 import { price as sharedPrice, winDrawWin } from '../shared/odds.ts';
-import { MIN_SCORE_SPREAD, ODDS_GAMEWEEKS, ODDS_OVERROUND, POSITIONS } from './config.ts';
+import { MIN_SCORE_SPREAD, ODDS_GAMEWEEKS, ODDS_OVERROUND, POSITIONS, PROJECTED_GAMEWEEKS } from './config.ts';
 import { modelBefore, modelExpected } from './expected.ts';
 import type { Season } from './season.ts';
 import { range, round, sum } from './util.ts';
@@ -36,9 +36,10 @@ export function oddsModel(season: Season, managerIds: number[], scoresByGw: Reco
 
   // Every priced gameweek's projected XIs, from today's squads.
   const priced = range(nextGw, Math.min(nextGw + ODDS_GAMEWEEKS - 1, league.stop_event));
+  const forecasts = new Map(priced.slice(1).map((gw) => [gw, model?.at(gw)]));
   const projections: Record<number, Record<number, { ids: number[]; pts: number }>> = Object.fromEntries(
     priced.map((gw) => {
-      const xp = gw === nextGw ? expected : (model?.at(gw) ?? fplExpected);
+      const xp = gw === nextGw ? expected : (forecasts.get(gw)?.points ?? fplExpected);
       return [gw, Object.fromEntries(managerIds.map((id) => [id, xiOf(squadOf(id), xp)]))];
     }),
   );
@@ -86,7 +87,10 @@ export function oddsModel(season: Season, managerIds: number[], scoresByGw: Reco
     fplExpected,
     fplNow,
     fromFpl: model === null,
-    milestones: model?.milestones,
+    parts: model?.parts,
+    partsNow: model?.partsNow,
+    /** The site's for the gameweeks after the next that the page shows (PROJECTED_GAMEWEEKS). */
+    ahead: model ? priced.slice(1, PROJECTED_GAMEWEEKS).flatMap((gw) => forecasts.get(gw) ?? []) : [],
     priced,
     projections,
     leagueMean,
@@ -135,7 +139,7 @@ export function priceMatches(matches: Match[], model: OddsModel, nextGw: number,
     }
     if (m.gw < nextGw || m.gw >= nextGw + ODDS_GAMEWEEKS) continue;
     m.odds = priced(expectedScore(m.home, m.gw), expectedScore(m.away, m.gw), spreadFor(m.gw));
-    if (m.gw === nextGw && hasProjections) m.odds.xi = [projections[nextGw][m.home].ids, projections[nextGw][m.away].ids];
+    if (m.gw < nextGw + PROJECTED_GAMEWEEKS && hasProjections) m.odds.xi = [projections[m.gw][m.home].ids, projections[m.gw][m.away].ids];
   }
 }
 

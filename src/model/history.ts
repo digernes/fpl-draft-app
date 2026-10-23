@@ -10,6 +10,8 @@ export interface ModelPlayer {
   pos: Position;
   /** FPL's chance of him playing the gameweek being forecast, in %; null when there's no doubt. */
   chance?: number | null;
+  /** His place in FPL's order of his club's penalty takers (1 takes them); null when he isn't on it. */
+  penalties?: number | null;
 }
 
 export interface ClubMatch {

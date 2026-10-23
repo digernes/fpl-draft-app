@@ -2,8 +2,8 @@
 // leaders) and, under Transfers, the transfer stats.
 
 import type { Decided } from '../../shared/data.ts';
-import { resultText } from '../cards.ts';
-import { avatar, card, chip, crest, empty, listRow, photo, tag, tile } from '../components.ts';
+import { dgwRule, resultText } from '../cards.ts';
+import { avatar, card, chip, crest, empty, infoButton, listRow, photo, tag, tile } from '../components.ts';
 import { esc } from '../format.ts';
 import { first, mgr, player, seasonStat } from '../lookups.ts';
 import { D, state } from '../state.ts';
@@ -49,7 +49,10 @@ function topGameweeksCard(limit: number) {
   return card({
     cls: 'top-gameweeks',
     title: 'Top gameweeks',
-    sub: `−${D.meta.dgwPenalty} per double-gameweek player in the XI · earlier week wins a tie · every manager included`,
+    action: infoButton(
+      `Every manager’s best week makes the list; the top one holds the prize. Ties go to the earlier week. ${dgwRule()}`,
+      'Rules',
+    ),
     body: `<div class="list">${rows.join('')}</div>`,
     footer: limit < D.topGameweeks.length ? { href: '#stats', label: 'All top gameweeks' } : null,
   });

@@ -4,7 +4,7 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { ById, Club, Data, Lineup, Meta, Player, SeasonEntry, SeasonIndex } from '../shared/data.ts';
+import type { ById, Club, Data, Lineup, Meta, Player, SeasonEntry, SeasonIndex, XpParts } from '../shared/data.ts';
 import { DGW_PENALTY, FORM_LENGTH, KIT_COLORS, ODDS_OVERROUND, POSITIONS, SCHEMA } from './config.ts';
 import type { Season } from './season.ts';
 import { round } from './util.ts';
@@ -15,6 +15,8 @@ export function buildPlayers(
   lineups: ById<ById<Lineup>>,
   expected: (pid: number) => number,
   fpl?: (pid: number) => number,
+  parts?: (pid: number) => XpParts | undefined,
+  ahead: { points: (pid: number) => number; parts: (pid: number) => XpParts | undefined }[] = [],
 ): ById<Player> {
   const { elements, ownerNow, transactions, trades, gws, pointsIn } = season;
   // Only players in the league's story get their points gameweek by gameweek.
@@ -41,10 +43,22 @@ export function buildPlayers(
       ...(el.news ? { news: el.news } : {}),
       ep: round(expected(pid), 1),
       ...(fpl ? { fpl: round(fpl(pid), 1) } : {}),
+      ...withParts(ownerNow.has(pid) && round(expected(pid), 1) > 0 ? parts?.(pid) : undefined),
+      ...(ownerNow.has(pid) && ahead.length
+        ? {
+            ahead: ahead.map((a) => ({
+              ep: round(a.points(pid), 1),
+              ...withParts(round(a.points(pid), 1) > 0 ? a.parts(pid) : undefined),
+            })),
+          }
+        : {}),
     };
   }
   return players;
 }
+
+// In tenths, as the tooltip shows them.
+const withParts = (parts: XpParts | undefined) => (parts ? { parts: parts.map((v) => round(v, 1)) as XpParts } : {});
 
 export function buildClubs(season: Season): ById<Club> {
   return Object.fromEntries(

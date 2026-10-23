@@ -229,7 +229,7 @@ export const EntryPicks = z.object({
 // --- Main FPL game: bootstrap-static (projections only) -----------------------
 
 export const FplBootstrap = z.object({
-  elements: z.array(z.object({ code: id, ep_next: numeric.nullable(), ep_this: numeric.nullish() })),
+  elements: z.array(z.object({ code: id, ep_next: numeric.nullable(), ep_this: numeric.nullish(), penalties_order: z.number().nullish() })),
 });
 
 export type LeagueDetails = z.infer<typeof LeagueDetails>;

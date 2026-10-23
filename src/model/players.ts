@@ -36,11 +36,12 @@ export interface PlayerOptions {
   flagPower: number;
 }
 
-/** How xG and xA become FPL's goals and assists, by position, and the league's line for saves. */
+/** How xG and xA become FPL's goals and assists, by position, the league's line for saves, and its penalties. */
 export interface Conversion {
   finishing: Record<Position, number>;
   assists: Record<Position, number>;
   saves: Counts['saves'];
+  penalties: Counts['penalties'];
 }
 
 interface Totals {
@@ -82,11 +83,15 @@ export function playerRates(
   const match = new Map(h.matches.map((m) => [`${m.fixture}:${m.club}`, m]));
   const byPlayer = new Map<number, Totals>();
   const byPosition = new Map<Position, Totals>();
+  // A first-choice penalty taker's xG and goals include his club's penalties, which are a
+  // part of their own (points.ts), so his share leaves out the ones he could expect.
+  const penalty = (a: Appearance) =>
+    players.get(a.pid)?.penalties === 1 ? (c.penalties.perMatch * c.penalties.scored * a.minutes) / 90 : 0;
   const add = (t: Totals, a: Appearance, m: ClubMatch, w: number) => {
     t.minutes += w * a.minutes;
-    t.xg += w * a.xg;
+    t.xg += w * (a.xg - penalty(a));
     t.xa += w * a.xa;
-    t.goals += w * a.goals;
+    t.goals += w * (a.goals - penalty(a));
     t.assists += w * a.assists;
     t.defcon += w * a.defcon;
     t.saves += w * a.saves;
@@ -115,7 +120,8 @@ export function playerRates(
     // a little from the goals and assists themselves).
     const goals = (x: Totals) => (1 - o.actual) * c.finishing[pos] * x.xg + o.actual * x.goals;
     const assists = (x: Totals) => (1 - o.actual) * c.assists[pos] * x.xa + o.actual * x.assists;
-    const share = (mine: number, theirs: number) => (mine + o.sharePrior[pos] * ratio(theirs, avg.clubXg)) / (t.clubXg + o.sharePrior[pos]);
+    const share = (mine: number, theirs: number) =>
+      (Math.max(0, mine) + o.sharePrior[pos] * ratio(theirs, avg.clubXg)) / (t.clubXg + o.sharePrior[pos]);
     const per90 = (mine: number, theirs: number) => (mine + o.ratePrior * ratio(theirs, avg.minutes / 90)) / (t.minutes / 90 + o.ratePrior);
     const line = (c.saves.base * t.minutes) / 90 + c.saves.perXga * t.clubXga;
     rates.set(pid, {

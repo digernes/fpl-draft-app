@@ -17,6 +17,7 @@ In short:
 points = his minutes × (his goals and assists per xG of his club's × his club's expected goals against this opponent)
        + clean sheets, goals conceded and saves from the goals his club can expect to concede
        + defensive contributions, bonus and cards from his rates per 90
+       + penalties, for his club's takers
 ```
 
 ## The parts
@@ -85,7 +86,14 @@ points = his minutes × (his goals and assists per xG of his club's × his club'
   - goals conceded (−1 per 2) and a goalkeeper's saves (+1 per 3) in expectation;
   - the defensive contribution (+2 for 10 tackles, clearances, blocks and interceptions
     in defence, or 12 with recoveries elsewhere) as the chance his count reaches it;
-  - bonus and cards at his rates.
+  - bonus and cards at his rates;
+  - **penalties.** A club wins about 0.12 a match, scaled by the xG it can expect
+    against this opponent, since a club's own penalty count is too noisy to go on. They
+    go to its takers in FPL's order (from FPL's main game: the Draft one leaves it empty),
+    each taking them when nobody ahead of him is on the pitch. 79% go in (a penalty's xG),
+    for the goal's points, and the rest cost 2. A goalkeeper saves about 15% of those he
+    faces, for 5 points. A first-choice taker's share of his club's attack leaves out the
+    penalties he could expect to have taken, so they aren't counted twice.
 
   Goals are a negative binomial of size 10 rather than a Poisson, since a club's rate is
   itself uncertain (a Poisson with an uncertain rate is a negative binomial). Defensive
@@ -118,14 +126,14 @@ GW 3–7 of 2026/27, RMSE (MAE in brackets):
 
 |                                   | n     | Model           | FPL form    | Points per gameweek |
 | --------------------------------- | ----- | --------------- | ----------- | ------------------- |
-| The league's squads               | 600   | **3.28** (2.55) | 3.88 (2.96) | 3.72 (2.92)         |
+| The league's squads               | 600   | **3.29** (2.57) | 3.88 (2.96) | 3.72 (2.92)         |
 | Everyone who has played           | 2,014 | **2.63** (1.83) | 3.05 (2.02) | 2.93 (1.99)         |
-| Everyone who played 60+ that week | 1,026 | **3.30** (2.44) | 3.78 (2.81) | 3.65 (2.73)         |
+| Everyone who played 60+ that week | 1,026 | **3.30** (2.45) | 3.78 (2.81) | 3.65 (2.73)         |
 
 - **Every gameweek, every position.** It beats both benchmarks in every gameweek, by the
   most in the early ones, when form is a week or two of luck. By position, its RMSE is
-  11–14% below form's.
-- **From a single gameweek.** Forecast from GW 1 alone, GW 2's RMSE was 3.74 against
+  11–15% below form's.
+- **From a single gameweek.** Forecast from GW 1 alone, GW 2's RMSE was 3.70 against
   form's 5.02 over the squads.
 - **Against last season.** On players who played 60+ in 2025/26 (GW 8–38), a trailing
   four-gameweek average had an RMSE of 3.74, and the season's average 3.55. Those are
@@ -136,7 +144,8 @@ The parts against what came, over everyone who has played:
 |                         | Forecast | Actual |
 | ----------------------- | -------- | ------ |
 | Appearance              | 2,569    | 2,463  |
-| Goals                   | 707      | 640    |
+| Goals                   | 676      | 640    |
+| Penalties               | 44       | 6      |
 | Assists                 | 378      | 381    |
 | Clean sheets            | 647      | 713    |
 | Goals conceded          | −269     | −241   |
@@ -146,8 +155,9 @@ The parts against what came, over everyone who has played:
 | Cards                   | −186     | −194   |
 
 The appearance points come out high because the backtest has no flags: it gives some
-minutes to players who were injured at the time. Over the league's squads it comes out
-0.17 points a week low. Those are mostly good players, and pulling every rate towards the
+minutes to players who were injured at the time. FPL doesn't say which goals were
+penalties, so the actual penalties are only the misses and saves, and the scored ones are
+in goals. Over the league's squads it comes out 0.15 points a week low. Those are mostly good players, and pulling every rate towards the
 position's average costs them most in bonus.
 
 **Stand-ins** can't be tested on FPL's real flags, so they were tested on perfect ones: every
@@ -183,13 +193,14 @@ will move as the season goes on, and two choices are worth testing again:
   need refitting on 2026/27, since the bonus points system changed.
 - **Opponents in the minor parts.** Defensive actions (tested here: no gain yet) and
   cards are flat rates for now.
-- **Penalties and set pieces.** FPL lists the takers (`penalties_order` and so on). A new
-  taker's penalty xG, about 0.1 a match, would come before his shots do.
+- **Set pieces.** FPL lists the corner and free-kick takers too
+  (`corners_and_indirect_freekicks_order`, `direct_freekicks_order`), which could lift
+  their assists and direct free-kick goals the way the penalty order does for penalties.
 
 ## Sources
 
 - AIrsenal's models: [xG models](https://github.com/alan-turing-institute/AIrsenal/blob/main/docs/xg-models.md) and [how it works](https://github.com/alan-turing-institute/AIrsenal/blob/main/docs/how-it-works.md)
 - [OpenFPL](https://arxiv.org/html/2508.09992v1)
 - The Premier League on [defensive contributions](https://www.premierleague.com/en/news/4361991) and [assists](https://www.premierleague.com/en/news/4362187)
-- [The Analyst on xG](https://theanalyst.com/articles/what-is-expected-goals-xg)
+- [The Analyst on xG](https://theanalyst.com/articles/what-is-expected-goals-xg) and [on penalties](https://theanalyst.com/articles/football-newsletter-penalties-bruno-fernandes)
 - FPL's 2024/25–2025/26 match data, as archived by [vaastav/Fantasy-Premier-League](https://github.com/vaastav/Fantasy-Premier-League), for the whole-season ratios above

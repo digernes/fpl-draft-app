@@ -1,6 +1,6 @@
 // Small components shared across the views.
 
-import type { MatchResult } from '../shared/data.ts';
+import type { MatchResult, XpParts } from '../shared/data.ts';
 import { esc, ordinal, plural } from './format.ts';
 import { infoSvg, triangleSvg } from './icons.ts';
 import { club, mgr, player, slotOf } from './lookups.ts';
@@ -61,6 +61,21 @@ export const pointsTier = (pts: number) => (pts >= 10 ? 'p4' : pts >= 6 ? 'p3' :
 export function ptsPill(pts: number, bonus = 0) {
   if (!bonus) return `<span class="ptsp ${pointsTier(pts)}">${pts}</span>`;
   return `<span class="ptsp ${pointsTier(pts)}" data-tip="${plural(pts, 'point')}, ${bonus} of them bonus">${pts - bonus}+${bonus}</span>`;
+}
+
+const XP_PARTS = ['Playing', 'Goals', 'Penalties', 'Assists', 'Clean sheet', 'Conceded', 'Defcon', 'Saves', 'Bonus', 'Cards'];
+const tenths = (x: number) => (x < 0 ? `−${(-x).toFixed(1)}` : x.toFixed(1));
+
+// Expected points, with a tip that takes them apart when the site's model gave the parts
+// (FPL's form has none): his expected minutes, then every part worth a tenth or more, as
+// rows the tooltip lines up (chrome.ts).
+export function xpPill(xp: number, parts?: XpParts, note = '') {
+  if (!parts) return `<span class="ptsp xp" data-tip="${esc(`${tenths(xp)} expected points${note}`)}">${xp.toFixed(1)}</span>`;
+  const rows = parts
+    .slice(1)
+    .flatMap((x, i) => (Math.abs(x) >= 0.05 ? [`${XP_PARTS[i]}\t${tenths(x)}`] : []))
+    .join('\n');
+  return `<span class="ptsp xp" data-tip="${tenths(xp)} xP · ${Math.round(parts[0])} avg mins" data-tip-rows="${esc(rows)}">${xp.toFixed(1)}</span>`;
 }
 
 export function tag(text: string, tip = '', cls = '') {

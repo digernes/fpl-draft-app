@@ -230,6 +230,14 @@ function bindTooltips() {
   const show = (el: Tipped) => {
     clearTimeout(hideTimer);
     tip.textContent = el.dataset.tip ?? el.getAttribute('data-tip');
+    // Label and value pairs under the tip, lined up in two columns (as text, never markup).
+    const rows = el.dataset.tipRows;
+    if (rows) {
+      const grid = Object.assign(document.createElement('div'), { className: 'tip-rows' });
+      for (const row of rows.split('\n'))
+        for (const cell of row.split('\t')) grid.append(Object.assign(document.createElement('span'), { textContent: cell }));
+      tip.replaceChildren(Object.assign(document.createElement('div'), { className: 'tip-head', textContent: tip.textContent }), grid);
+    }
     tip.hidden = false;
     const r = el.getBoundingClientRect();
     const half = tip.offsetWidth / 2;

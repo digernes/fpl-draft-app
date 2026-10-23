@@ -1,6 +1,6 @@
 // The Overview tab: this round, the latest review and table, the prize and the market.
 
-import { feed, feedRow, gameweekReviewCard, resultText, squadStrip } from '../cards.ts';
+import { dgwRule, feed, feedRow, gameweekReviewCard, resultText, squadStrip } from '../cards.ts';
 import { avatar, card, empty, infoButton, listRow } from '../components.ts';
 import { esc } from '../format.ts';
 import { first, isLive, lineupFor, player } from '../lookups.ts';
@@ -42,10 +42,7 @@ function tableCard() {
 
 function gwPrizeCard() {
   const title = 'Highest gameweek prize';
-  const action = infoButton(
-    `Best score after −${D.meta.dgwPenalty} per double-gameweek player in the XI. An earlier week wins a tie.`,
-    'Rules',
-  );
+  const action = infoButton(`Highest gameweek score. Ties go to the earlier week. ${dgwRule()}`, 'Rules');
   const holders = D.topGameweeks.filter((g) => g.rank === 1);
   if (!holders.length) return card({ title, action, body: empty('Up for grabs once the first gameweek finishes') });
   const seasonOver = D.gameweeks.every((g) => g.finished);

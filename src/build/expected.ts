@@ -3,7 +3,7 @@
 // gameweek has been played there is nothing to learn from, so odds.ts falls back on FPL's.
 
 import { forecast, type Forecast, type ModelInput } from '../model/forecast.ts';
-import type { ById, Data } from '../shared/data.ts';
+import type { ById, Data, XpParts } from '../shared/data.ts';
 import type { Element } from '../shared/fpl-api.ts';
 import type { ModelPlayer } from '../model/history.ts';
 import { POSITIONS } from './config.ts';
@@ -15,6 +15,8 @@ import type { Season } from './season.ts';
  */
 export function modelInput(season: Season, chance?: 'next' | 'this' | number): ModelInput {
   const deadline = Date.parse(season.events.find((e) => e.id === chance)?.deadline_time ?? '');
+  // The Draft game leaves its penalty order empty; FPL's main game keeps it.
+  const penalties = new Map((season.fplBoot?.elements ?? []).map((el) => [el.code, el.penalties_order ?? null]));
   const players = new Map<number, ModelPlayer>();
   for (const el of season.elements.values()) {
     const odds =
@@ -25,7 +27,7 @@ export function modelInput(season: Season, chance?: 'next' | 'this' | number): M
           : chance !== undefined
             ? laterChance(el, deadline)
             : null;
-    players.set(el.id, { club: el.team, pos: POSITIONS[el.element_type], chance: odds ?? null });
+    players.set(el.id, { club: el.team, pos: POSITIONS[el.element_type], chance: odds ?? null, penalties: penalties.get(el.code) ?? null });
   }
   const feeds = Object.fromEntries(season.finishedGws.map((gw) => [gw, season.live[gw]]));
   return { scoring: season.boot.settings.scoring, players, feeds };
@@ -50,6 +52,26 @@ export function laterChance(el: Pick<Element, 'status' | 'news' | 'chance_of_pla
 }
 
 const points = (f: Forecast) => (pid: number) => f.points.get(pid) ?? 0;
+const partsOf =
+  (f: Forecast) =>
+  (pid: number): XpParts | undefined => {
+    const p = f.parts.get(pid);
+    return (
+      p && [
+        f.minutes.get(pid) ?? 0,
+        p.appearance,
+        p.goals,
+        p.penalties,
+        p.assists,
+        p.cleanSheet,
+        p.conceded,
+        p.defcon,
+        p.saves,
+        p.bonus,
+        p.cards,
+      ]
+    );
+  };
 
 export function modelExpected(season: Season) {
   if (!season.finishedGws.length) return null;
@@ -60,12 +82,13 @@ export function modelExpected(season: Season) {
   return {
     next: points(next),
     now: points(now),
-    /** A later gameweek's, by the chances of playing it (laterChance). */
-    at: (gw: number) => points(forecast(modelInput(season, gw), gw, boot.fixtures?.[gw] ?? [])),
-    /** This gameweek's appearance and clean-sheet points, for the live projections. */
-    milestones: (pid: number): [number, number] | undefined => {
-      const parts = now.parts.get(pid);
-      return parts && [parts.appearance, parts.cleanSheet];
+    /** Both taken apart. */
+    parts: partsOf(next),
+    partsNow: partsOf(now),
+    /** A later gameweek's, by the chances of playing it (laterChance), and taken apart. */
+    at: (gw: number) => {
+      const f = forecast(modelInput(season, gw), gw, boot.fixtures?.[gw] ?? []);
+      return { points: points(f), parts: partsOf(f) };
     },
   };
 }
