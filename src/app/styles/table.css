@@ -1,0 +1,358 @@
+/* --- League table ------------------------------------------------------------------ */
+
+.ftable {
+  container-type: inline-size;
+  padding: 0 0 8px;
+}
+
+.trow {
+  position: relative;
+  display: grid;
+  grid-template-columns: var(--cols-xs);
+  align-items: center;
+  column-gap: 8px;
+  height: 36px;
+  padding-right: 8px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+
+.trow.thead {
+  height: 48px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.trow.featured {
+  background: var(--featured);
+}
+
+.trow.qual::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 4px;
+  width: 2px;
+  height: 28px;
+  border-radius: 1px;
+  background: var(--qual);
+}
+
+.tc {
+  min-width: 0;
+  text-align: center;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.c-pos {
+  padding-left: 8px;
+  text-align: left;
+}
+
+.c-pos,
+.c-pts {
+  font-weight: 500;
+}
+
+.c-team,
+.c-left,
+.thead .c-form {
+  text-align: left;
+}
+
+.c-left {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.who-name {
+  flex: none;
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.who-team {
+  display: none;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+.form {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.pill {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 5px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 500;
+  text-align: center;
+}
+
+/* fotmob.com's live score pill: coloured by the result as it stands, gently pulsing. */
+.livep {
+  display: inline-grid;
+  place-items: center;
+  min-width: 46px;
+  height: 22px;
+  padding: 0 5px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.livep.W {
+  background: var(--win);
+}
+.livep.D {
+  background: var(--draw);
+}
+.livep.L {
+  background: var(--lose);
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.pill.W {
+  background: var(--win);
+}
+.pill.D {
+  background: var(--draw);
+}
+.pill.L {
+  background: var(--lose);
+}
+
+.pill.latest::after {
+  content: '';
+  position: absolute;
+  bottom: -4px;
+  left: 50%;
+  width: 16px;
+  height: 2px;
+  margin-left: -8px;
+  border-radius: 2px;
+  background: inherit;
+}
+
+@container (max-width: 379.98px) {
+  .from-sm,
+  .from-md,
+  .from-lg {
+    display: none;
+  }
+}
+
+@container (max-width: 549.98px) {
+  .from-md,
+  .from-lg {
+    display: none;
+  }
+}
+
+@container (max-width: 767.98px) {
+  .from-lg {
+    display: none;
+  }
+}
+
+@container (min-width: 380px) {
+  .until-xs {
+    display: none;
+  }
+}
+
+@container (min-width: 550px) {
+  .until-sm {
+    display: none;
+  }
+}
+
+/* Simulated finishing chances: brand green, stronger the likelier it is. */
+.simp {
+  display: inline-grid;
+  place-items: center;
+  width: 40px;
+  height: 26px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--brand-solid) var(--shade), transparent);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.simp.strong {
+  color: #fff;
+}
+
+.qmark {
+  padding-bottom: 3px;
+  box-shadow: inset 0 -2px 0 var(--q);
+}
+
+@container (min-width: 380px) {
+  .ftable .trow {
+    grid-template-columns: var(--cols-sm);
+    column-gap: 12px;
+    padding-right: 16px;
+    font-size: 14px;
+  }
+
+  .c-pos {
+    padding-left: 16px;
+  }
+
+  .who-name {
+    font-size: 14px;
+  }
+}
+
+@container (min-width: 550px) {
+  .ftable .trow {
+    grid-template-columns: var(--cols-md);
+  }
+
+  .who {
+    gap: 16px;
+  }
+
+  .who-team {
+    display: block;
+  }
+
+  .form {
+    gap: 12px;
+  }
+
+  .pill {
+    font-size: 12px;
+  }
+}
+
+@container (min-width: 768px) {
+  .ftable .trow {
+    grid-template-columns: var(--cols-lg);
+    padding-right: 24px;
+  }
+
+  .c-pos {
+    padding-left: 24px;
+  }
+}
+
+/* Expected-value cells: the superscript is actual minus expected, coloured by whether it helped. */
+.xv {
+  white-space: nowrap;
+}
+
+.diff {
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 0;
+}
+
+.diff.good,
+.rank-delta.good {
+  color: var(--diff-good);
+}
+
+.diff.bad,
+.rank-delta.bad {
+  color: var(--diff-bad);
+}
+
+.diff.even,
+.rank-delta.even {
+  color: var(--text-3);
+}
+
+.rank-delta {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.rank-delta .tri {
+  width: 7px;
+  height: 7px;
+}
+
+.rank-delta.bad .tri {
+  transform: rotate(180deg);
+}
+
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  padding: 8px 16px 16px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 26px;
+}
+
+.legend-item i {
+  width: 6px;
+  height: 6px;
+  border-radius: 2px;
+}
+
+.info-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: var(--text-2);
+}
+
+.info-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.table-note {
+  padding: 0 16px 16px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+@media (min-width: 992px) {
+  .legend,
+  .table-note {
+    padding-left: 24px;
+    padding-right: 24px;
+  }
+}

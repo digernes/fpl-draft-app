@@ -1,0 +1,130 @@
+/* --- Lists ------------------------------------------------------------------------- */
+
+.lrow {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--row-divider);
+}
+
+.list > .lrow:first-child {
+  border-top: 0;
+}
+
+.lrow-rank {
+  flex: none;
+  width: 20px;
+  color: var(--text-2);
+  font-weight: 500;
+  text-align: center;
+}
+
+.lrow-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.lrow-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 6px;
+  font-weight: 500;
+}
+
+.lrow-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  margin-top: 4px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.lrow-value {
+  display: inline-grid;
+  justify-items: center;
+  flex: none;
+  min-width: 36px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.lrow-value.top {
+  background: var(--brand-solid);
+  color: #fff;
+}
+
+.lrow-sub {
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.lrow-value.top .lrow-sub {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.arrow-in,
+.arrow-out {
+  display: inline-grid;
+  width: 12px;
+  height: 12px;
+  flex: none;
+}
+
+.arrow-in {
+  color: var(--win);
+}
+
+.arrow-out {
+  color: var(--lose);
+  transform: rotate(180deg);
+}
+
+.swap-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--hover);
+  color: var(--text-2);
+}
+
+.swap-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.date-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 40px;
+  margin: 8px 8px 0;
+  padding: 0 16px;
+  border-radius: 10px;
+  background: var(--group-bg);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+@media (min-width: 992px) {
+  .lrow {
+    padding: 8px 24px;
+  }
+
+  .date-head {
+    font-size: 14px;
+  }
+}

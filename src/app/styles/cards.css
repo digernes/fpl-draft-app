@@ -1,0 +1,62 @@
+/* --- Cards ------------------------------------------------------------------------ */
+
+.card {
+  min-width: 0;
+  background: var(--card);
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  overflow: hidden;
+}
+
+.card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 56px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.card-heading {
+  min-width: 0;
+}
+
+.card-title {
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 18px;
+}
+
+.card-sub {
+  margin-top: 4px;
+  color: var(--text-3);
+  font-size: 13px;
+  line-height: 16px;
+}
+
+.card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 56px;
+  border-top: 1px solid var(--divider);
+  font-weight: 500;
+}
+
+.empty {
+  padding: 24px 16px;
+  color: var(--text-2);
+  text-align: center;
+}
+
+.card.empty {
+  padding: 48px 16px;
+}
+
+@media (min-width: 992px) {
+  .card-header {
+    min-height: 64px;
+    padding: 12px 24px;
+  }
+}

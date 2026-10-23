@@ -1,0 +1,81 @@
+/* --- Hover --------------------------------------------------------------------------
+   Only on devices that really hover, so a tap on a phone doesn't leave a chip faded or
+   a row grey. Backgrounds for rows and icon buttons, opacity for chips, tabs and pills,
+   underline for text links. A table row highlights too, as it opens that manager's squad. */
+
+.logo,
+.tab,
+.chip,
+.pill,
+.icon-btn,
+.info-btn,
+.gw-select select,
+.match,
+.squad-summary,
+.bar {
+  transition:
+    opacity 0.15s ease,
+    background-color 0.15s ease,
+    color 0.2s ease;
+}
+
+@media (hover: hover) {
+  .logo:hover {
+    opacity: 0.6;
+  }
+
+  .topnav a:hover {
+    text-decoration: underline;
+  }
+
+  .card-footer:hover {
+    text-decoration: underline;
+  }
+
+  .tab:not([aria-selected='true']):hover {
+    opacity: 0.6;
+  }
+
+  .chip:not([aria-pressed='true']):hover {
+    opacity: 0.75;
+  }
+
+  .pill:hover {
+    opacity: 0.65;
+  }
+
+  .icon-btn:hover:not(:disabled) {
+    background: var(--hover);
+  }
+
+  .info-btn:hover {
+    background: var(--hover);
+    color: var(--text);
+  }
+
+  .gw-select select:hover {
+    background: var(--hover);
+  }
+
+  .match:hover {
+    background: var(--match-hover);
+  }
+
+  .trow:not(.thead):hover,
+  .ftable.full .trow:not(.thead):hover .c-team {
+    background: var(--hover);
+  }
+
+  .squad-summary:hover,
+  .tile-link:hover {
+    background: var(--hover);
+  }
+
+  .sq-sort:hover {
+    color: var(--text);
+  }
+
+  .bar-col:hover .bar {
+    opacity: 0.75;
+  }
+}

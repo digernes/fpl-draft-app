@@ -1,0 +1,108 @@
+/* --- Draft board ----------------------------------------------------------------- */
+
+.board {
+  padding: 12px 16px 4px;
+  overflow-x: auto;
+}
+
+.db-grid {
+  display: grid;
+  gap: 4px;
+  min-width: calc(var(--managers) * 104px + 28px);
+}
+
+.db-row {
+  display: grid;
+  grid-template-columns: 24px repeat(var(--managers), minmax(100px, 1fr));
+  gap: 4px;
+}
+
+.db-head > span {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.db-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-round {
+  display: grid;
+  place-items: center;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.db-cell {
+  display: grid;
+  gap: 2px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border-radius: 8px;
+  background: var(--hover);
+}
+
+.db-cell.pos-GKP {
+  background: var(--pos-GKP);
+}
+.db-cell.pos-DEF {
+  background: var(--pos-DEF);
+}
+.db-cell.pos-MID {
+  background: var(--pos-MID);
+}
+.db-cell.pos-FWD {
+  background: var(--pos-FWD);
+}
+
+.db-cell.gone {
+  opacity: 0.4;
+}
+
+.db-player {
+  overflow: hidden;
+  font-size: 12px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.db-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-2);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.db-meta .av {
+  width: 14px;
+  height: 14px;
+  font-size: 6px;
+}
+
+.legend-item i.pos-GKP {
+  background: var(--pos-GKP);
+}
+.legend-item i.pos-DEF {
+  background: var(--pos-DEF);
+}
+.legend-item i.pos-MID {
+  background: var(--pos-MID);
+}
+.legend-item i.pos-FWD {
+  background: var(--pos-FWD);
+}
+
+.legend-item i.gone-key {
+  background: var(--featured-key);
+  opacity: 0.5;
+}

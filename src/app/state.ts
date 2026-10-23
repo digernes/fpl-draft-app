@@ -17,8 +17,10 @@ export const REFRESH_MS = 10 * 60 * 1000;
 export const LIVE_REFRESH_MS = 2 * 60 * 1000; // data.json itself changes about every 10 minutes during matches
 // Near real-time scores while a gameweek is being played come from a small Cloudflare
 // Worker (worker/), because browsers can't call the FPL API. Leave empty to rely on
-// data.json, which the scheduled job refreshes every 10 minutes during matches.
-export const LIVE_URL: string = 'https://fpl-draft-live.digernes.workers.dev';
+// data.json, which the scheduled job refreshes every 10 minutes during matches. ?relay=off
+// does that for one visit, to try a gameweek faked by scripts/fake-live.ts.
+export const LIVE_URL: string =
+  new URLSearchParams(location.search).get('relay') === 'off' ? '' : 'https://fpl-draft-live.digernes.workers.dev';
 export const LIVE_POLL_MS = 30 * 1000; // while Premier League matches are on
 export const LIVE_IDLE_MS = 5 * 60 * 1000; // between the match days of a live gameweek
 export const TRANSFERS_POLL_MS = 2 * 60 * 1000; // new moves between builds, from the relay

@@ -1,5 +1,5 @@
-// Bundles the page (src/app) and the service worker (src/sw.ts) into public/, which is
-// the whole site as GitHub Pages serves it.
+// Bundles the page (src/app), its styles (src/app/styles) and the service worker
+// (src/sw.ts) into public/, which is the whole site as GitHub Pages serves it.
 //
 //   node scripts/build-site.ts            one build
 //   node scripts/build-site.ts --serve    rebuild on change and serve public/ on :8765
@@ -12,6 +12,7 @@ const port = Number(process.env.PORT ?? 8765);
 const options: esbuild.BuildOptions = {
   entryPoints: [
     { in: 'src/app/main.ts', out: 'assets/app' },
+    { in: 'src/app/styles/index.css', out: 'assets/styles' },
     { in: 'src/sw.ts', out: 'sw' },
   ],
   outdir: 'public',

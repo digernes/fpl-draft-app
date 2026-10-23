@@ -91,20 +91,25 @@ Then open http://localhost:8765. `npm run data` builds `public/data.json`; `--ca
 raw API responses so later runs don't hit the API. `npm run dev` bundles the page with esbuild,
 rebuilds it on every change and serves `public/`.
 
+To try the live views on a day without matches, `node scripts/fake-live.ts` turns the latest
+gameweek into one in progress; open http://localhost:8765/?relay=off#fixtures (so the live relay
+doesn't replace it with the real scores), and `node scripts/fake-live.ts --restore` afterwards.
+
 ## Code
 
 TypeScript throughout, in strict mode. Node 24 runs the build scripts as they are; esbuild bundles
-the page and the service worker; Wrangler bundles the Worker.
+the page, its styles and the service worker; Wrangler bundles the Worker. CLAUDE.md has the working notes.
 
 ```
 scripts/build-data.ts   builds data.json (entry point)
-scripts/build-site.ts   bundles src/app and src/sw.ts into public/
+scripts/build-site.ts   bundles src/app (script and styles) and src/sw.ts into public/
+scripts/fake-live.ts    fakes a gameweek in progress, to try the live views
 src/build/              the build, one module per part of data.json
-src/app/                the page
+src/app/                the page; its styles are in src/app/styles/, one file per area
 src/shared/             data.json's types, the FPL API's Zod schemas, live scoring
 src/sw.ts               the service worker
 worker/                 the live relay
-public/                 the site as deployed: HTML, CSS, icons, data.json, seasons/
+public/                 the site as deployed: HTML, icons, data.json, seasons/ and the bundles
 tests/                  node --test
 ```
 

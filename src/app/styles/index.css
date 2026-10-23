@@ -1,0 +1,29 @@
+/* The page's styles, one file per area. scripts/build-site.ts bundles them in this order
+   into public/assets/styles.css, and the order is the cascade: a later file wins a tie
+   with an earlier one. Colours and sizes are tokens in tokens.css (light, then dark);
+   every hover effect is in hover.css, for devices that really hover. */
+
+@import './tokens.css';
+@import './base.css';
+@import './top-bar.css';
+@import './layout.css';
+@import './cards.css';
+@import './league-header.css';
+@import './avatars.css';
+@import './controls.css';
+@import './table.css';
+@import './prize.css';
+@import './lists.css';
+@import './matches.css';
+@import './tiles.css';
+@import './heatmap.css';
+@import './column-chart.css';
+@import './trades.css';
+@import './original-squads.css';
+@import './draft-board.css';
+@import './squads.css';
+@import './pitch.css';
+@import './match-pitch.css';
+@import './tooltip.css';
+@import './hover.css';
+@import './motion.css';

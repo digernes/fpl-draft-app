@@ -1,0 +1,53 @@
+/* --- Column chart --------------------------------------------------------------- */
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 180px;
+  padding: 16px 16px 12px;
+}
+
+.bar-col {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  height: 100%;
+  min-width: 0;
+}
+
+.bar-track {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  width: 100%;
+  min-height: 0;
+}
+
+/* The value label needs ~20px above the tallest bar. */
+.bar {
+  width: min(24px, 70%);
+  height: calc((100% - 20px) * var(--share));
+  min-height: 2px;
+  border-radius: 4px 4px 0 0;
+  background: var(--brand-solid);
+}
+
+.bar-value {
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.bar-label {
+  width: 100%;
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px solid var(--divider);
+  color: var(--text-2);
+  font-size: 11px;
+  text-align: center;
+}

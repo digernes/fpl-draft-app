@@ -1,0 +1,225 @@
+/* --- League header ("poster" + tabs) ------------------------------------------ */
+
+.league-header {
+  margin: -16px -16px 0;
+  background: var(--card);
+  border-bottom: 1px solid var(--card-border);
+}
+
+.poster {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 72px;
+  padding: 16px 16px 8px;
+}
+
+.league-logo svg {
+  display: block;
+  width: 40px;
+  height: 40px;
+}
+
+.poster-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.league-name {
+  font-size: 19px;
+  font-weight: 500;
+  line-height: 1.15;
+}
+
+.league-sub {
+  margin-top: 4px;
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.poster-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.status-chip,
+.season-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 32px;
+  padding: 0 14px;
+  border-radius: 22px;
+  border: 1px solid var(--chip-border);
+  background: var(--chip-bg);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.status-chip strong {
+  font-weight: 700;
+}
+
+.status-chip.live {
+  color: var(--green-text);
+}
+
+.status-chip.live i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: blink 2s ease-in-out infinite;
+}
+
+.season-chip {
+  display: none;
+}
+
+/* With more than one season the chip is a picker, and phones need it too. */
+.season-chip.season-select {
+  position: relative;
+  display: inline-flex;
+  padding: 0;
+}
+
+.season-select select {
+  appearance: none;
+  height: 100%;
+  padding: 0 32px 0 14px;
+  border: 0;
+  border-radius: 22px;
+  background: transparent;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.season-select .chev {
+  position: absolute;
+  right: 12px;
+  pointer-events: none;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0.35;
+  }
+}
+
+.tabs {
+  position: relative;
+  display: flex;
+  gap: 16px;
+  padding: 0 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab {
+  display: flex;
+  align-items: center;
+  flex: none;
+  height: 56px;
+  padding: 0 4px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tab[aria-selected='true'] {
+  color: var(--text);
+  opacity: 1;
+}
+
+.tab-indicator {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  height: 3px;
+  border-radius: 3px 3px 0 0;
+  background: var(--tab-indicator);
+  transition:
+    left 0.2s ease-out,
+    width 0.2s ease-out;
+}
+
+@media (max-width: 599px) {
+  .poster {
+    flex-wrap: wrap;
+  }
+
+  .poster-side {
+    flex-wrap: wrap;
+    width: 100%;
+  }
+
+  .poster-side:empty {
+    display: none;
+  }
+
+  .status-chip {
+    height: 28px;
+    padding: 0 10px;
+    font-size: 12px;
+  }
+}
+
+@media (min-width: 769px) {
+  .tabs {
+    gap: 32px;
+    padding: 0 24px;
+  }
+
+  .tab {
+    font-size: 14px;
+  }
+}
+
+@media (min-width: 992px) {
+  .league-header {
+    margin: 0;
+    border: 1px solid var(--card-border);
+    border-radius: 16px;
+    overflow: hidden;
+  }
+
+  .poster {
+    gap: 16px;
+    min-height: 112px;
+    padding: 16px 32px 8px;
+  }
+
+  .league-logo svg {
+    width: 56px;
+    height: 56px;
+  }
+
+  .league-name {
+    font-size: 23px;
+  }
+
+  .league-sub {
+    font-size: 16px;
+  }
+
+  .season-chip {
+    display: inline-flex;
+  }
+
+  .tabs {
+    gap: 40px;
+    padding: 0 32px;
+  }
+
+  .tab {
+    height: 64px;
+    font-size: 16px;
+  }
+}

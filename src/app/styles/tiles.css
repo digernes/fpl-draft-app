@@ -1,0 +1,41 @@
+/* --- Tiles --------------------------------------------------------------------- */
+
+/* Dividers are drawn by each tile's shadow, so a half-empty last row stays card-coloured;
+   the card clips the shadows on its outer edges. */
+.tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.tile {
+  padding: 16px;
+  box-shadow:
+    1px 0 0 var(--divider),
+    0 1px 0 var(--divider);
+}
+
+.tile-label {
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tile-value {
+  margin-top: 10px;
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.tile-meta {
+  margin-top: 8px;
+  color: var(--text-3);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+@media (min-width: 992px) {
+  .tile {
+    padding: 20px 24px;
+  }
+}

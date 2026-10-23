@@ -1,0 +1,154 @@
+/* FotMob Draft League. Tokens follow fotmob.com's light and dark themes. */
+
+:root {
+  color-scheme: light;
+  --font: walsheim, 'GT Walsheim', 'DM Sans', system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+  --bg: #fafafa;
+  --card: #fff;
+  --card-border: #f0f0f0;
+  --popover: #fff;
+  --hover: #f5f5f5;
+  --divider: #f5f5f5;
+  --row-divider: #f5f5f5;
+  --featured: #f0f0f0;
+  --featured-key: #d9d9d9;
+  --text: #222;
+  --text-2: #717171;
+  --text-3: #9f9f9f;
+  --brand: #00985f;
+  --brand-solid: #00985f;
+  --green-text: #00985f;
+  --header-bg: #fff;
+  --header-border: #f5f5f5;
+  --tab-indicator: #222;
+  --chip-bg: #fff;
+  --chip-border: #e8e8e8;
+  --chip-text: #222;
+  --chip-active-bg: #222;
+  --chip-active-text: #fff;
+  --search-bg: #f0f0f0;
+  --odds-bg: #ebf4f1;
+  --odds-label: #717171;
+  --odds-price: #00985f;
+  --group-bg: #f8f8f8;
+  --match-hover: #eaeaea;
+  --win: #00985f;
+  --draw: #8d9499;
+  --lose: #dd3636;
+  --qual-top: #2ad572;
+  --qual-europe: #0046a7;
+  --qual-bottom: #ff4646;
+  --tooltip: #464646;
+  --shadow: 0 10px 40px 0 rgba(0, 0, 0, 0.2);
+  --diff-good: #00985f;
+  --diff-bad: #dd3636;
+  --kit-head: #c9c9c9;
+  --kit-edge: rgba(0, 0, 0, 0.28);
+  --kit-none: #b5b5b5;
+  --kit-none-trim: #e8e8e8;
+  --pitch: #f4f4f4;
+  --pitch-lines: #e6e6e6;
+  --pitch-photo: #e3e3e3;
+  --pitch-chip: #fff;
+  --pitch-chip-border: #e0e0e0;
+
+  /* Manager identity: validated 8-slot categorical palette, fixed by join order. */
+  --m0: #8d9499;
+  --m1: #2a78d6;
+  --m2: #eb6834;
+  --m3: #1baf7a;
+  --m4: #eda100;
+  --m5: #e87ba4;
+  --m6: #008300;
+  --m7: #6250d6;
+  --m8: #e34948;
+  --ink-m3: #111;
+  --ink-m4: #111;
+  --ink-m5: #111;
+
+  /* Gameweek score heatmap: one green ramp, light to dark. */
+  --h0: #eef7f2;
+  --h1: #c9eadb;
+  --h2: #8fd2b3;
+  --h3: #3fae7e;
+  --h4: #00744a;
+  --ink-h3: #fff;
+  --ink-h4: #fff;
+
+  --pos-GKP: rgba(237, 161, 0, 0.16);
+  --pos-DEF: rgba(0, 152, 95, 0.13);
+  --pos-MID: rgba(42, 120, 214, 0.13);
+  --pos-FWD: rgba(227, 73, 72, 0.13);
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #000;
+  --card: #1d1d1d;
+  --card-border: transparent;
+  --popover: #2b2b2b;
+  --hover: #333;
+  --divider: #333;
+  --row-divider: #262626;
+  --featured: #0a0a0a;
+  --featured-key: #3a3a3a;
+  --text: #fff;
+  --text-2: #9f9f9f;
+  --text-3: #9f9f9f;
+  --brand: #61df6e;
+  --green-text: #33c771;
+  --header-bg: #1a1a1a;
+  --header-border: #000;
+  --tab-indicator: #61df6e;
+  --chip-bg: #333;
+  --chip-border: transparent;
+  --chip-text: #fff;
+  --chip-active-bg: #fff;
+  --chip-active-text: #222;
+  --search-bg: #2c2c2c;
+  --odds-bg: #333;
+  --odds-label: #61df6e;
+  --odds-price: #e8e8e8;
+  --group-bg: #333;
+  --match-hover: #333;
+  --diff-good: #33c771;
+  --diff-bad: #ff3030;
+  --kit-head: #6b6b6b;
+  --kit-edge: rgba(255, 255, 255, 0.18);
+  --kit-none: #5a5a5a;
+  --kit-none-trim: #8a8a8a;
+  --pitch: #2c2c2c; /* fotmob.com's lineup pitch */
+  --pitch-lines: #343434;
+  --pitch-photo: #4a4a4a;
+  --pitch-chip: #262626;
+  --pitch-chip-border: #464646;
+
+  --m1: #3987e5;
+  --m2: #d95926;
+  --m3: #199e70;
+  --m4: #c98500;
+  --m5: #d55181;
+  --m6: #008300;
+  --m7: #9085e9;
+  --m8: #e66767;
+  --ink-m5: #fff;
+  --ink-m7: #111;
+  --ink-m8: #111;
+
+  --h0: #15261e;
+  --h1: #1a3d2d;
+  --h2: #1d5d41;
+  --h3: #22835a;
+  --h4: #33c771;
+  --ink-h0: #fff;
+  --ink-h1: #fff;
+  --ink-h2: #fff;
+  --ink-h3: #fff;
+  --ink-h4: #0b0b0b;
+
+  --pos-GKP: rgba(201, 133, 0, 0.24);
+  --pos-DEF: rgba(51, 199, 113, 0.18);
+  --pos-MID: rgba(57, 135, 229, 0.22);
+  --pos-FWD: rgba(230, 103, 103, 0.22);
+}

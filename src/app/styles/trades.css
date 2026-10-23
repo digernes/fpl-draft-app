@@ -1,0 +1,45 @@
+/* --- Trades -------------------------------------------------------------------- */
+
+.trade {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-top: 1px solid var(--row-divider);
+}
+
+.trade:first-child {
+  border-top: 0;
+}
+
+.trade-head {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-weight: 500;
+}
+
+.trade-head .swap-icon {
+  width: 24px;
+  height: 24px;
+}
+
+.trade-head .tag {
+  margin-left: auto;
+}
+
+.trade-side {
+  font-size: 13px;
+  line-height: 18px;
+}
+
+.trade-meta {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+@media (min-width: 992px) {
+  .trade {
+    padding: 16px 24px;
+  }
+}
