@@ -16,7 +16,7 @@ top gameweeks, transfer stats, original squads and each manager's Premier League
 - The header counts down to the waiver run and the deadline, and shows "Live" while a gameweek is being played.
 - During a gameweek the table gets fotmob.com's Live column and live positions, with rows sliding as they change. With the live relay set up (below), scores update every 30 seconds.
 - Installable: on Android Chrome use the menu → Install app (on iPhone, Share → Add to Home Screen).
-- The table marks the prize places (1st and 2nd) and last place, whose penalty is still to be announced. Managers appear by first name only, since the page is public.
+- The table marks the prize places (1st and 2nd) and last place, whose penalty is still to be decided. Managers appear by first name only, since the page is public.
 - Finished seasons are kept: the season chip becomes a picker once there is more than one.
 
 ## How it works
