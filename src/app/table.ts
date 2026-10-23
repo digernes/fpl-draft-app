@@ -286,7 +286,7 @@ export const TABLE_VIEWS: Record<string, RenderedView> = {
     legend: [
       ['var(--qual-top)', '1st prize'],
       ['var(--qual-europe)', '2nd prize'],
-      ['var(--qual-bottom)', 'Penalty to be announced'],
+      ['var(--qual-bottom)', 'Penalty to be decided'],
     ],
   }),
   form: tableView<StandingRow>({
@@ -364,7 +364,7 @@ export const TABLE_VIEWS: Record<string, RenderedView> = {
     legend: [
       ['var(--qual-top)', '1st prize'],
       ['var(--qual-europe)', '2nd prize'],
-      ['var(--qual-bottom)', 'Penalty to be announced'],
+      ['var(--qual-bottom)', 'Penalty to be decided'],
     ],
     info: simulationFormula,
     note: () =>

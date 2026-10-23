@@ -37,7 +37,7 @@ No framework: each tab is a function in `src/app/views/` that returns an HTML st
 - `state.ts` holds the tabs (`TABS`), constants, `state` (view state and settings) and `D` (the loaded data.json). `live-scores.ts` loads and refreshes data.json and polls the relay.
 - `render.ts` puts the current view in `#view`, and rebuilds the whole view after every change.
 - One delegated click handler in `chrome.ts`: elements carry `data-action` (and `data-value`), the handler updates `state` and calls `renderView()`. Routing is the hash (`#fixtures/8`, `#squads/<id>`, `#stats/transfers`), read in `readRoute()` there too.
-- Shared pieces: `components.ts` (avatars, crests, photos, cards, chips, segmented switches, tiles, pills), `matches.ts`, `pitch.ts` (with `event-icons.ts` for what each player did), `table.ts`, `cards.ts`. `lookups.ts` reads the data (`player()`, `club()`, `first()`, `isLive()`, `isArchive()`); `format.ts` formats and escapes.
+- Shared pieces: `components.ts` (avatars, crests, photos, cards, chips, segmented switches, tiles, pills), `matches.ts`, `pitch.ts` (with `event-icons.ts` for what each player did and `lineup-filters.ts` for the xP, xG, xA and xCS filters), `table.ts`, `cards.ts`. `lookups.ts` reads the data (`player()`, `club()`, `first()`, `isLive()`, `isArchive()`); `format.ts` formats and escapes.
 - Escape text from the data with `esc()`: team names and other strings are typed by FPL users.
 - Stats that need only data.json are pure functions of `Data` (like `manager-stats.ts`), so `tests/` can check them without a browser.
 - A finished season stays browsable (`public/seasons/`), so views must also work for an archive, where nothing is live.

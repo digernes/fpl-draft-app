@@ -20,7 +20,16 @@ import type { Data } from '../src/shared/data.ts';
 import { fetchLeague } from '../src/build/api.ts';
 import { buildDraft } from '../src/build/draft.ts';
 import { buildGameweeks, buildRecords } from '../src/build/gameweeks.ts';
-import { buildEvents, buildLineups, buildLiveData, buildManagers, buildMatches, lineupOf, patchLiveScores } from '../src/build/lineups.ts';
+import {
+  buildEvents,
+  buildLineups,
+  buildLiveData,
+  buildUnderlying,
+  buildManagers,
+  buildMatches,
+  lineupOf,
+  patchLiveScores,
+} from '../src/build/lineups.ts';
 import { oddsModel, priceMatches } from '../src/build/odds.ts';
 import { buildClubs, buildMeta, buildPlayers, readPrevious, seasonSlug, writeIfChanged, writeSeasonIndex } from '../src/build/output.ts';
 import { readSeason } from '../src/build/season.ts';
@@ -85,6 +94,7 @@ const data: Data = {
   plTwins: premierLeagueTwins(overall, plTable),
   lineups,
   events: buildEvents(season, lineups),
+  underlying: buildUnderlying(season, lineups),
   live: buildLiveData(season, lineups, model.expectedNow),
   topGameweeks,
   worstGameweeks,

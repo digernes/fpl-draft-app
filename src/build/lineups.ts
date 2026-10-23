@@ -2,7 +2,7 @@
 // the double-gameweek adjustment, bench points and expected points, and what the
 // players in it did.
 
-import type { ById, LiveData, Lineup, Manager, Match } from '../shared/data.ts';
+import type { ById, LiveData, Lineup, Manager, Match, Underlying } from '../shared/data.ts';
 import { scoreLineup, slimLive, type PlayerEvents, type SlimLive } from '../shared/live.ts';
 import { DGW_PENALTY } from './config.ts';
 import type { Season } from './season.ts';
@@ -94,7 +94,7 @@ export function buildLineups(season: Season, matches: Match[]) {
   if (lineupMismatches) console.warn(`! ${lineupMismatches} lineups do not add up to their H2H score`);
 
   for (const byGw of Object.values(lineups)) {
-    for (const [gw, l] of Object.entries(byGw)) l.xpf = round(sum(l.xi.map((pid) => expectedPointsIn(season, pid, Number(gw)))), 1);
+    for (const [gw, l] of Object.entries(byGw)) l.xpf = round(sum(l.xi.map((pid) => underlyingIn(season, pid, Number(gw))?.xp ?? 0)), 1);
   }
   return lineups;
 }
@@ -141,19 +141,37 @@ export function patchLiveScores(matches: Match[], lineup: ReturnType<typeof line
   }
 }
 
+// Each lineup player's xG, xA, expected clean sheets and expected points, gameweek by
+// gameweek, for the pitches' lineup filters. Only players who got on the pitch.
+export function buildUnderlying(season: Season, lineups: Lineups): ById<ById<Underlying>> {
+  const out: ById<ById<Underlying>> = {};
+  for (const gw of season.finishedGws) {
+    const ids = Object.values(lineups).flatMap((byGw) => [...(byGw[gw]?.xi ?? []), ...(byGw[gw]?.bench ?? [])]);
+    const week: ById<Underlying> = {};
+    for (const pid of [...ids].sort((a, b) => a - b)) {
+      const u = underlyingIn(season, pid, gw);
+      if (!u?.minutes || u.xg === undefined) continue;
+      week[pid] = [round(u.xg, 2), round(u.xa, 2), round(u.xp, 1), ...(u.xcs === undefined ? [] : [round(u.xcs, 2)])] as Underlying;
+    }
+    if (Object.keys(week).length) out[gw] = week;
+  }
+  return out;
+}
+
 // Expected ("underlying") points, in the spirit of FotMob's xG: the returns that
 // swing on finishing (goals, assists, clean sheets, goals conceded) are swapped
 // for what the player's xG, xA and xGC were worth. Minutes, bonus, saves, cards
-// and defensive contributions stay as scored.
-function expectedPointsIn(season: Season, pid: number, gw: number): number {
+// and defensive contributions stay as scored. xCS, the expected clean sheets, is
+// only there for positions where a clean sheet scores.
+function underlyingIn(season: Season, pid: number, gw: number) {
   const rules = season.boot.settings.scoring;
   const rule = (key: string) => {
     const value = rules[key];
     return typeof value === 'number' ? value : 0;
   };
   const s = season.live[gw]?.elements[pid]?.stats;
-  if (!s) return 0;
-  if (s.expected_goals == null) return s.total_points;
+  if (!s) return undefined;
+  if (s.expected_goals == null) return { minutes: s.minutes, xp: s.total_points };
   const pos = season.positionOf(pid);
   const goal = rule(`goals_scored_${pos}`);
   const cleanSheet = rule(`clean_sheets_${pos}`);
@@ -166,10 +184,9 @@ function expectedPointsIn(season: Season, pid: number, gw: number): number {
     rules.assists * s.assists +
     cleanSheet * s.clean_sheets +
     conceded * Math.floor(s.goals_conceded / rules.concede_limit);
-  const expected =
-    goal * Number(s.expected_goals) +
-    rules.assists * Number(s.expected_assists) +
-    cleanSheet * fullGames * Math.exp(-xConceded / fixtures) + // chance of a clean sheet, per full game
-    (conceded * xConceded) / rules.concede_limit;
-  return s.total_points - actual + expected;
+  const xg = Number(s.expected_goals);
+  const xa = Number(s.expected_assists);
+  const xcs = fullGames * Math.exp(-xConceded / fixtures); // the chance of a clean sheet, per full game
+  const expected = goal * xg + rules.assists * xa + cleanSheet * xcs + (conceded * xConceded) / rules.concede_limit;
+  return { minutes: s.minutes, xg, xa, xcs: cleanSheet ? xcs : undefined, xp: s.total_points - actual + expected };
 }

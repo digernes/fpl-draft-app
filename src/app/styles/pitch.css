@@ -94,6 +94,12 @@
   }
 }
 
+/* The lineup filters over a finished gameweek's pitch, as on fotmob.com. */
+.filter-bar.lineup-filters {
+  min-height: 56px;
+  border-bottom: 0;
+}
+
 /* Expected points would vanish into the pitch in the usual grey. */
 .pp-badge .ptsp.xp {
   border: 1px solid var(--pitch-chip-border);

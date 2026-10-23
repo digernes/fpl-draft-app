@@ -6,6 +6,7 @@ import { liveOdds } from '../shared/odds.ts';
 import { avatar, empty, ptsPill, seg } from './components.ts';
 import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, priceText, sum } from './format.ts';
 import { first, gwBonus, gwEvents, gwInfo, gwPoints, isLive, lineupFor, matchKey, mgr, player, slotOf } from './lookups.ts';
+import { lineupFilters, showsEvents, statBadge } from './lineup-filters.ts';
 import { matchPitch, subMark, type PitchPlayer, type PitchSide } from './pitch.ts';
 import { D, live, LIVE_URL, state } from './state.ts';
 
@@ -87,11 +88,28 @@ function preMatchOdds(m: Match) {
 
 function matchDetail(m: Match) {
   if (!m.started) return upcomingDetail(m);
-  return `<div class="match-detail">${preMatchOdds(m)}${matchLineups(m)}</div>`;
+  return `<div class="match-detail">${preMatchOdds(m)}${expectedStats(m)}${matchLineups(m)}</div>`;
+}
+
+// A finished match's numbers from the xG table, the way fotmob.com shows a match's xG:
+// the label in the middle and the higher figure in a pill of that side's colour.
+function expectedStats(m: Match) {
+  if (!m.xg) return '';
+  const row = (label: string, tip: string, [home, away]: [number, number]) => {
+    const value = (v: number, id: number, higher: boolean) =>
+      `<span class="xg-value${higher ? ` higher m${slotOf(id)}` : ''}">${v.toFixed(1)}</span>`;
+    return `<div class="xg-row">${value(home, m.home, home > away)}<span class="xg-label" data-tip="${tip}">${label}</span>${value(away, m.away, away > home)}</div>`;
+  };
+  return `<div class="detail-xg">
+    <div class="detail-label">Underlying numbers <span class="muted">· as in the xG table</span></div>
+    ${row('Expected points (xP)', 'Each XI with goals, assists and clean sheets swapped for what the xG, xA and xGC were worth', m.xg.xp)}
+    ${row('Expected table points (xPTS)', 'The table points both expected scores would have earned', m.xg.xPts)}
+  </div>`;
 }
 
 // Both XIs on one pitch with each player's points, what they did, auto-subs, double
-// gameweeks and, in a live gameweek, the minute; the benches below.
+// gameweeks and, in a live gameweek, the minute; the benches below. A finished
+// gameweek gets the lineup filters on top.
 function matchLineups(m: Match) {
   const home = lineupFor(m.home, m.gw);
   const away = lineupFor(m.away, m.gw);
@@ -106,14 +124,15 @@ function matchLineups(m: Match) {
       const twice = doubles.has(p.club) ? '<span data-tip="Plays twice this gameweek">×2</span>' : '';
       return {
         pid,
-        badge: roundPill(pid, m.gw, match),
-        events: gwEvents(pid, m.gw),
+        badge: statBadge(pid, m.gw) ?? roundPill(pid, m.gw, match),
+        events: showsEvents(m.gw) ? gwEvents(pid, m.gw) : undefined,
         mark: l.subs.includes(pid) ? subMark : '',
         note: match?.state === 'live' ? stateLabel(match) : twice,
       };
     };
   const side = (id: number, l: Lineup): PitchSide => ({ id, xi: l.xi.map(onPitch(l)), note: lineupNote(l, feed) });
-  return matchPitch(side(m.home, home), side(m.away, away), [home.bench.map(onPitch(home)), away.bench.map(onPitch(away))]);
+  const pitch = matchPitch(side(m.home, home), side(m.away, away), [home.bench.map(onPitch(home)), away.bench.map(onPitch(away))]);
+  return `${lineupFilters(m.gw)}${pitch}`;
 }
 
 // How far through the gameweek the XI is, and the score after any double-gameweek penalty.

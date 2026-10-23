@@ -24,6 +24,8 @@ export interface Data {
   lineups: ById<ById<Lineup>>;
   /** gameweek → player → what he did, for everyone in a lineup that gameweek. Missing from older archives. */
   events?: ById<ById<PlayerEvents>>;
+  /** Finished gameweek → player → his underlying numbers, for everyone in a lineup who played. Missing from older archives. */
+  underlying?: ById<ById<Underlying>>;
   /** While a gameweek is being played: its live feed, so the page can tell who is still to play. */
   live?: LiveData;
   topGameweeks: TopGameweek[];
@@ -109,6 +111,18 @@ export interface Match {
   started: boolean;
   finished: boolean;
   odds?: Odds;
+  /** Once finished: the xG table's numbers for this match (home, away). */
+  xg?: MatchXg;
+}
+
+/** xG, xA and expected points; then expected clean sheets, where a clean sheet scores for his position. */
+export type Underlying = [xg: number, xa: number, xp: number, xcs?: number];
+
+export interface MatchXg {
+  /** Expected points: each XI with goals, assists and clean sheets swapped for their expected values. */
+  xp: [number, number];
+  /** The table points those expected scores would have earned. */
+  xPts: [number, number];
 }
 
 export interface MatchResult {
