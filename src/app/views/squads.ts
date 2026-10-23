@@ -12,6 +12,7 @@ import { esc, ordinal, pct, plural, signed, sum } from '../format.ts';
 import { club, first, gwEvents, gwPoints, isArchive, lineupFor, mgr, player, seasonStat, slotOf } from '../lookups.ts';
 import { closeCalls, gameIn, nemesis, pointsByPosition, rivalries, type Rivalry } from '../manager-stats.ts';
 import { roundPill, stateLabel } from '../matches.ts';
+import { lineupFilters, showsEvents, statBadge } from '../lineup-filters.ts';
 import { formationOf, pitch, subMark, type PitchPlayer } from '../pitch.ts';
 import { D, live, state } from '../state.ts';
 
@@ -123,15 +124,15 @@ function lastLineup(id: number) {
     const match = feed ? clubState(feed, player(pid).club) : null;
     return {
       pid,
-      badge: roundPill(pid, gw, match),
-      events: gwEvents(pid, gw),
+      badge: statBadge(pid, gw) ?? roundPill(pid, gw, match),
+      events: showsEvents(gw) ? gwEvents(pid, gw) : undefined,
       mark: l.subs.includes(pid) ? subMark : '',
       note: match?.state === 'live' ? stateLabel(match) : '',
     };
   };
   return {
     sub: `GW ${gw} · ${plural(l.pts, 'pt')}${feed ? ' so far' : ''} · ${formationOf(l.xi)}`,
-    body: pitch(l.xi.map(onPitch), l.bench.map(onPitch)),
+    body: lineupFilters(gw) + pitch(l.xi.map(onPitch), l.bench.map(onPitch)),
   };
 }
 

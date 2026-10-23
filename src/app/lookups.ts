@@ -1,6 +1,6 @@
 // Lookups into the loaded data, aware of live scores and the season being viewed.
 
-import type { Lineup, Match } from '../shared/data.ts';
+import type { Lineup, Match, Underlying } from '../shared/data.ts';
 import type { PlayerEvents } from '../shared/live.ts';
 import { esc } from './format.ts';
 import { COLOR_SLOTS, D, live, managers, seasons, state } from './state.ts';
@@ -19,6 +19,7 @@ export const lineupFor = (id: number, gw: number): Lineup | undefined => (live?.
 // copy if the relay's feed doesn't have them), and the bonus in his points.
 export const gwEvents = (pid: number, gw: number): PlayerEvents | undefined =>
   ((live?.gw === gw && live.feed.events) || D.events?.[gw])?.[pid];
+export const gwUnderlying = (pid: number, gw: number): Underlying | undefined => D.underlying?.[gw]?.[pid];
 export const gwBonus = (pid: number, gw: number) => (live?.gw === gw ? live.bonus(pid) : (gwEvents(pid, gw)?.bonus ?? 0));
 export const seasonStat = (id: number) => D.seasonStats.find((s) => s.id === id);
 export const slotOf = (id: number) => {

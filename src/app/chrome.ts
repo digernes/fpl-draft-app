@@ -86,6 +86,9 @@ function onClick(event: MouseEvent) {
   } else if (action === 'lineup-view') {
     state.lineupView = value;
     renderView();
+  } else if (action === 'lineup-stat') {
+    state.lineupStat = state.lineupStat === value ? '' : value; // tapping the chosen filter again goes back to points
+    renderView();
   } else if (action === 'squad-scope') {
     state.squadScope = value;
     renderView();
