@@ -66,7 +66,7 @@ function inPlayOdds(m: Match) {
 }
 
 // FotMob-style match state next to each player in a live gameweek.
-function stateLabel(s: PlayerState) {
+export function stateLabel(s: PlayerState) {
   if (s.state === 'live') return `<span class="lp-state is-live" data-tip="Playing now">${Math.max(1, s.min)}'</span>`;
   if (s.state === 'done') return `<span class="lp-state" data-tip="Match over">FT</span>`;
   if (s.state === 'blank') return `<span class="lp-state" data-tip="No match this gameweek">–</span>`;
@@ -104,14 +104,7 @@ function lineupColumn(id: number, gw: number) {
       doubles.has(p.club) ? tag('DGW', 'Plays twice this gameweek', 'tag-dgw') : '',
     ].join('');
     const match = feed ? clubState(feed, p.club) : null;
-    const pts = gwPoints(pid, gw);
-    // Before kick-off a 0 says nothing, so players still to play show what FPL expects instead.
-    const ep = D.live?.ep[pid] ?? p.ep;
-    const pill =
-      match?.state === 'due' && pts === 0
-        ? `<span class="ptsp xp" data-tip="Expected points (not played yet)">${ep.toFixed(1)}</span>`
-        : ptsPill(pts);
-    return `<div class="lp${benched ? ' benched' : ''}"><span class="lp-pos">${p.pos}</span>${crest(p.club, 16)}<span class="lp-name">${esc(p.name)}${flags}</span>${match ? stateLabel(match) : ''}${pill}</div>`;
+    return `<div class="lp${benched ? ' benched' : ''}"><span class="lp-pos">${p.pos}</span>${crest(p.club, 16)}<span class="lp-name">${esc(p.name)}${flags}</span>${match ? stateLabel(match) : ''}${roundPill(pid, gw, match)}</div>`;
   };
   // How far through the gameweek the scoring XI is.
   const states = feed ? l.xi.map((pid) => clubState(feed, player(pid).club).state) : [];
@@ -136,6 +129,15 @@ function lineupColumn(id: number, gw: number) {
     <div class="lineup-bench">Bench · ${plural(l.benchPts, 'pt')}</div>
     ${l.bench.map((pid) => row(pid, true)).join('')}
   </div>`;
+}
+
+// A player's points in a gameweek. Before kick-off a 0 says nothing, so players still
+// to play show what FPL expects instead.
+export function roundPill(pid: number, gw: number, match: PlayerState | null) {
+  const pts = gwPoints(pid, gw);
+  if (match?.state !== 'due' || pts !== 0) return ptsPill(pts);
+  const ep = D.live?.ep[pid] ?? player(pid).ep;
+  return `<span class="ptsp xp" data-tip="Expected points (not played yet)">${ep.toFixed(1)}</span>`;
 }
 
 function upcomingDetail(m: Match) {

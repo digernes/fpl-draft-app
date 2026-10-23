@@ -114,6 +114,9 @@ export function listRow({ lead = '', title, meta = '', value = '', top = false, 
 
 export const empty = (text: string) => `<div class="empty">${text}</div>`;
 
+export const tile = (label: string, value: string | number, meta: string, tip = '') =>
+  `<div class="tile"${tip ? ` data-tip="${esc(tip)}"` : ''}><div class="tile-label">${label}</div><div class="tile-value">${value}</div><div class="tile-meta">${meta}</div></div>`;
+
 export function formPills(form: MatchResult[]) {
   if (!form.length) return '<span class="form"></span>';
   return `<span class="form">${form
