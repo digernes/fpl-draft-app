@@ -10,9 +10,8 @@ import { avatar, card, chip, crest, empty, formPills, listRow, photo, pointsTier
 import { esc, ordinal, pct, plural, signed, sum } from '../format.ts';
 import { club, first, gwPoints, isArchive, lineupFor, mgr, player, seasonStat, slotOf } from '../lookups.ts';
 import { closeCalls, gameIn, nemesis, pointsByPosition, rivalries, type Rivalry } from '../manager-stats.ts';
-import { arrowSvg } from '../icons.ts';
 import { roundPill, stateLabel } from '../matches.ts';
-import { formationOf, pitch, type PitchPlayer } from '../pitch.ts';
+import { formationOf, pitch, subMark, type PitchPlayer } from '../pitch.ts';
 import { D, live, state } from '../state.ts';
 
 const GROUPS: [Position, string][] = [
@@ -74,15 +73,18 @@ const squadOf = (id: number) =>
     .map(Number)
     .filter((pid) => player(pid).owner === id);
 
-// What each player has scored for this manager: points and starts in their XI, the
-// gameweek being played included.
+// Each player's time with this manager: gameweeks in their lineup (XI or bench), and
+// starts and points in the XI, the gameweek being played included.
 function xiRecord(id: number) {
-  const record = new Map<number, { pts: number; starts: number }>();
+  const record = new Map<number, { pts: number; starts: number; weeks: number }>();
+  const add = (pid: number, started: boolean, gw: number) => {
+    const r = record.get(pid) ?? { pts: 0, starts: 0, weeks: 0 };
+    record.set(pid, started ? { pts: r.pts + gwPoints(pid, gw), starts: r.starts + 1, weeks: r.weeks + 1 } : { ...r, weeks: r.weeks + 1 });
+  };
   for (let gw = D.meta.firstGw; gw <= D.meta.currentGw; gw++) {
-    for (const pid of lineupFor(id, gw)?.xi ?? []) {
-      const r = record.get(pid) ?? { pts: 0, starts: 0 };
-      record.set(pid, { pts: r.pts + gwPoints(pid, gw), starts: r.starts + 1 });
-    }
+    const l = lineupFor(id, gw);
+    for (const pid of l?.xi ?? []) add(pid, true, gw);
+    for (const pid of l?.bench ?? []) add(pid, false, gw);
   }
   return record;
 }
@@ -113,7 +115,7 @@ function lastLineup(id: number) {
     return {
       pid,
       badge: roundPill(pid, gw, match),
-      left: l.subs.includes(pid) ? `<span class="pp-sub" data-tip="Came on as an automatic substitute">${arrowSvg}</span>` : '',
+      left: l.subs.includes(pid) ? subMark : '',
       right: match?.state === 'live' ? stateLabel(match) : '',
     };
   };
@@ -130,15 +132,17 @@ function bestLineup(id: number) {
   const scored = (pid: number) => record.get(pid)?.pts ?? 0;
   const xi = bestXi(everOwned(id, squad), scored, (pid) => player(pid).pos, D.meta.xiLimits);
   if (!xi.ids.length) return { sub: '', body: empty('No points yet') };
+  // Badges are coloured like a gameweek's points, by points per gameweek of the season.
+  const gameweeks = Math.max(1, D.meta.currentGw - D.meta.firstGw + 1);
   const onPitch = (pid: number): PitchPlayer => {
     const { pts, starts } = record.get(pid)!;
     const owner = player(pid).owner;
     const now = owned.has(pid) ? '' : owner ? ` · now with ${mgr(owner)?.first}` : ' · a free agent now';
+    const perWeek = (pts / gameweeks).toFixed(1);
     return {
       pid,
-      // Coloured by points per start, as the round's points are.
-      badge: `<span class="ptsp ${pointsTier(pts / starts)}">${pts}</span>`,
-      tip: `${player(pid).name}: ${plural(pts, 'pt')} in ${plural(starts, 'start')}${now}`,
+      badge: `<span class="ptsp ${pointsTier(pts / gameweeks)}">${pts}</span>`,
+      tip: `${player(pid).name}: ${plural(pts, 'pt')} in ${plural(starts, 'start')}, ${perWeek} a gameweek${now}`,
       faded: !owned.has(pid),
     };
   };
@@ -161,24 +165,44 @@ function squadCard(id: number) {
 
   const record = xiRecord(id);
   const total = (pid: number) => record.get(pid)?.pts ?? 0;
+  const weeks = (pid: number) => record.get(pid)?.weeks ?? 0;
 
   // Grouped by position in lineup order, or one list sorted on a column, highest first,
   // with each player's position as a chip. Tapping the column again, or Position, groups
   // them again.
+  const matchOf = (pid: number) => (feed && role(pid) !== 'out' ? clubState(feed, player(pid).club) : null);
+  const dash = '<span class="muted">–</span>';
   const columns = [
+    {
+      key: 'weeks',
+      label: 'GWs',
+      tip: `Gameweeks in ${mgr(id)!.first}’s squad, in the XI or on the bench`,
+      value: weeks,
+      cell: (pid: number) => String(weeks(pid)),
+    },
     l && {
       key: 'gw',
       label: `GW${gw}`,
       tip: `Points in GW ${gw}${feed ? ', live' : ''}`,
       value: (pid: number) => (role(pid) === 'out' ? -1 : gwPoints(pid, gw)),
+      cell: (pid: number) => (role(pid) === 'out' ? dash : roundPill(pid, gw, matchOf(pid))),
+      cls: 'sq-gw',
     },
     showXp && {
       key: 'xp',
       label: 'xP',
       tip: `FPL’s expected points for GW ${nextGw}`,
       value: (pid: number) => (owned.has(pid) ? player(pid).ep : -1),
+      cell: (pid: number) => (owned.has(pid) ? `<span class="ptsp xp">${player(pid).ep.toFixed(1)}</span>` : dash),
     },
-    { key: 'total', label: 'Total', tip: `Points in ${mgr(id)!.first}’s XI this season`, value: total },
+    {
+      key: 'total',
+      label: 'Total',
+      tip: `Points in ${mgr(id)!.first}’s XI this season`,
+      value: total,
+      cell: (pid: number) => String(total(pid)),
+      cls: 'sq-total',
+    },
   ].filter((c) => !!c);
   const sorted = columns.find((c) => c.key === state.squadSort);
   const byLineup = (a: number, b: number) =>
@@ -194,7 +218,7 @@ function squadCard(id: number) {
   const row = (pid: number) => {
     const p = player(pid);
     const r = role(pid);
-    const match = feed && r !== 'out' ? clubState(feed, p.club) : null;
+    const match = matchOf(pid);
     // Lineups already have the automatic substitutions made.
     const note = !owned.has(pid)
       ? `<span data-tip="${p.owner ? `Now with ${esc(mgr(p.owner)?.first)}` : 'A free agent now'}">Left</span>`
@@ -205,16 +229,16 @@ function squadCard(id: number) {
           : l?.subs.includes(pid)
             ? `<span data-tip="Came on as an automatic substitute in GW ${gw}">Auto-sub</span>`
             : '';
-    const position = sorted ? `<span class="pos-tag pos-${p.pos}">${p.pos}</span>` : '';
-    const meta = [`${position}${crest(p.club, 14)}${esc(club(p.club).short)}`, note].filter(Boolean).join(' · ');
+    // Sorted, the position chip takes the room of the club's short name; the crest stays.
+    const where = sorted
+      ? `<span class="pos-tag pos-${p.pos}">${p.pos}</span>${crest(p.club, 14)}`
+      : `${crest(p.club, 14)}${esc(club(p.club).short)}`;
+    const meta = [where, note].filter(Boolean).join(' · ');
     const flag = owned.has(pid) && p.status !== 'a' ? tag('!', p.news || 'Flagged', 'tag-flag') : '';
-    const dash = '<span class="muted">–</span>';
-    const gwCell = l ? `<span class="sq-num sq-gw">${r === 'out' ? dash : roundPill(pid, gw, match)}</span>` : '';
-    const xpCell = showXp ? `<span class="sq-num">${owned.has(pid) ? `<span class="ptsp xp">${p.ep.toFixed(1)}</span>` : dash}</span>` : '';
     return `<div class="sq-row${r === 'bench' ? ' benched' : ''}${owned.has(pid) ? '' : ' gone'}">
       ${photo(pid, 32)}
       <div class="sq-main"><div class="sq-name"><span>${esc(p.name)}</span>${flag}${match ? stateLabel(match) : ''}</div><div class="sq-meta">${meta}</div></div>
-      ${gwCell}${xpCell}<span class="sq-num sq-total">${total(pid)}</span>
+      ${columns.map((c) => `<span class="sq-num ${c.cls ?? ''}">${c.cell(pid)}</span>`).join('')}
     </div>`;
   };
   const head = (label: string) => `<div class="sq-head">${label}${heads}</div>`;

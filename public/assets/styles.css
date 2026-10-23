@@ -1893,57 +1893,6 @@ img {
   padding: 8px 16px 16px;
 }
 
-.lineups {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-
-.lineup-head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--divider);
-  font-weight: 500;
-}
-
-.lineup-name {
-  flex: 1;
-}
-
-.lineup-total {
-  font-weight: 700;
-}
-
-.lp {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  min-height: 32px;
-  font-size: 13px;
-}
-
-.lp.benched {
-  opacity: 0.6;
-}
-
-.lp-pos {
-  flex: none;
-  width: 28px;
-  color: var(--text-2);
-  font-size: 10px;
-  font-weight: 500;
-}
-
-.lp-name {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 /* Where each player's match stands in a live gameweek: minute, FT or kick-off. */
 .lp-state {
   flex: none;
@@ -1955,27 +1904,6 @@ img {
 
 .lp-state.is-live {
   color: var(--green-text);
-  font-weight: 500;
-}
-
-.lineup-state {
-  padding: 6px 0 2px;
-  color: var(--text-2);
-  font-size: 12px;
-}
-
-.lp .ptsp {
-  min-width: 28px;
-  height: 20px;
-  font-size: 12px;
-}
-
-.lineup-bench {
-  margin-top: 8px;
-  padding: 8px 0 4px;
-  border-top: 1px solid var(--divider);
-  color: var(--text-2);
-  font-size: 12px;
   font-weight: 500;
 }
 
@@ -2817,6 +2745,18 @@ img {
   text-align: right;
 }
 
+/* Four number columns leave a phone little room for the names, so they close up there. */
+@media (max-width: 599px) {
+  .sq-row,
+  .sq-head {
+    gap: 4px;
+  }
+
+  .sq-num {
+    width: 34px;
+  }
+}
+
 /* A manager's table row opens their squad. */
 .trow[data-action] {
   cursor: pointer;
@@ -2847,16 +2787,19 @@ img {
   overflow: hidden;
 }
 
-.pitch-lines {
+.pitch-mark {
   position: absolute;
+  fill: none;
+  stroke: var(--pitch-lines);
+  stroke-width: 6;
+}
+
+.pitch-lines {
   bottom: -3px;
   left: 50%;
   width: 256px;
   max-width: 72%;
   transform: translateX(-50%);
-  fill: none;
-  stroke: var(--pitch-lines);
-  stroke-width: 6;
 }
 
 .pitch-xi {
@@ -2915,6 +2858,12 @@ img {
   padding: 0 5px;
   border-radius: 12px;
   font-size: 12px;
+}
+
+/* Expected points would vanish into the pitch in the usual grey. */
+.pp-badge .ptsp.xp {
+  border: 1px solid var(--pitch-chip-border);
+  background: var(--pitch-chip);
 }
 
 .pp-corner {
@@ -2983,6 +2932,233 @@ img {
 .pitch-bench .pitch-row {
   max-width: 520px;
   margin: 0 auto;
+}
+
+/* --- Match pitch ---------------------------------------------------------------
+   fotmob.com's match lineup: both XIs on one pitch, side by side with the goalkeepers
+   at the ends, or home above away when the match is narrower than 560px. */
+
+.match-detail {
+  container-type: inline-size;
+}
+
+.mp {
+  margin: 0 -16px;
+  background: var(--pitch);
+}
+
+.mp-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px 4px;
+}
+
+.mp-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.mp-team.away {
+  flex-direction: row-reverse;
+  text-align: right;
+}
+
+.mp-team-text {
+  min-width: 0;
+}
+
+.mp-name {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mp-form {
+  margin: 0 6px;
+  color: var(--text-2);
+  font-weight: 400;
+}
+
+.mp-note {
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.mpitch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.mp-halfway {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 4px;
+  margin-top: -2px;
+  background: var(--pitch-lines);
+}
+
+.mp-circle {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 112px;
+  height: 112px;
+  border: 4px solid var(--pitch-lines);
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.mp-box {
+  --box-w: 200px;
+  --box-h: calc(var(--box-w) * 174 / 316);
+  left: 50%;
+  width: var(--box-w);
+  max-width: 60%;
+}
+
+.mp-box.home {
+  top: -3px;
+  transform: translateX(-50%) rotate(180deg);
+}
+
+.mp-box.away {
+  bottom: -3px;
+  transform: translateX(-50%);
+}
+
+.mhalf {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+.mline {
+  display: flex;
+  justify-content: center;
+  min-height: 92px;
+  padding-top: 12px;
+}
+
+.pp-flag {
+  color: #f08022;
+  font-weight: 700;
+}
+
+@container (min-width: 560px) {
+  .mpitch {
+    flex-direction: row;
+    min-height: 420px;
+  }
+
+  .mhalf {
+    flex: 1;
+    flex-direction: row;
+  }
+
+  .mline {
+    flex: 1 1 0;
+    flex-direction: column;
+    justify-content: space-around;
+    min-width: 0;
+    min-height: 0;
+    padding: 8px 0;
+  }
+
+  .mline .pp {
+    flex: none;
+    width: 100%;
+    max-width: none;
+  }
+
+  .mp-halfway {
+    top: 0;
+    bottom: 0;
+    left: 50%;
+    width: 4px;
+    height: auto;
+    margin: 0 0 0 -2px;
+  }
+
+  /* The goal lines at the ends: centred, then turned a quarter. */
+  .mp-box {
+    --box-w: 180px;
+    top: 50%;
+    bottom: auto;
+    max-width: none;
+  }
+
+  .mp-box.home {
+    left: calc(var(--box-h) / 2 - 3px);
+    transform: translate(-50%, -50%) rotate(90deg);
+  }
+
+  .mp-box.away {
+    left: auto;
+    right: calc(var(--box-h) / 2 - 3px);
+    transform: translate(50%, -50%) rotate(-90deg);
+  }
+}
+
+.mp-bench {
+  padding-top: 12px;
+}
+
+.mp-bench-title {
+  padding-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.mp-bench-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 0 16px;
+}
+
+.mp-sub {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  border-top: 1px solid var(--row-divider);
+}
+
+.mp-sub-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.mp-sub-name {
+  overflow: hidden;
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mp-sub-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 11px;
+}
+
+/* Bench points don't count. */
+.mp-sub .ptsp {
+  min-width: 28px;
+  height: 20px;
+  font-size: 12px;
+  opacity: 0.6;
 }
 
 /* --- Tooltip ------------------------------------------------------------------- */

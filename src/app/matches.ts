@@ -1,14 +1,13 @@
 // Head-to-head matches: the list, odds and the expanded match.
 
-import type { Match, Odds } from '../shared/data.ts';
-import { clubState, liveProjection, type PlayerState } from '../shared/live.ts';
+import type { Lineup, Match, Odds } from '../shared/data.ts';
+import { clubState, liveProjection, type PlayerState, type SlimLive } from '../shared/live.ts';
 import { liveOdds } from '../shared/odds.ts';
-import { avatar, crest, empty, ptsPill, seg, tag } from './components.ts';
-import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, plural, priceText, sum } from './format.ts';
+import { avatar, empty, ptsPill, seg } from './components.ts';
+import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, priceText, sum } from './format.ts';
 import { first, gwInfo, gwPoints, isLive, lineupFor, matchKey, mgr, player, slotOf } from './lookups.ts';
+import { matchPitch, subMark, type PitchPlayer, type PitchSide } from './pitch.ts';
 import { D, live, LIVE_URL, state } from './state.ts';
-
-const POS_ORDER = { GKP: 0, DEF: 1, MID: 2, FWD: 3 };
 
 export function featuredGw() {
   const { meta } = D;
@@ -88,47 +87,46 @@ function preMatchOdds(m: Match) {
 
 function matchDetail(m: Match) {
   if (!m.started) return upcomingDetail(m);
-  return `<div class="match-detail">${preMatchOdds(m)}<div class="lineups">${lineupColumn(m.home, m.gw)}${lineupColumn(m.away, m.gw)}</div></div>`;
+  return `<div class="match-detail">${preMatchOdds(m)}${matchLineups(m)}</div>`;
 }
 
-function lineupColumn(id: number, gw: number) {
-  const l = lineupFor(id, gw);
-  if (!l) return `<div class="lineup">${empty('No lineup')}</div>`;
-  const feed = live?.gw === gw ? live.feed : null;
-  const doubles = new Set(gwInfo(gw)?.doubles ?? []);
-  const byPosition = (ids: number[]) => [...ids].sort((a, b) => POS_ORDER[player(a).pos] - POS_ORDER[player(b).pos]);
-  const row = (pid: number, benched: boolean) => {
-    const p = player(pid);
-    const flags = [
-      l.subs.includes(pid) ? tag('Sub', 'Came on as an automatic substitute', 'tag-sub') : '',
-      doubles.has(p.club) ? tag('DGW', 'Plays twice this gameweek', 'tag-dgw') : '',
-    ].join('');
-    const match = feed ? clubState(feed, p.club) : null;
-    return `<div class="lp${benched ? ' benched' : ''}"><span class="lp-pos">${p.pos}</span>${crest(p.club, 16)}<span class="lp-name">${esc(p.name)}${flags}</span>${match ? stateLabel(match) : ''}${roundPill(pid, gw, match)}</div>`;
-  };
-  // How far through the gameweek the scoring XI is.
+// Both XIs on one pitch with each player's points, auto-subs, double gameweeks and, in a
+// live gameweek, the minute; the benches below.
+function matchLineups(m: Match) {
+  const home = lineupFor(m.home, m.gw);
+  const away = lineupFor(m.away, m.gw);
+  if (!home || !away) return empty('No lineups');
+  const feed = live?.gw === m.gw ? live.feed : null;
+  const doubles = new Set(gwInfo(m.gw)?.doubles ?? []);
+  const onPitch =
+    (l: Lineup) =>
+    (pid: number): PitchPlayer => {
+      const p = player(pid);
+      const match = feed ? clubState(feed, p.club) : null;
+      const twice = doubles.has(p.club) ? '<span data-tip="Plays twice this gameweek">×2</span>' : '';
+      return {
+        pid,
+        badge: roundPill(pid, m.gw, match),
+        left: l.subs.includes(pid) ? subMark : '',
+        right: match?.state === 'live' ? stateLabel(match) : twice,
+      };
+    };
+  const side = (id: number, l: Lineup): PitchSide => ({ id, xi: l.xi.map(onPitch(l)), note: lineupNote(l, feed) });
+  return matchPitch(side(m.home, home), side(m.away, away), [home.bench.map(onPitch(home)), away.bench.map(onPitch(away))]);
+}
+
+// How far through the gameweek the XI is, and the score after any double-gameweek penalty.
+function lineupNote(l: Lineup, feed: SlimLive | null) {
   const states = feed ? l.xi.map((pid) => clubState(feed, player(pid).club).state) : [];
   const count = (...wanted: PlayerState['state'][]) => states.filter((s) => wanted.includes(s)).length;
-  const progress = feed
-    ? `<div class="lineup-state">${[
-        count('live') && `${count('live')} playing`,
-        count('due') && `${count('due')} to play`,
-        count('done', 'blank') && `${count('done', 'blank')} done`,
-      ]
-        .filter(Boolean)
-        .join(' · ')}</div>`
-    : '';
-  const adjusted = l.dgw
-    ? ` <span class="muted" data-tip="${D.meta.dgwPenalty} off per double-gameweek player in the XI">(${l.adj} adj.)</span>`
-    : '';
-  return `<div class="lineup">
-    <div class="lineup-head">${avatar(id, 24)}<span class="lineup-name">${first(id)}</span><span class="lineup-total">${l.pts}${adjusted}</span></div>${progress}
-    ${byPosition(l.xi)
-      .map((pid) => row(pid, false))
-      .join('')}
-    <div class="lineup-bench">Bench · ${plural(l.benchPts, 'pt')}</div>
-    ${l.bench.map((pid) => row(pid, true)).join('')}
-  </div>`;
+  return [
+    count('live') && `${count('live')} playing`,
+    count('due') && `${count('due')} to play`,
+    count('done', 'blank') && `${count('done', 'blank')} done`,
+    l.dgw && `<span data-tip="${D.meta.dgwPenalty} off per double-gameweek player in the XI">${l.adj} adj.</span>`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 // A player's points in a gameweek. Before kick-off a 0 says nothing, so players still
@@ -144,24 +142,25 @@ function upcomingDetail(m: Match) {
   if (!m.odds) return `<div class="match-detail">${empty('Odds go up three gameweeks before the deadline')}</div>`;
   const [ph, pd, pa] = m.odds.p;
   const [eh, ea] = m.odds.expected;
-  const projected = (id: number, ids: number[]) => {
-    const xp = sum(ids.map((pid) => player(pid).ep));
-    const rows = [...ids]
-      .sort((a, b) => POS_ORDER[player(a).pos] - POS_ORDER[player(b).pos])
-      .map((pid) => {
-        const p = player(pid);
-        const flag = p.status !== 'a' ? tag('!', p.news || 'Flagged', 'tag-flag') : '';
-        return `<div class="lp"><span class="lp-pos">${p.pos}</span>${crest(p.club, 16)}<span class="lp-name">${esc(p.name)}${flag}</span><span class="ptsp xp">${p.ep.toFixed(1)}</span></div>`;
-      });
-    return `<div class="lineup"><div class="lineup-head">${avatar(id, 24)}<span class="lineup-name">${first(id)}</span><span class="lineup-total" data-tip="Best legal XI by FPL expected points">${xp.toFixed(1)} xP</span></div>${rows.join('')}</div>`;
-  };
+  const projected = (id: number, ids: number[]): PitchSide => ({
+    id,
+    xi: ids.map((pid) => {
+      const p = player(pid);
+      return {
+        pid,
+        badge: `<span class="ptsp xp">${p.ep.toFixed(1)}</span>`,
+        left: p.status !== 'a' ? `<span class="pp-flag" data-tip="${esc(p.news || 'Flagged')}">!</span>` : '',
+      };
+    }),
+    note: `<span data-tip="Best legal XI by FPL expected points">${sum(ids.map((pid) => player(pid).ep)).toFixed(1)} xP</span>`,
+  });
   return `<div class="match-detail">
     <div class="prob">
       <div class="prob-bar"><span class="m${slotOf(m.home)}" style="flex:${ph}"></span><span class="prob-draw" style="flex:${pd}"></span><span class="m${slotOf(m.away)}" style="flex:${pa}"></span></div>
       <div class="prob-legend"><span>${first(m.home)} ${pct(ph)}</span><span>Draw ${pct(pd)}</span><span>${first(m.away)} ${pct(pa)}</span></div>
     </div>
     <p class="detail-note">Model score ${eh} – ${ea}: league average, plus ${m.odds.xi ? 'form and each side’s best projected XI' : 'season form'}. Prices carry a ${Math.round((D.meta.oddsOverround - 1) * 100)}% margin.</p>
-    ${m.odds.xi ? `<div class="lineups">${projected(m.home, m.odds.xi[0])}${projected(m.away, m.odds.xi[1])}</div>` : ''}
+    ${m.odds.xi ? matchPitch(projected(m.home, m.odds.xi[0]), projected(m.away, m.odds.xi[1])) : ''}
   </div>`;
 }
 
