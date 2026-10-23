@@ -1,0 +1,41 @@
+/* --- Tooltip ------------------------------------------------------------------- */
+
+.tooltip {
+  position: fixed;
+  z-index: 100;
+  max-width: min(320px, calc(100vw - 16px));
+  padding: 6px 12px;
+  border-radius: 6px;
+  background: var(--tooltip);
+  color: #fff;
+  font-size: 12px;
+  line-height: 16px;
+  white-space: pre-line; /* multi-line tips, like the simulation formula */
+  pointer-events: none;
+  transform: translate(-50%, calc(-100% - 10px));
+}
+
+.tooltip.below {
+  transform: translate(-50%, 10px);
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  left: calc(50% + var(--arrow, 0px));
+  top: 100%;
+  border: 5px solid transparent;
+  border-top-color: var(--tooltip);
+  transform: translateX(-50%);
+}
+
+.tooltip.below::after {
+  top: auto;
+  bottom: 100%;
+  border-top-color: transparent;
+  border-bottom-color: var(--tooltip);
+}
+
+.tooltip[hidden] {
+  display: none;
+}

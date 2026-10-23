@@ -71,7 +71,7 @@ jobs:
           git pull --rebase origin main # in case code was pushed while this ran
           git push
 
-      - name: Bundle the page and the service worker into public/
+      - name: Bundle the page, its styles and the service worker into public/
         if: steps.data.outputs.changed == 'true' || env.UNATTENDED != 'true'
         run: npm run build
 

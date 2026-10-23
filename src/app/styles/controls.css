@@ -1,0 +1,110 @@
+/* --- Chips, filter bars and table tools --------------------------------------- */
+
+.chip {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  height: 32px;
+  padding: 0 10px;
+  border: 1px solid var(--chip-border);
+  border-radius: 22px;
+  background: var(--chip-bg);
+  color: var(--chip-text);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.chip[aria-pressed='true'] {
+  border-color: transparent;
+  background: var(--chip-active-bg);
+  color: var(--chip-active-text);
+  opacity: 1;
+}
+
+.filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 64px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--divider);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.filter-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.table-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+/* In the Full table on a phone the manager column stays put while the numbers scroll
+   under it. (On wider screens the Full table fits, so nothing needs pinning.) */
+@media (max-width: 599px) {
+  .ftable.full .c-team {
+    position: sticky;
+    left: 0;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    align-self: stretch;
+    background: var(--card);
+    box-shadow: 8px 0 8px -8px rgba(0, 0, 0, 0.3);
+  }
+
+  .ftable.full .trow.featured .c-team {
+    background: var(--featured);
+  }
+
+  /* Just the manager and the numbers: the team names would only widen the scroll. */
+  .ftable.full .who-team {
+    display: none;
+  }
+}
+
+.table-tools {
+  padding: 12px 16px 0;
+  text-align: right;
+}
+
+.narrow-only .seg {
+  display: inline-flex;
+}
+
+/* The Short/Form switch only matters while the table is too narrow for both. */
+.narrow-only {
+  display: none;
+}
+
+@media (max-width: 599px) {
+  .narrow-only {
+    display: block;
+    flex: none;
+  }
+}
+
+/* The opposite: things phones reach some other way (the odds format is in settings). */
+.wide-only {
+  display: contents;
+}
+
+@media (max-width: 599px) {
+  .wide-only {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .chip {
+    padding: 0 20px;
+    font-size: 14px;
+  }
+
+  .filter-bar {
+    padding: 0 24px;
+  }
+}

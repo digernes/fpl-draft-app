@@ -94,17 +94,17 @@ rebuilds it on every change and serves `public/`.
 ## Code
 
 TypeScript throughout, in strict mode. Node 24 runs the build scripts as they are; esbuild bundles
-the page and the service worker; Wrangler bundles the Worker.
+the page, its styles and the service worker; Wrangler bundles the Worker.
 
 ```
 scripts/build-data.ts   builds data.json (entry point)
-scripts/build-site.ts   bundles src/app and src/sw.ts into public/
+scripts/build-site.ts   bundles src/app (script and styles) and src/sw.ts into public/
 src/build/              the build, one module per part of data.json
-src/app/                the page
+src/app/                the page; its styles are in src/app/styles/, one file per area
 src/shared/             data.json's types, the FPL API's Zod schemas, live scoring
 src/sw.ts               the service worker
 worker/                 the live relay
-public/                 the site as deployed: HTML, CSS, icons, data.json, seasons/
+public/                 the site as deployed: HTML, icons, data.json, seasons/ and the bundles
 tests/                  node --test
 ```
 

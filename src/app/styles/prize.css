@@ -1,0 +1,84 @@
+/* --- Highest-gameweek prize --------------------------------------------------------- */
+
+.prize {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px;
+}
+
+.prize + .prize {
+  border-top: 1px solid var(--row-divider);
+}
+
+.prize-main {
+  flex: 1;
+  min-width: 0;
+}
+
+.prize-label {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.prize-name {
+  margin-top: 4px;
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.prize-meta {
+  margin-top: 4px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.prize-score {
+  display: grid;
+  justify-items: center;
+  min-width: 56px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: var(--brand-solid);
+  color: #fff;
+  font-size: 26px;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.prize-adj {
+  margin-top: 4px;
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.prize-live {
+  display: grid;
+  gap: 6px;
+  margin: 0 16px 12px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: var(--group-bg);
+  color: var(--green-text);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.prize-live span {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+@media (min-width: 992px) {
+  .prize {
+    padding: 16px 24px;
+  }
+
+  .prize-live {
+    margin: 0 24px 12px;
+  }
+}

@@ -1,0 +1,98 @@
+/* --- Heatmap ------------------------------------------------------------------- */
+
+.heatmap {
+  padding: 12px 16px 4px;
+  overflow-x: auto;
+}
+
+.hm-grid {
+  display: grid;
+  gap: 3px;
+  min-width: max-content;
+}
+
+.hm-row {
+  display: grid;
+  grid-template-columns: 96px repeat(var(--gws), minmax(34px, 1fr)) 44px;
+  align-items: center;
+  gap: 3px;
+}
+
+.hm-head {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.hm-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.hm-cell {
+  display: grid;
+  place-items: center;
+  height: 30px;
+  border-radius: 6px;
+  background: var(--hover);
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.hm-cell.h0 {
+  background: var(--h0);
+  color: var(--ink-h0, var(--text));
+}
+.hm-cell.h1 {
+  background: var(--h1);
+  color: var(--ink-h1, var(--text));
+}
+.hm-cell.h2 {
+  background: var(--h2);
+  color: var(--ink-h2, var(--text));
+}
+.hm-cell.h3 {
+  background: var(--h3);
+  color: var(--ink-h3, var(--text));
+}
+.hm-cell.h4 {
+  background: var(--h4);
+  color: var(--ink-h4, var(--text));
+}
+
+.hm-cell.best {
+  box-shadow: inset 0 0 0 2px var(--text);
+}
+
+.hm-avg {
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: center;
+}
+
+.legend-item i.h0 {
+  background: var(--h0);
+}
+.legend-item i.h1 {
+  background: var(--h1);
+}
+.legend-item i.h2 {
+  background: var(--h2);
+}
+.legend-item i.h3 {
+  background: var(--h3);
+}
+.legend-item i.h4 {
+  background: var(--h4);
+}
+
+.legend-item i.best-key {
+  box-shadow: inset 0 0 0 1.5px var(--text);
+}

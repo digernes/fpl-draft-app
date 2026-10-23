@@ -1,0 +1,281 @@
+/* --- Squads -------------------------------------------------------------------- */
+
+.chip .av {
+  margin: 0 6px 0 -4px;
+}
+
+.team-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.team-name {
+  font-size: 18px;
+  font-weight: 500;
+  line-height: 22px;
+}
+
+.team-rank {
+  display: grid;
+  justify-items: end;
+  flex: none;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.team-rank strong {
+  color: var(--text);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.1;
+}
+
+.tile-link {
+  width: 100%;
+}
+
+/* Four tiles, so wide screens stretch them rather than leave a gap. */
+.team-card .tiles {
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+}
+
+.tile-value .form {
+  justify-content: flex-start;
+}
+
+.tile-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 16px;
+  line-height: 28px;
+}
+
+.tile-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.squad {
+  padding-bottom: 8px;
+}
+
+/* The group heads carry the column labels, lined up with the numbers below. */
+.sq-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  margin: 8px 8px 0;
+  padding: 0 8px;
+  border-radius: 10px;
+  background: var(--group-bg);
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.sq-label {
+  flex: 1;
+  color: var(--text);
+  font-size: 13px;
+}
+
+.sq-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 6px 16px;
+}
+
+.sq-row + .sq-row {
+  border-top: 1px solid var(--row-divider);
+}
+
+.sq-main {
+  flex: 1;
+  min-width: 0;
+  margin-left: 4px;
+}
+
+.sq-name {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 500;
+}
+
+.sq-name > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* In a live gameweek the match state sits by the points, as in the match lineups. */
+.sq-name .lp-state {
+  margin-left: auto;
+}
+
+.sq-name .lp-state:not(.is-live) {
+  font-weight: 400;
+}
+
+.sq-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0 4px;
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.sq-num {
+  display: grid;
+  justify-items: center;
+  flex: none;
+  width: 40px;
+  font-variant-numeric: tabular-nums;
+}
+
+.sq-total {
+  font-weight: 500;
+}
+
+.sq-sort {
+  align-content: center;
+  height: 36px;
+}
+
+/* Sorted, the list loses its position groups and each player shows a chip instead. */
+.sq-label.sq-sort {
+  color: inherit;
+  font-size: 12px;
+}
+
+.pos-tag {
+  display: inline-grid;
+  place-items: center;
+  height: 16px;
+  margin-right: 2px;
+  padding: 0 4px;
+  border-radius: 4px;
+  color: var(--text);
+  font-size: 10px;
+  font-weight: 500;
+}
+
+.pos-tag.pos-GKP {
+  background: var(--pos-GKP);
+}
+
+.pos-tag.pos-DEF {
+  background: var(--pos-DEF);
+}
+
+.pos-tag.pos-MID {
+  background: var(--pos-MID);
+}
+
+.pos-tag.pos-FWD {
+  background: var(--pos-FWD);
+}
+
+.sq-sort[aria-pressed='true'] {
+  color: var(--text);
+  text-decoration: underline 2px var(--tab-indicator);
+  text-underline-offset: 4px;
+}
+
+.sq-row .ptsp {
+  min-width: 28px;
+  height: 20px;
+  font-size: 12px;
+}
+
+.sq-row.benched .sq-gw {
+  opacity: 0.6;
+}
+
+/* All-time: players who have left, faded like the draft board's. */
+.sq-row.gone .photo,
+.sq-row.gone .sq-name {
+  opacity: 0.6;
+}
+
+.pos-split {
+  display: grid;
+  gap: 8px;
+  padding: 12px 16px 16px;
+}
+
+.pos-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) 36px;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+}
+
+.pos-label {
+  color: var(--text-2);
+  font-weight: 500;
+}
+
+.pos-track {
+  height: 8px;
+  border-radius: 4px;
+  background: var(--hover);
+  overflow: hidden;
+}
+
+.pos-track i {
+  display: block;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.pos-value {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+/* Four number columns leave a phone little room for the names, so they close up there. */
+@media (max-width: 599px) {
+  .sq-row,
+  .sq-head {
+    gap: 4px;
+  }
+
+  .sq-num {
+    width: 34px;
+  }
+}
+
+/* A manager's table row opens their squad. */
+.trow[data-action] {
+  cursor: pointer;
+}
+
+@media (min-width: 992px) {
+  .sq-row {
+    padding: 6px 24px;
+  }
+
+  .sq-head {
+    padding: 0 16px;
+  }
+
+  .pos-split {
+    padding: 12px 24px 16px;
+  }
+}

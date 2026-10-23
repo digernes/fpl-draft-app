@@ -1,0 +1,201 @@
+/* --- Avatars, crests, photos, pills ------------------------------------------- */
+
+.av {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--av-bg);
+  color: var(--av-ink, #fff);
+  font-size: 7px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1;
+}
+
+.av-22 {
+  width: 22px;
+  height: 22px;
+  font-size: 9px;
+}
+
+.av-24 {
+  width: 24px;
+  height: 24px;
+  font-size: 9px;
+}
+
+.av-32 {
+  width: 32px;
+  height: 32px;
+  font-size: 12px;
+}
+
+.av-48 {
+  width: 48px;
+  height: 48px;
+  font-size: 17px;
+}
+
+.m0 {
+  --av-bg: var(--m0);
+  background: var(--m0);
+}
+.m1 {
+  --av-bg: var(--m1);
+  --av-ink: var(--ink-m1, #fff);
+  background: var(--m1);
+}
+.m2 {
+  --av-bg: var(--m2);
+  --av-ink: var(--ink-m2, #fff);
+  background: var(--m2);
+}
+.m3 {
+  --av-bg: var(--m3);
+  --av-ink: var(--ink-m3, #fff);
+  background: var(--m3);
+}
+.m4 {
+  --av-bg: var(--m4);
+  --av-ink: var(--ink-m4, #fff);
+  background: var(--m4);
+}
+.m5 {
+  --av-bg: var(--m5);
+  --av-ink: var(--ink-m5, #fff);
+  background: var(--m5);
+}
+.m6 {
+  --av-bg: var(--m6);
+  --av-ink: var(--ink-m6, #fff);
+  background: var(--m6);
+}
+.m7 {
+  --av-bg: var(--m7);
+  --av-ink: var(--ink-m7, #fff);
+  background: var(--m7);
+}
+.m8 {
+  --av-bg: var(--m8);
+  --av-ink: var(--ink-m8, #fff);
+  background: var(--m8);
+}
+
+.stack {
+  display: inline-flex;
+  align-items: center;
+}
+
+.stack > .av {
+  box-shadow: 0 0 0 2px var(--card);
+}
+
+.stack > .av + .av {
+  margin-left: -4px;
+}
+
+.crest {
+  display: inline-block;
+  flex: none;
+  object-fit: contain;
+  vertical-align: middle;
+}
+
+.photo {
+  position: relative;
+  flex: none;
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
+  background: var(--hover);
+  overflow: hidden;
+}
+
+/* The photo sits on an opaque background over the kit silhouette, which only shows
+   once a missing photo has removed itself. */
+.photo img {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  background: var(--hover);
+  object-fit: cover;
+  object-position: top;
+}
+
+.photo .kit {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.kit-head {
+  fill: var(--kit-head);
+}
+
+.ptsp {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  min-width: 30px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.ptsp.p0 {
+  background: var(--lose);
+}
+.ptsp.p1 {
+  background: #f08022;
+}
+.ptsp.p2 {
+  background: var(--draw);
+}
+.ptsp.p3 {
+  background: var(--win);
+}
+.ptsp.p4 {
+  background: #0e87e0;
+}
+
+.ptsp.xp {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  margin-left: 6px;
+  padding: 0 6px;
+  border-radius: 4px;
+  background: var(--hover);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 500;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+.tag-dgw {
+  background: var(--brand-solid);
+  color: #fff;
+}
+
+.tag-prize {
+  background: var(--qual-top);
+  color: #0b0b0b;
+}
+
+.tag-flag {
+  background: #f08022;
+  color: #fff;
+}

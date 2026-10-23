@@ -1,0 +1,245 @@
+/* --- Matches and odds ---------------------------------------------------------- */
+
+.matches {
+  padding: 0 0 8px;
+}
+
+.match-block {
+  border-top: 1px solid var(--row-divider);
+}
+
+.matches > .match-block:first-child {
+  border-top: 0;
+}
+
+.match {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 2px;
+  width: calc(100% - 16px);
+  min-height: 56px;
+  margin: 4px 8px;
+  padding: 0 8px;
+  border-radius: 10px;
+}
+
+.side {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  padding: 0 4px;
+}
+
+.side.home {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.side-text {
+  display: grid;
+  min-width: 0;
+}
+
+.side-name {
+  overflow: hidden;
+  font-size: 13px;
+  letter-spacing: 0.24px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-team {
+  display: none;
+  overflow: hidden;
+  margin-top: 3px;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mid {
+  display: grid;
+  justify-items: center;
+  gap: 2px;
+}
+
+.score {
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.score.is-live,
+.live-label {
+  color: var(--green-text);
+}
+
+.live-label {
+  font-size: 11px;
+  font-weight: 500;
+}
+
+.kickoff {
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.odds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 8px 12px;
+}
+
+.odd {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 28px;
+  padding: 8px;
+  border-radius: 7px;
+  background: var(--odds-bg);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.odd-label {
+  color: var(--odds-label);
+}
+
+/* Settled after full time, as on fotmob.com: losing selections grey, price struck through. */
+.odd.lost .odd-label,
+.odd.lost .odd-price {
+  color: var(--text-3);
+}
+
+.odd.lost .odd-price {
+  text-decoration: line-through;
+}
+
+.detail-label {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.match-detail .odds {
+  padding: 0;
+}
+
+.odd-price {
+  color: var(--odds-price);
+}
+
+.match-detail {
+  display: grid;
+  gap: 16px;
+  padding: 8px 16px 16px;
+}
+
+/* Where each player's match stands in a live gameweek: minute, FT or kick-off. */
+.lp-state {
+  flex: none;
+  color: var(--text-2);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.lp-state.is-live {
+  color: var(--green-text);
+  font-weight: 500;
+}
+
+.prob-bar {
+  display: flex;
+  gap: 2px;
+  height: 8px;
+}
+
+.prob-bar span {
+  min-width: 2px;
+  border-radius: 4px;
+}
+
+.prob-draw {
+  background: var(--draw);
+}
+
+.prob-legend {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 8px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.detail-note {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.gw-nav {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Phones have no odds toggle beside it, so the arrows go to either end. */
+@media (max-width: 599px) {
+  .gw-nav {
+    flex: 1;
+    justify-content: space-between;
+  }
+}
+
+.gw-select {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.gw-select select {
+  appearance: none;
+  height: 36px;
+  padding: 0 28px 0 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font-size: 16px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.gw-select .chev {
+  position: absolute;
+  right: 8px;
+  pointer-events: none;
+}
+
+.chev {
+  width: 16px;
+  height: 16px;
+  flex: none;
+}
+
+@media (min-width: 769px) {
+  .match {
+    column-gap: 12px;
+    min-height: 64px;
+  }
+
+  .side-name {
+    font-size: 14px;
+  }
+
+  .side-team {
+    display: block;
+  }
+}
