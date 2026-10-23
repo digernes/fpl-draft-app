@@ -59,7 +59,7 @@ export function buildClubs(season: Season): ById<Club> {
 }
 
 export function buildMeta(season: Season, leagueId: number, hasProjections: boolean): Meta {
-  const { league, events, currentGw, game, lastFinishedGw, nextGw, nextEvent, scoring, formation } = season;
+  const { league, events, currentGw, game, lastFinishedGw, nextGw, nextEvent, scoring, formation, xiLimits } = season;
   const firstDeadline = events[0]?.deadline_time ?? new Date().toISOString();
   const seasonStart = new Date(firstDeadline).getUTCFullYear();
   return {
@@ -84,6 +84,7 @@ export function buildMeta(season: Season, leagueId: number, hasProjections: bool
     oddsOverround: ODDS_OVERROUND,
     hasProjections,
     formation,
+    xiLimits,
   };
 }
 

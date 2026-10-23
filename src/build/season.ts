@@ -1,7 +1,7 @@
 // The fetched league turned into the lookups every other build module works from:
 // which gameweeks are played and finished, who the players are, and their points.
 
-import type { Formation, Position } from '../shared/data.ts';
+import type { Formation, Position, XiLimits } from '../shared/data.ts';
 import type { Element } from '../shared/fpl-api.ts';
 import type { Fetched } from './api.ts';
 import { POSITIONS } from './config.ts';
@@ -31,6 +31,9 @@ export function readSeason(fetched: Fetched) {
 
   const { squad } = boot.settings;
   const formation: Formation = { DEF: squad.min_play_DEF, MID: squad.min_play_MID, FWD: squad.min_play_FWD };
+  const xiLimits = Object.fromEntries(
+    Object.values(POSITIONS).map((pos) => [pos, [squad[`min_play_${pos}`], squad[`max_play_${pos}`]]]),
+  ) as XiLimits;
 
   return {
     ...fetched,
@@ -48,6 +51,7 @@ export function readSeason(fetched: Fetched) {
     pointsIn,
     doubleClubs,
     formation,
+    xiLimits,
     /** Head-to-head points for a win, draw and loss. */
     scoring: boot.settings.league,
   };

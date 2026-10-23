@@ -47,6 +47,11 @@
   --kit-edge: rgba(0, 0, 0, 0.28);
   --kit-none: #b5b5b5;
   --kit-none-trim: #e8e8e8;
+  --pitch: #f4f4f4;
+  --pitch-lines: #e6e6e6;
+  --pitch-photo: #e3e3e3;
+  --pitch-chip: #fff;
+  --pitch-chip-border: #e0e0e0;
 
   /* Manager identity: validated 8-slot categorical palette, fixed by join order. */
   --m0: #8d9499;
@@ -113,6 +118,11 @@
   --kit-edge: rgba(255, 255, 255, 0.18);
   --kit-none: #5a5a5a;
   --kit-none-trim: #8a8a8a;
+  --pitch: #2c2c2c; /* fotmob.com's lineup pitch */
+  --pitch-lines: #343434;
+  --pitch-photo: #4a4a4a;
+  --pitch-chip: #262626;
+  --pitch-chip-border: #464646;
 
   --m1: #3987e5;
   --m2: #d95926;
@@ -2824,6 +2834,155 @@ img {
   .pos-split {
     padding: 12px 24px 16px;
   }
+}
+
+/* --- Pitch ---------------------------------------------------------------------
+   fotmob.com's lineup: lines of players 96px apart, each with a 44px photo, the
+   rating (here the points) at its top right, and the name below. */
+
+.pitch {
+  position: relative;
+  padding: 8px 0;
+  background: var(--pitch);
+  overflow: hidden;
+}
+
+.pitch-lines {
+  position: absolute;
+  bottom: -3px;
+  left: 50%;
+  width: 256px;
+  max-width: 72%;
+  transform: translateX(-50%);
+  fill: none;
+  stroke: var(--pitch-lines);
+  stroke-width: 6;
+}
+
+.pitch-xi {
+  position: relative;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+/* Players share a line equally, but never take more than 40% of it, so a pair sits
+   at 30% and 70% as on fotmob.com. */
+.pitch-row {
+  display: flex;
+  justify-content: center;
+  min-height: 96px;
+  padding-top: 12px;
+}
+
+.pp {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  flex: 1 1 0;
+  min-width: 0;
+  max-width: 40%;
+}
+
+.pp.faded .pp-head,
+.pp.faded .pp-name {
+  opacity: 0.6;
+}
+
+.pp-head {
+  position: relative;
+  width: 44px;
+  height: 44px;
+}
+
+.pp .photo {
+  display: block;
+}
+
+.pp .photo,
+.pp .photo img {
+  background: var(--pitch-photo);
+}
+
+.pp-badge {
+  position: absolute;
+  top: -8px;
+  left: 27px;
+}
+
+.pp-badge .ptsp {
+  min-width: 0;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 12px;
+  font-size: 12px;
+}
+
+.pp-corner {
+  position: absolute;
+  top: 30px;
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 4px;
+  border: 1px solid var(--pitch-chip-border);
+  border-radius: 12px;
+  background: var(--pitch-chip);
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.pp-left {
+  right: 30px;
+}
+
+.pp-right {
+  left: 30px;
+}
+
+.pp-sub {
+  display: inline-grid;
+  width: 10px;
+  height: 10px;
+  color: var(--win);
+}
+
+.pp-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+  margin-top: 10px;
+  padding: 0 2px;
+  font-size: 12px;
+  line-height: 14px;
+}
+
+.pp-name span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pp-name .crest {
+  flex: none;
+}
+
+.pitch-bench {
+  padding: 4px 0 8px;
+}
+
+.pitch-bench-label {
+  padding: 8px 16px 0;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.pitch-bench .pitch-row {
+  max-width: 520px;
+  margin: 0 auto;
 }
 
 /* --- Tooltip ------------------------------------------------------------------- */

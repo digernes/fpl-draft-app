@@ -6,6 +6,8 @@ import type { SlimLive } from './live.ts';
 export type Position = 'GKP' | 'DEF' | 'MID' | 'FWD';
 export type Result = 'W' | 'D' | 'L';
 export type Formation = Record<'DEF' | 'MID' | 'FWD', number>;
+/** [min, max] players per position in an XI. */
+export type XiLimits = Record<Position, [number, number]>;
 /** Keyed by id; JSON object keys are strings, but numeric lookups work. */
 export type ById<T> = Record<string, T>;
 
@@ -53,6 +55,7 @@ export interface Meta {
   oddsOverround: number;
   hasProjections: boolean;
   formation: Formation;
+  xiLimits: XiLimits;
 }
 
 export interface Manager {

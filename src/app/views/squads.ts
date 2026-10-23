@@ -3,13 +3,16 @@
 // points and what each player has scored for them, and how they've fared against
 // everyone else.
 
+import { bestXi } from '../../shared/best-xi.ts';
 import type { Position } from '../../shared/data.ts';
 import { clubState } from '../../shared/live.ts';
-import { avatar, card, chip, crest, empty, formPills, listRow, photo, seg, tag, tile } from '../components.ts';
+import { avatar, card, chip, crest, empty, formPills, listRow, photo, pointsTier, seg, tag, tile } from '../components.ts';
 import { esc, ordinal, pct, plural, signed, sum } from '../format.ts';
 import { club, first, gwPoints, isArchive, lineupFor, mgr, player, seasonStat, slotOf } from '../lookups.ts';
 import { closeCalls, gameIn, nemesis, pointsByPosition, rivalries, type Rivalry } from '../manager-stats.ts';
+import { arrowSvg } from '../icons.ts';
 import { roundPill, stateLabel } from '../matches.ts';
+import { formationOf, pitch, type PitchPlayer } from '../pitch.ts';
 import { D, live, state } from '../state.ts';
 
 const GROUPS: [Position, string][] = [
@@ -31,7 +34,7 @@ export function viewSquads() {
   return `${card({ body: `<div class="filter-bar">${chips}</div>`, cls: 'filter-card' })}
   <div class="cols">
     <div class="col">${teamCard(id)}${squadCard(id)}</div>
-    <div class="col">${rivalsCard(id)}${seasonCard(id)}</div>
+    <div class="col">${lineupCard(id)}${rivalsCard(id)}${seasonCard(id)}</div>
   </div>`;
 }
 
@@ -66,10 +69,84 @@ function nextTile(id: number) {
   return `<button type="button" class="tile tile-link" ${open}><div class="tile-label">${label}</div><div class="tile-value">${value}</div><div class="tile-meta">${meta}</div></button>`;
 }
 
-function squadCard(id: number) {
-  const squad = Object.keys(D.players)
+const squadOf = (id: number) =>
+  Object.keys(D.players)
     .map(Number)
     .filter((pid) => player(pid).owner === id);
+
+// What each player has scored for this manager: points and starts in their XI, the
+// gameweek being played included.
+function xiRecord(id: number) {
+  const record = new Map<number, { pts: number; starts: number }>();
+  for (let gw = D.meta.firstGw; gw <= D.meta.currentGw; gw++) {
+    for (const pid of lineupFor(id, gw)?.xi ?? []) {
+      const r = record.get(pid) ?? { pts: 0, starts: 0 };
+      record.set(pid, { pts: r.pts + gwPoints(pid, gw), starts: r.starts + 1 });
+    }
+  }
+  return record;
+}
+
+// FotMob's "Last starting XI" on a pitch, or the best XI of the season by the points
+// players have scored for this manager.
+function lineupCard(id: number) {
+  const allTime = state.lineupView === 'all';
+  const { sub, body } = allTime ? bestLineup(id) : lastLineup(id);
+  const toggle = seg(
+    'lineup-view',
+    [
+      ['last', 'Last match'],
+      ['all', 'All-time'],
+    ],
+    allTime ? 'all' : 'last',
+  );
+  return card({ title: 'Starting XI', sub, action: toggle, body, cls: 'lineup-card' });
+}
+
+function lastLineup(id: number) {
+  const gw = D.meta.currentGw;
+  const l = gw >= D.meta.firstGw ? lineupFor(id, gw) : undefined;
+  if (!l) return { sub: '', body: empty('No lineup yet') };
+  const feed = live?.gw === gw ? live.feed : null;
+  const onPitch = (pid: number): PitchPlayer => {
+    const match = feed ? clubState(feed, player(pid).club) : null;
+    return {
+      pid,
+      badge: roundPill(pid, gw, match),
+      left: l.subs.includes(pid) ? `<span class="pp-sub" data-tip="Came on as an automatic substitute">${arrowSvg}</span>` : '',
+      right: match?.state === 'live' ? stateLabel(match) : '',
+    };
+  };
+  return {
+    sub: `GW ${gw} · ${plural(l.pts, 'pt')}${feed ? ' so far' : ''} · ${formationOf(l.xi)}`,
+    body: pitch(l.xi.map(onPitch), l.bench.map(onPitch)),
+  };
+}
+
+function bestLineup(id: number) {
+  const record = xiRecord(id);
+  const squad = squadOf(id);
+  const owned = new Set(squad);
+  const scored = (pid: number) => record.get(pid)?.pts ?? 0;
+  const xi = bestXi(everOwned(id, squad), scored, (pid) => player(pid).pos, D.meta.xiLimits);
+  if (!xi.ids.length) return { sub: '', body: empty('No points yet') };
+  const onPitch = (pid: number): PitchPlayer => {
+    const { pts, starts } = record.get(pid)!;
+    const owner = player(pid).owner;
+    const now = owned.has(pid) ? '' : owner ? ` · now with ${mgr(owner)?.first}` : ' · a free agent now';
+    return {
+      pid,
+      // Coloured by points per start, as the round's points are.
+      badge: `<span class="ptsp ${pointsTier(pts / starts)}">${pts}</span>`,
+      tip: `${player(pid).name}: ${plural(pts, 'pt')} in ${plural(starts, 'start')}${now}`,
+      faded: !owned.has(pid),
+    };
+  };
+  return { sub: `Season’s best · ${xi.pts} pts · ${formationOf(xi.ids)}`, body: pitch(xi.ids.map(onPitch)) };
+}
+
+function squadCard(id: number) {
+  const squad = squadOf(id);
   if (!squad.length) return card({ title: 'Squad', body: empty('No players yet') });
   const { currentGw: gw, firstGw, nextGw, lastGw } = D.meta;
   const l = gw >= firstGw ? lineupFor(id, gw) : undefined;
@@ -82,13 +159,8 @@ function squadCard(id: number) {
   const role = (pid: number) => (!l ? 'none' : l.xi.includes(pid) ? 'xi' : l.bench.includes(pid) ? 'bench' : 'out');
   const ROLE_ORDER = { xi: 0, bench: 1, out: 2, none: 3 };
 
-  // What each player has scored for this manager: points in their XI, the gameweek
-  // being played included.
-  const scored = new Map<number, number>();
-  for (let g = firstGw; g <= gw; g++) {
-    for (const pid of lineupFor(id, g)?.xi ?? []) scored.set(pid, (scored.get(pid) ?? 0) + gwPoints(pid, g));
-  }
-  const total = (pid: number) => scored.get(pid) ?? 0;
+  const record = xiRecord(id);
+  const total = (pid: number) => record.get(pid)?.pts ?? 0;
 
   // Grouped by position in lineup order, or one list sorted on a column, highest first,
   // with each player's position as a chip. Tapping the column again, or Position, groups
