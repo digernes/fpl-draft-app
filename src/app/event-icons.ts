@@ -5,7 +5,7 @@
 
 import type { PlayerEvents } from '../shared/live.ts';
 import { plural } from './format.ts';
-import { ballSvg, bootSvg, cardSvg, gloveSvg, missSvg, subSvg } from './icons.ts';
+import { ballSvg, bootSvg, cardSvg, gloveSvg, missSvg, ownGoalSvg, subSvg } from './icons.ts';
 
 /** HTML for each place around the photo. */
 export interface EventSlots {
@@ -25,9 +25,8 @@ function icons(ev: PlayerEvents) {
       (ev.on ? icon(subSvg(true), `Came on · played ${plural(ev.min ?? 0, 'minute')}`) : '') +
       (ev.off ? icon(subSvg(false), `Taken off after ${plural(ev.min ?? 0, 'minute')}`) : ''),
     cards: times(ev.yellow, cardSvg(false), 'Yellow card') + times(ev.red, cardSvg(true), 'Red card'),
-    assists: times(ev.assists, bootSvg, 'Assist'),
-    goals:
-      times(ev.goals, ballSvg(), 'Goal') + times(ev.ownGoals, ballSvg(true), 'Own goal') + times(ev.pensSaved, gloveSvg, 'Penalty saved'),
+    assists: times(ev.assists, bootSvg(), 'Assist'),
+    goals: times(ev.goals, ballSvg(), 'Goal') + times(ev.ownGoals, ownGoalSvg, 'Own goal') + times(ev.pensSaved, gloveSvg, 'Penalty saved'),
     missed: times(ev.pensMissed, missSvg, 'Penalty missed'),
   };
 }
@@ -50,7 +49,7 @@ export function totalSlots(goals: number, assists: number, starts: number): Even
   const pill = (svg: string, n: number, what: string) =>
     `<span class="ev-total" data-tip="${plural(n, what)} in ${plural(starts, 'start')}">${svg}${n}</span>`;
   return {
-    bottomLeft: assists ? pill(bootSvg, assists, 'assist') : '',
-    bottomRight: goals ? pill(ballSvg(), goals, 'goal') : '',
+    bottomLeft: assists ? pill(bootSvg('var(--text)'), assists, 'assist') : '',
+    bottomRight: goals ? pill(ballSvg('var(--text)', 'transparent'), goals, 'goal') : '',
   };
 }

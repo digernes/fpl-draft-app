@@ -52,10 +52,11 @@
   --pitch-photo: #e3e3e3;
   --pitch-chip: #fff;
   --pitch-chip-border: #e0e0e0;
-  /* The event icons on the pitches look the same in both themes. */
-  --ball-ink: #222;
-  --yellow-card: #fece2f;
-  --red-card: #e55e5b;
+  /* The event icons on the pitches. */
+  --event-ink: #333;
+  --card-yellow: #f7c331;
+  --event-green: #00985f;
+  --event-border: #e8e8e8;
 
   /* Manager identity: validated 8-slot categorical palette, fixed by join order. */
   --m0: #8d9499;
@@ -127,6 +128,9 @@
   --pitch-photo: #4a4a4a;
   --pitch-chip: #262626;
   --pitch-chip-border: #464646;
+  --event-ink: #fff;
+  --event-green: #33c771;
+  --event-border: #717171;
 
   --m1: #3987e5;
   --m2: #d95926;

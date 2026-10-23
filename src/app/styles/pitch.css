@@ -46,6 +46,7 @@
   flex: 1 1 0;
   min-width: 0;
   max-width: 40%;
+  container: pp / inline-size;
 }
 
 .pp.faded .pp-head,
@@ -82,6 +83,17 @@
   font-size: 12px;
 }
 
+/* Five in a line on a phone leaves no room for a wide badge like 15+2, so it moves in a little. */
+@container pp (max-width: 72px) {
+  .pp-badge {
+    left: 22px;
+  }
+
+  .pp-badge .ptsp {
+    padding: 0 4px;
+  }
+}
+
 /* Expected points would vanish into the pitch in the usual grey. */
 .pp-badge .ptsp.xp {
   border: 1px solid var(--pitch-chip-border);
@@ -101,8 +113,8 @@
   white-space: nowrap;
 }
 
-/* What the player did, around the photo as on fotmob.com: several of a kind overlap,
-   and the chips sit beyond the icons at the bottom. */
+/* What the player did, around the photo where fotmob.com puts it: several of a kind
+   overlap. */
 .pp-ev {
   position: absolute;
   display: flex;
@@ -126,13 +138,13 @@
 }
 
 .pp-ev.bottom-left {
-  top: 32px;
-  right: 28px;
+  top: 34px;
+  right: 32px;
 }
 
 .pp-ev.bottom-right {
-  top: 32px;
-  left: 28px;
+  top: 34px;
+  left: 32px;
 }
 
 .ev {
@@ -141,10 +153,10 @@
   place-items: center;
   width: 18px;
   height: 18px;
-  border: 1px solid var(--pitch-chip-border);
+  padding: 1px;
+  border: 1px solid var(--event-border);
   border-radius: 50%;
   background: var(--pitch-chip);
-  color: var(--text);
 }
 
 .ev + .ev {
@@ -152,18 +164,17 @@
 }
 
 .ev svg {
-  width: 14px;
-  height: 14px;
+  display: block;
 }
 
-/* The season's goals and assists, narrow enough for five in a line on a phone. */
+/* The season's goals and assists, a little higher and closer in than a match's icons,
+   as on fotmob.com's team pages. */
 .ev-total {
   display: inline-flex;
   flex: none;
   align-items: center;
   gap: 2px;
-  height: 18px;
-  padding: 0 4px 0 1px;
+  padding: 2px 4px 2px 2px;
   border: 1px solid var(--pitch-chip-border);
   border-radius: 12px;
   background: var(--pitch-chip);
@@ -171,9 +182,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-.ev-total svg {
-  width: 12px;
-  height: 12px;
+.bottom-left .ev-total {
+  translate: 7px -2px;
+}
+
+.bottom-right .ev-total {
+  translate: -5px -2px;
 }
 
 /* A bench row has them in a line before the points. */
