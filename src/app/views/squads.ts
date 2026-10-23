@@ -7,8 +7,9 @@ import { bestXi } from '../../shared/best-xi.ts';
 import type { Position } from '../../shared/data.ts';
 import { clubState } from '../../shared/live.ts';
 import { avatar, card, chip, crest, empty, formPills, listRow, photo, pointsTier, seg, tag, tile } from '../components.ts';
+import { totalSlots } from '../event-icons.ts';
 import { esc, ordinal, pct, plural, signed, sum } from '../format.ts';
-import { club, first, gwPoints, isArchive, lineupFor, mgr, player, seasonStat, slotOf } from '../lookups.ts';
+import { club, first, gwEvents, gwPoints, isArchive, lineupFor, mgr, player, seasonStat, slotOf } from '../lookups.ts';
 import { closeCalls, gameIn, nemesis, pointsByPosition, rivalries, type Rivalry } from '../manager-stats.ts';
 import { roundPill, stateLabel } from '../matches.ts';
 import { formationOf, pitch, subMark, type PitchPlayer } from '../pitch.ts';
@@ -76,10 +77,18 @@ const squadOf = (id: number) =>
 // Each player's time with this manager: gameweeks in their lineup (XI or bench), and
 // starts and points in the XI, the gameweek being played included.
 function xiRecord(id: number) {
-  const record = new Map<number, { pts: number; starts: number; weeks: number }>();
+  const record = new Map<number, { pts: number; goals: number; assists: number; starts: number; weeks: number }>();
   const add = (pid: number, started: boolean, gw: number) => {
-    const r = record.get(pid) ?? { pts: 0, starts: 0, weeks: 0 };
-    record.set(pid, started ? { pts: r.pts + gwPoints(pid, gw), starts: r.starts + 1, weeks: r.weeks + 1 } : { ...r, weeks: r.weeks + 1 });
+    const r = record.get(pid) ?? { pts: 0, goals: 0, assists: 0, starts: 0, weeks: 0 };
+    r.weeks++;
+    if (started) {
+      const ev = gwEvents(pid, gw);
+      r.pts += gwPoints(pid, gw);
+      r.goals += ev?.goals ?? 0;
+      r.assists += ev?.assists ?? 0;
+      r.starts++;
+    }
+    record.set(pid, r);
   };
   for (let gw = D.meta.firstGw; gw <= D.meta.currentGw; gw++) {
     const l = lineupFor(id, gw);
@@ -115,8 +124,9 @@ function lastLineup(id: number) {
     return {
       pid,
       badge: roundPill(pid, gw, match),
-      left: l.subs.includes(pid) ? subMark : '',
-      right: match?.state === 'live' ? stateLabel(match) : '',
+      events: gwEvents(pid, gw),
+      mark: l.subs.includes(pid) ? subMark : '',
+      note: match?.state === 'live' ? stateLabel(match) : '',
     };
   };
   return {
@@ -135,13 +145,14 @@ function bestLineup(id: number) {
   // Badges are coloured like a gameweek's points, by points per gameweek of the season.
   const gameweeks = Math.max(1, D.meta.currentGw - D.meta.firstGw + 1);
   const onPitch = (pid: number): PitchPlayer => {
-    const { pts, starts } = record.get(pid)!;
+    const { pts, goals, assists, starts } = record.get(pid)!;
     const owner = player(pid).owner;
     const now = owned.has(pid) ? '' : owner ? ` · now with ${mgr(owner)?.first}` : ' · a free agent now';
     const perWeek = (pts / gameweeks).toFixed(1);
     return {
       pid,
       badge: `<span class="ptsp ${pointsTier(pts / gameweeks)}">${pts}</span>`,
+      icons: totalSlots(goals, assists, starts),
       tip: `${player(pid).name}: ${plural(pts, 'pt')} in ${plural(starts, 'start')}, ${perWeek} a gameweek${now}`,
       faded: !owned.has(pid),
     };

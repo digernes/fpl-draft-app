@@ -88,10 +88,9 @@
   background: var(--pitch-chip);
 }
 
-.pp-corner {
-  position: absolute;
-  top: 30px;
+.pp-chip {
   display: inline-flex;
+  flex: none;
   align-items: center;
   height: 18px;
   padding: 0 4px;
@@ -102,12 +101,89 @@
   white-space: nowrap;
 }
 
-.pp-left {
-  right: 30px;
+/* What the player did, around the photo as on fotmob.com: several of a kind overlap,
+   and the chips sit beyond the icons at the bottom. */
+.pp-ev {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
-.pp-right {
-  left: 30px;
+.pp-ev.top-left {
+  top: -8px;
+  right: 32px;
+}
+
+.pp-ev.middle-left {
+  top: 13px;
+  right: 36px;
+}
+
+.pp-ev.middle-right {
+  top: 13px;
+  left: 36px;
+}
+
+.pp-ev.bottom-left {
+  top: 32px;
+  right: 28px;
+}
+
+.pp-ev.bottom-right {
+  top: 32px;
+  left: 28px;
+}
+
+.ev {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  border: 1px solid var(--pitch-chip-border);
+  border-radius: 50%;
+  background: var(--pitch-chip);
+  color: var(--text);
+}
+
+.ev + .ev {
+  margin-left: -11px;
+}
+
+.ev svg {
+  width: 14px;
+  height: 14px;
+}
+
+/* The season's goals and assists, narrow enough for five in a line on a phone. */
+.ev-total {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  height: 18px;
+  padding: 0 4px 0 1px;
+  border: 1px solid var(--pitch-chip-border);
+  border-radius: 12px;
+  background: var(--pitch-chip);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ev-total svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* A bench row has them in a line before the points. */
+.ev-row {
+  display: flex;
+  flex: none;
+}
+
+.ev-row .ev + .ev {
+  margin-left: -4px;
 }
 
 .pp-sub {
@@ -138,6 +214,16 @@
 
 .pp-name .crest {
   flex: none;
+}
+
+.pp-note {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 14px;
 }
 
 .pitch-bench {

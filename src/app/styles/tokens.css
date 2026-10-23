@@ -52,6 +52,10 @@
   --pitch-photo: #e3e3e3;
   --pitch-chip: #fff;
   --pitch-chip-border: #e0e0e0;
+  /* The event icons on the pitches look the same in both themes. */
+  --ball-ink: #222;
+  --yellow-card: #fece2f;
+  --red-card: #e55e5b;
 
   /* Manager identity: validated 8-slot categorical palette, fixed by join order. */
   --m0: #8d9499;

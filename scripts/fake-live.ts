@@ -50,7 +50,19 @@ async function fake() {
     delete f.bps;
     toCome.add(f.h).add(f.a);
   });
-  for (const [pid, p] of Object.entries(d.players)) if (toCome.has(p.club)) delete feed.elements[pid];
+  // What happened in matches still to come hasn't happened yet, and nobody in the match
+  // in play has gone off yet, as slimLive only decides that at full time.
+  const playing = new Set([fixtures[inPlay].h, fixtures[inPlay].a]);
+  const events = feed.events ?? {};
+  for (const [pid, p] of Object.entries(d.players)) {
+    if (toCome.has(p.club)) {
+      delete feed.elements[pid];
+      delete events[pid];
+    } else if (playing.has(p.club) && events[pid]?.off) {
+      delete events[pid].off;
+      if (!events[pid].on) delete events[pid].min;
+    }
+  }
 
   d.meta.currentGwFinished = false;
   d.meta.lastFinishedGw = gw - 1;
@@ -63,7 +75,7 @@ async function fake() {
     l.picks = [...l.xi, ...l.bench];
     for (const pid of l.picks) picked.add(pid);
   }
-  d.live = { gw, elements: feed.elements, fixtures, ep: Object.fromEntries([...picked].map((pid) => [pid, d.players[pid].ep])) };
+  d.live = { gw, elements: feed.elements, events, fixtures, ep: Object.fromEntries([...picked].map((pid) => [pid, d.players[pid].ep])) };
 
   await mkdir('.cache', { recursive: true });
   await copyFile(DATA, REAL);

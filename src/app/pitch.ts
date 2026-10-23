@@ -1,9 +1,11 @@
 // Lineups on a pitch, as on fotmob.com: a team's XI in lines from the goalkeeper up
 // (its "Last starting XI"), or both XIs of a match on one pitch. Each player has their
-// photo, a points badge and their name.
+// photo, a points badge, what they did around the photo and their name.
 
 import type { Position } from '../shared/data.ts';
+import type { PlayerEvents } from '../shared/live.ts';
 import { avatar, crest, photo } from './components.ts';
+import { eventRow, eventSlots, type EventSlots } from './event-icons.ts';
 import { esc } from './format.ts';
 import { arrowSvg } from './icons.ts';
 import { club, first, player } from './lookups.ts';
@@ -12,9 +14,14 @@ export interface PitchPlayer {
   pid: number;
   /** Top right of the photo: the points. */
   badge: string;
-  /** Bottom left and bottom right of the photo. */
-  left?: string;
-  right?: string;
+  /** What they did in the gameweek: icons around the photo (see event-icons.ts), or in a line on a bench row. */
+  events?: PlayerEvents;
+  /** Other icons around the photo instead, like the season's goals and assists. */
+  icons?: EventSlots;
+  /** A chip at the top left, by any substitution: an auto-sub, or a doubt. */
+  mark?: string;
+  /** Under the name: where their match stands, or that they play twice. */
+  note?: string;
   tip?: string;
   faded?: boolean;
 }
@@ -39,9 +46,18 @@ export const formationOf = (xi: number[]) =>
 
 function pitchPlayer(p: PitchPlayer) {
   const pl = player(p.pid);
+  const { topLeft = '', middleLeft, middleRight, bottomLeft, bottomRight } = p.icons ?? eventSlots(p.events);
+  const at = (place: string, html?: string) => (html ? `<span class="pp-ev ${place}">${html}</span>` : '');
+  const around = [
+    at('top-left', (p.mark ? `<span class="pp-chip">${p.mark}</span>` : '') + topLeft),
+    at('middle-left', middleLeft),
+    at('middle-right', middleRight),
+    at('bottom-left', bottomLeft),
+    at('bottom-right', bottomRight),
+  ].join('');
   return `<div class="pp${p.faded ? ' faded' : ''}"${p.tip ? ` data-tip="${esc(p.tip)}"` : ''}>
-    <div class="pp-head">${photo(p.pid, 44)}<span class="pp-badge">${p.badge}</span>${p.left ? `<span class="pp-corner pp-left">${p.left}</span>` : ''}${p.right ? `<span class="pp-corner pp-right">${p.right}</span>` : ''}</div>
-    <div class="pp-name">${crest(pl.club, 12)}<span>${esc(pl.name)}</span></div>
+    <div class="pp-head">${photo(p.pid, 44)}<span class="pp-badge">${p.badge}</span>${around}</div>
+    <div class="pp-name">${crest(pl.club, 12)}<span>${esc(pl.name)}</span></div>${p.note ? `<div class="pp-note">${p.note}</div>` : ''}
   </div>`;
 }
 
@@ -86,5 +102,5 @@ export function matchPitch(home: PitchSide, away: PitchSide, benches?: [PitchPla
 
 function benchRow(p: PitchPlayer) {
   const pl = player(p.pid);
-  return `<div class="mp-sub">${photo(p.pid, 28)}<div class="mp-sub-main"><div class="mp-sub-name">${esc(pl.name)}</div><div class="mp-sub-meta">${crest(pl.club, 12)}${esc(club(pl.club).short)} · ${pl.pos}</div></div>${p.badge}</div>`;
+  return `<div class="mp-sub">${photo(p.pid, 28)}<div class="mp-sub-main"><div class="mp-sub-name">${esc(pl.name)}</div><div class="mp-sub-meta">${crest(pl.club, 12)}${esc(club(pl.club).short)} · ${pl.pos}</div></div>${eventRow(p.events)}${p.badge}</div>`;
 }

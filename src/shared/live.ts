@@ -1,5 +1,6 @@
 // Live scoring shared by the page, the build and the Cloudflare Worker: a slim copy of
-// the FPL live feed, provisional bonus, and provisional automatic substitutions.
+// the FPL live feed (with what each player did), provisional bonus, and provisional
+// automatic substitutions.
 
 import type { Formation, Position } from './data.ts';
 import type { LiveFeed } from './fpl-api.ts';
@@ -21,7 +22,27 @@ export interface SlimFixture {
 export interface SlimLive {
   /** element id → [points, minutes] */
   elements: Record<string, [number, number]>;
+  /** element id → what he did, for anyone who did something. Missing from older feeds. */
+  events?: Record<string, PlayerEvents>;
   fixtures: SlimFixture[];
+}
+
+/** What a player did in a gameweek, for the icons around his photo. Counts are left out when 0. */
+export interface PlayerEvents {
+  goals?: number;
+  assists?: number;
+  ownGoals?: number;
+  yellow?: number;
+  red?: number;
+  pensSaved?: number;
+  pensMissed?: number;
+  /** Bonus points awarded (the provisional bonus is worked out from the BPS instead). */
+  bonus?: number;
+  /** Came on as a substitute, or was taken off. */
+  on?: number;
+  off?: number;
+  /** Minutes played, for a substitution's tooltip. */
+  min?: number;
 }
 
 export type PlayerInfo = (id: number) => { pos: Position | undefined; club: number | undefined };
@@ -35,14 +56,19 @@ export interface Scored {
   points: (id: number) => number;
 }
 
-// The FPL live feed is ~450 KB; this keeps what live scores need (~20 KB).
-// elements: { id: [points, minutes] } for anyone with either; fixtures keep the BPS
-// list only while their bonus has not been awarded yet.
+// The FPL live feed is ~450 KB; this keeps what live scores need (~25 KB).
+// elements: { id: [points, minutes] } for anyone with either; events for anyone who
+// did something; fixtures keep the BPS list only while their bonus has not been
+// awarded yet.
 export function slimLive(raw: Partial<LiveFeed>): SlimLive {
   const elements: SlimLive['elements'] = {};
+  const events: Record<string, PlayerEvents> = {};
+  const over = new Set((raw.fixtures ?? []).filter((f) => f.finished || f.finished_provisional).map((f) => f.id));
   for (const [id, el] of Object.entries(raw.elements ?? {})) {
     const { total_points: points, minutes } = el.stats;
     if (points || minutes) elements[id] = [points, minutes];
+    const did = playerEvents(el, over);
+    if (did) events[id] = did;
   }
   const fixtures = (raw.fixtures ?? []).map((f): SlimFixture => {
     const stat = (name: string) => f.stats?.find((s) => s.s === name);
@@ -60,7 +86,34 @@ export function slimLive(raw: Partial<LiveFeed>): SlimLive {
       ...(f.started && !bonusIn && bps ? { bps: [...bps.h, ...bps.a].map((b): [number, number] => [b.element, b.value]) } : {}),
     };
   });
-  return { elements, fixtures };
+  return { elements, events, fixtures };
+}
+
+// FPL doesn't list substitutions, so they come from the minutes in each match: a
+// player who played in more matches than he started came on, and a starter short of
+// 90 minutes in a match that is over went off, unless he was sent off. While a match
+// is on, nobody has 90 minutes yet, so going off waits for the final whistle.
+function playerEvents({ stats: s, explain = [] }: LiveFeed['elements'][string], over: Set<number>): PlayerEvents | undefined {
+  const minutes = explain.map(([stats, fixture]) => ({ fixture, min: stats.find((x) => x.stat === 'minutes')?.value ?? 0 }));
+  const played = minutes.filter((m) => m.min > 0).length;
+  const on = s.starts === undefined ? 0 : Math.max(0, played - s.starts);
+  const short = minutes.filter((m) => m.min > 0 && m.min < 90 && over.has(m.fixture)).length;
+  const off = s.starts === undefined ? 0 : Math.max(0, short - on - (s.red_cards ?? 0));
+  const counts: PlayerEvents = {
+    goals: s.goals_scored,
+    assists: s.assists,
+    ownGoals: s.own_goals,
+    yellow: s.yellow_cards,
+    red: s.red_cards,
+    pensSaved: s.penalties_saved,
+    pensMissed: s.penalties_missed,
+    bonus: s.bonus,
+    on,
+    off,
+    min: on || off ? s.minutes : 0,
+  };
+  const did = Object.entries(counts).filter(([, n]) => n);
+  return did.length ? Object.fromEntries(did) : undefined;
 }
 
 // Bonus as it stands for fixtures still waiting for it: the top three BPS get 3, 2

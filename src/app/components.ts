@@ -1,7 +1,7 @@
 // Small components shared across the views.
 
 import type { MatchResult } from '../shared/data.ts';
-import { esc, ordinal } from './format.ts';
+import { esc, ordinal, plural } from './format.ts';
 import { triangleSvg } from './icons.ts';
 import { club, mgr, player, slotOf } from './lookups.ts';
 
@@ -50,8 +50,10 @@ export function photo(pid: number | string, size = 32) {
 
 export const pointsTier = (pts: number) => (pts >= 10 ? 'p4' : pts >= 6 ? 'p3' : pts >= 3 ? 'p2' : pts >= 1 ? 'p1' : 'p0');
 
-export function ptsPill(pts: number) {
-  return `<span class="ptsp ${pointsTier(pts)}">${pts}</span>`;
+// With bonus points, the way FPL shows them: 10+3 rather than 13.
+export function ptsPill(pts: number, bonus = 0) {
+  if (!bonus) return `<span class="ptsp ${pointsTier(pts)}">${pts}</span>`;
+  return `<span class="ptsp ${pointsTier(pts)}" data-tip="${plural(pts, 'point')}, ${bonus} of them bonus">${pts - bonus}+${bonus}</span>`;
 }
 
 export function tag(text: string, tip = '', cls = '') {

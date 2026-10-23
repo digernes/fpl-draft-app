@@ -5,7 +5,7 @@ import { clubState, liveProjection, type PlayerState, type SlimLive } from '../s
 import { liveOdds } from '../shared/odds.ts';
 import { avatar, empty, ptsPill, seg } from './components.ts';
 import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, priceText, sum } from './format.ts';
-import { first, gwInfo, gwPoints, isLive, lineupFor, matchKey, mgr, player, slotOf } from './lookups.ts';
+import { first, gwBonus, gwEvents, gwInfo, gwPoints, isLive, lineupFor, matchKey, mgr, player, slotOf } from './lookups.ts';
 import { matchPitch, subMark, type PitchPlayer, type PitchSide } from './pitch.ts';
 import { D, live, LIVE_URL, state } from './state.ts';
 
@@ -90,8 +90,8 @@ function matchDetail(m: Match) {
   return `<div class="match-detail">${preMatchOdds(m)}${matchLineups(m)}</div>`;
 }
 
-// Both XIs on one pitch with each player's points, auto-subs, double gameweeks and, in a
-// live gameweek, the minute; the benches below.
+// Both XIs on one pitch with each player's points, what they did, auto-subs, double
+// gameweeks and, in a live gameweek, the minute; the benches below.
 function matchLineups(m: Match) {
   const home = lineupFor(m.home, m.gw);
   const away = lineupFor(m.away, m.gw);
@@ -107,8 +107,9 @@ function matchLineups(m: Match) {
       return {
         pid,
         badge: roundPill(pid, m.gw, match),
-        left: l.subs.includes(pid) ? subMark : '',
-        right: match?.state === 'live' ? stateLabel(match) : twice,
+        events: gwEvents(pid, m.gw),
+        mark: l.subs.includes(pid) ? subMark : '',
+        note: match?.state === 'live' ? stateLabel(match) : twice,
       };
     };
   const side = (id: number, l: Lineup): PitchSide => ({ id, xi: l.xi.map(onPitch(l)), note: lineupNote(l, feed) });
@@ -133,7 +134,7 @@ function lineupNote(l: Lineup, feed: SlimLive | null) {
 // to play show what FPL expects instead.
 export function roundPill(pid: number, gw: number, match: PlayerState | null) {
   const pts = gwPoints(pid, gw);
-  if (match?.state !== 'due' || pts !== 0) return ptsPill(pts);
+  if (match?.state !== 'due' || pts !== 0) return ptsPill(pts, gwBonus(pid, gw));
   const ep = D.live?.ep[pid] ?? player(pid).ep;
   return `<span class="ptsp xp" data-tip="Expected points (not played yet)">${ep.toFixed(1)}</span>`;
 }
@@ -149,7 +150,7 @@ function upcomingDetail(m: Match) {
       return {
         pid,
         badge: `<span class="ptsp xp">${p.ep.toFixed(1)}</span>`,
-        left: p.status !== 'a' ? `<span class="pp-flag" data-tip="${esc(p.news || 'Flagged')}">!</span>` : '',
+        mark: p.status !== 'a' ? `<span class="pp-flag" data-tip="${esc(p.news || 'Flagged')}">!</span>` : '',
       };
     }),
     note: `<span data-tip="Best legal XI by FPL expected points">${sum(ids.map((pid) => player(pid).ep)).toFixed(1)} xP</span>`,
