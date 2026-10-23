@@ -7,6 +7,7 @@ import { D, seasons, state, TABS } from './state.ts';
 import { viewDraft } from './views/draft.ts';
 import { viewFixtures } from './views/fixtures.ts';
 import { viewOverview } from './views/overview.ts';
+import { viewSquads } from './views/squads.ts';
 import { viewStats } from './views/stats.ts';
 import { viewTable } from './views/table.ts';
 import { viewTransfers } from './views/transfers.ts';
@@ -71,6 +72,7 @@ export function renderView() {
     overview: viewOverview,
     table: viewTable,
     fixtures: viewFixtures,
+    squads: viewSquads,
     stats: viewStats,
     transfers: viewTransfers,
     draft: viewDraft,
@@ -78,9 +80,21 @@ export function renderView() {
   for (const tab of document.querySelectorAll<HTMLElement>('.tab'))
     tab.setAttribute('aria-selected', String(tab.dataset.tab === state.tab));
   document.getElementById('view')!.innerHTML = views[state.tab]();
+  revealPickedChips();
   document.title = state.tab === 'overview' ? D.meta.name : `${TABS.find((t) => t.id === state.tab)!.label} · ${D.meta.name}`;
   placeTabIndicator();
   syncSettings();
+}
+
+// A re-render starts the filter bars scrolled back to the left, which on a phone can
+// hide the chip that is picked (say, the Squads tab opened from the last row of the table).
+function revealPickedChips() {
+  for (const bar of document.querySelectorAll<HTMLElement>('#view .filter-bar')) {
+    const chip = bar.querySelector<HTMLElement>('[aria-pressed="true"]');
+    if (!chip) continue;
+    const left = chip.getBoundingClientRect().left - bar.getBoundingClientRect().left;
+    if (left < 0 || left + chip.offsetWidth > bar.clientWidth) bar.scrollLeft = left - (bar.clientWidth - chip.offsetWidth) / 2;
+  }
 }
 
 export function placeTabIndicator() {

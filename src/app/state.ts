@@ -7,6 +7,7 @@ export const TABS = [
   { id: 'overview', label: 'Overview' },
   { id: 'table', label: 'Table' },
   { id: 'fixtures', label: 'Fixtures' },
+  { id: 'squads', label: 'Squads' },
   { id: 'stats', label: 'Stats' },
   { id: 'transfers', label: 'Transfers' },
   { id: 'draft', label: 'Draft' },
@@ -50,6 +51,9 @@ export const state = {
   logManager: 'all', // transfer log filter
   statsView: 'season', // the Stats tab's 'season' or 'transfers'
   openSquad: null as string | null, // manager whose original squad is expanded
+  squadId: null as number | null, // manager on the Squads tab; null = the league leader
+  squadScope: 'now', // the Squads tab: 'now' (the squad) or 'all' (everyone ever owned)
+  squadSort: 'lineup', // the Squads tab's column: 'lineup' (XI, bench, new signings), 'gw', 'xp' or 'total'
   season: null as string | null, // slug of an archived season being viewed, e.g. "2025-26"; null = current
 };
 

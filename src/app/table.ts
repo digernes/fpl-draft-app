@@ -67,7 +67,9 @@ export function dataTable<R extends Keyed>(
   const body = rows
     .map((row) => {
       const q = qual(row);
-      return `<div class="trow ${rowClass(row)}${q ? ' qual' : ''}" data-key="${rowKey(row)}"${q ? ` style="--qual:${q}"` : ''}>${cols.map((col) => cell(col, col.cell(row))).join('')}</div>`;
+      // A manager's row opens their squad.
+      const open = row.type !== 'club' && row.id != null ? ` data-action="manager" data-value="${row.id}"` : '';
+      return `<div class="trow ${rowClass(row)}${q ? ' qual' : ''}" data-key="${rowKey(row)}"${open}${q ? ` style="--qual:${q}"` : ''}>${cols.map((col) => cell(col, col.cell(row))).join('')}</div>`;
     })
     .join('');
   // Wide enough for the desktop layout: fixed columns, 12px gaps, 24px end padding and

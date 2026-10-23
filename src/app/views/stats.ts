@@ -3,7 +3,7 @@
 
 import type { Decided } from '../../shared/data.ts';
 import { resultText } from '../cards.ts';
-import { avatar, card, chip, crest, empty, listRow, photo, tag } from '../components.ts';
+import { avatar, card, chip, crest, empty, listRow, photo, tag, tile } from '../components.ts';
 import { esc } from '../format.ts';
 import { first, mgr, player, seasonStat } from '../lookups.ts';
 import { D, state } from '../state.ts';
@@ -57,8 +57,6 @@ function topGameweeksCard(limit: number) {
 
 function recordsCard() {
   const r = D.records;
-  const tile = (label: string, value: string | number, meta: string, tip = '') =>
-    `<div class="tile"${tip ? ` data-tip="${esc(tip)}"` : ''}><div class="tile-label">${label}</div><div class="tile-value">${value}</div><div class="tile-meta">${meta}</div></div>`;
   const match = (d: Decided) => `${first(d.winner)} ${d.winPts}-${d.losePts} ${first(d.loser)} · GW ${d.gw}`;
   const tiles = [
     r.highest && tile('Highest score', r.highest.pts, `${first(r.highest.id)} · GW ${r.highest.gw}`),

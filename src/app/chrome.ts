@@ -17,7 +17,7 @@ async function switchSeason(slug: string) {
   if (state.season) url.searchParams.set('season', state.season);
   else url.searchParams.delete('season');
   history.replaceState(null, '', url);
-  Object.assign(state, { gw: null, openMatch: null, openSquad: null, logManager: 'all' });
+  Object.assign(state, { gw: null, openMatch: null, openSquad: null, squadId: null, logManager: 'all' });
   try {
     await loadData();
   } catch {
@@ -35,6 +35,7 @@ export function readRoute() {
   state.tab = TABS.some((t) => t.id === tab) ? tab : 'overview';
   if (state.tab === 'fixtures' && arg) state.gw = Number(arg) || state.gw;
   if (state.tab === 'stats') state.statsView = arg === 'transfers' ? 'transfers' : 'season';
+  if (state.tab === 'squads' && arg) state.squadId = Number(arg) || state.squadId;
 }
 
 export function applyTheme() {
@@ -78,6 +79,18 @@ function onClick(event: MouseEvent) {
   } else if (action === 'squad') {
     state.openSquad = state.openSquad === value ? null : value;
     renderView();
+  } else if (action === 'squads') {
+    state.squadId = Number(value);
+    history.replaceState(null, '', `#squads/${value}`);
+    renderView();
+  } else if (action === 'squad-scope') {
+    state.squadScope = value;
+    renderView();
+  } else if (action === 'squad-sort') {
+    state.squadSort = value;
+    renderView();
+  } else if (action === 'manager') {
+    location.hash = `squads/${value}`; // a table row
   } else if (action === 'match') {
     if (target.dataset.go) {
       // A form pill: open that week's match on the Fixtures tab.
