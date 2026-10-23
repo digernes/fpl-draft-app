@@ -1,5 +1,6 @@
 // The league header and the current tab.
 
+import { markLoadingPhotos } from './components.ts';
 import { esc, countdown, fmtShortDay, fmtStamp, fmtTime, plural } from './format.ts';
 import { chevronSvg, trophySvg } from './icons.ts';
 import { isArchive, isLive, seasonLabel, seasonSlug } from './lookups.ts';
@@ -79,7 +80,9 @@ export function renderView() {
   };
   for (const tab of document.querySelectorAll<HTMLElement>('.tab'))
     tab.setAttribute('aria-selected', String(tab.dataset.tab === state.tab));
-  document.getElementById('view')!.innerHTML = views[state.tab]();
+  const view = document.getElementById('view')!;
+  view.innerHTML = views[state.tab]();
+  markLoadingPhotos(view);
   revealPickedChips();
   document.title = state.tab === 'overview' ? D.meta.name : `${TABS.find((t) => t.id === state.tab)!.label} · ${D.meta.name}`;
   placeTabIndicator();

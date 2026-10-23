@@ -107,7 +107,7 @@
   text-align: center;
 }
 
-/* fotmob.com's live score pill: coloured by the result as it stands, gently pulsing. */
+/* fotmob.com's live score pill: coloured by the result as it stands. */
 .livep {
   display: inline-grid;
   place-items: center;
@@ -118,7 +118,6 @@
   color: #fff;
   font-size: 12px;
   font-weight: 500;
-  animation: pulse 2s ease-in-out infinite;
 }
 
 .livep.W {
@@ -129,12 +128,6 @@
 }
 .livep.L {
   background: var(--lose);
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.6;
-  }
 }
 
 .pill.W {

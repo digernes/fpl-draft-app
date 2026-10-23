@@ -1,14 +1,30 @@
 // Head-to-head matches: the list, odds and the expanded match.
 
+import { bestXi } from '../shared/best-xi.ts';
 import type { Lineup, Match, Odds } from '../shared/data.ts';
-import { clubState, liveProjection, type PlayerState, type SlimLive } from '../shared/live.ts';
+import { clubState, liveProjection, type Expected, type PlayerState, type Scored, type SlimLive } from '../shared/live.ts';
 import { liveOdds } from '../shared/odds.ts';
 import { avatar, empty, ptsPill, seg } from './components.ts';
 import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, priceText, sum } from './format.ts';
-import { first, gwBonus, gwEvents, gwInfo, gwPoints, isLive, lineupFor, matchKey, mgr, player, slotOf } from './lookups.ts';
-import { lineupFilters, showsEvents, statBadge } from './lineup-filters.ts';
+import {
+  club,
+  first,
+  gwBonus,
+  gwEvents,
+  gwInfo,
+  gwPoints,
+  isLive,
+  lineupFor,
+  liveXp,
+  matchKey,
+  mgr,
+  nextXp,
+  player,
+  slotOf,
+} from './lookups.ts';
+import { dueFilters, dueShows, lineupFilters, showsEvents, statBadge } from './lineup-filters.ts';
 import { matchPitch, subMark, type PitchPlayer, type PitchSide } from './pitch.ts';
-import { D, live, LIVE_URL, state } from './state.ts';
+import { D, live, state } from './state.ts';
 
 export function featuredGw() {
   const { meta } = D;
@@ -55,14 +71,22 @@ function oddsRow(odds: Pick<Odds, 'p' | 'prices'>, m: Match, outcome: number | n
 
 const playerInfo = (pid: number) => player(pid) ?? { pos: undefined, club: undefined };
 
-// Live odds for a match in play: both scores so far, plus FPL's expected points for
-// whatever each XI still has to play, with the uncertainty shrinking as games finish.
+// Live odds for a match in play: both scores so far, plus the expected points (by the
+// cog's setting) for whatever each XI still has to play, with the auto-subs it can count
+// on, the uncertainty shrinking as games finish.
 function inPlayOdds(m: Match) {
   const home = live?.gw === m.gw ? live.lineups[m.home] : undefined;
   const away = live?.gw === m.gw ? live.lineups[m.away] : undefined;
   if (!live || !home || !away) return null;
-  const ep = (pid: number) => D.live?.ep[pid] ?? player(pid)?.ep ?? 0;
-  return liveOdds(liveProjection(home, live.feed, playerInfo, ep), liveProjection(away, live.feed, playerInfo, ep), D.meta.oddsOverround);
+  const { feed } = live;
+  const ours = state.xp !== 'fpl'; // the appearance and clean-sheet parts are the model's
+  const expected: Expected = {
+    points: (pid) => (player(pid) ? liveXp(pid) : 0),
+    milestones: ours ? (pid) => D.live?.milestones?.[pid] : undefined,
+    cleanSheet: D.live?.cleanSheet,
+  };
+  const projection = (scored: Scored) => liveProjection(scored, feed, playerInfo, expected, D.meta.formation);
+  return liveOdds(projection(home), projection(away), D.meta.oddsOverround);
 }
 
 // FotMob-style match state next to each player in a live gameweek.
@@ -70,9 +94,16 @@ export function stateLabel(s: PlayerState) {
   if (s.state === 'live') return `<span class="lp-state is-live" data-tip="Playing now">${Math.max(1, s.min)}'</span>`;
   if (s.state === 'done') return `<span class="lp-state" data-tip="Match over">FT</span>`;
   if (s.state === 'blank') return `<span class="lp-state" data-tip="No match this gameweek">–</span>`;
-  const ko = s.ko ? new Date(s.ko) : null;
-  // Phones only have room for the time.
-  return `<span class="lp-state" data-tip="Still to play">${ko ? `<span class="wide-only">${fmtWeekday.format(ko)} </span>${fmtTime.format(ko)}` : 'TBC'}</span>`;
+  return `<span class="lp-state" data-tip="Still to play">${kickoffTime(s.ko)}</span>`;
+}
+
+// A kick-off's day and time, or just the time when it is today (phones only have room for
+// the time).
+function kickoffTime(ko: string | null | undefined) {
+  if (!ko) return 'TBC';
+  const at = new Date(ko);
+  const today = at.toDateString() === new Date().toDateString();
+  return `${today ? '' : `<span class="wide-only">${fmtWeekday.format(at)} </span>`}${fmtTime.format(at)}`;
 }
 
 function preMatchOdds(m: Match) {
@@ -81,7 +112,7 @@ function preMatchOdds(m: Match) {
   // The first gameweek priced before its deadline, so kept rather than worked out afterwards.
   const keptFrom = Math.min(...D.matches.filter((x) => x.odds && !x.odds.afterwards).map((x) => x.gw));
   const tip = m.odds.afterwards
-    ? `Worked out afterwards from form before the gameweek; from GW ${keptFrom} on, the odds are the ones at the deadline`
+    ? `Worked out afterwards from each side’s projected XI, with only the gameweeks before it to go on; from GW ${keptFrom} on, the odds are the ones at the deadline`
     : 'The odds at the deadline';
   return `<div class="detail-odds"><div class="detail-label">Pre-match odds <span class="muted" data-tip="${tip}">${m.odds.afterwards ? '· worked out afterwards' : '· at the deadline'}</span></div>${oddsRow(m.odds, m, outcome)}</div>`;
 }
@@ -124,7 +155,7 @@ function matchLineups(m: Match) {
       const twice = doubles.has(p.club) ? '<span data-tip="Plays twice this gameweek">×2</span>' : '';
       return {
         pid,
-        badge: statBadge(pid, m.gw) ?? roundPill(pid, m.gw, match),
+        badge: statBadge(pid, m.gw) ?? pitchPill(pid, m.gw, match),
         events: showsEvents(m.gw) ? gwEvents(pid, m.gw) : undefined,
         mark: l.subs.includes(pid) ? subMark : '',
         note: match?.state === 'live' ? stateLabel(match) : twice,
@@ -132,7 +163,7 @@ function matchLineups(m: Match) {
     };
   const side = (id: number, l: Lineup): PitchSide => ({ id, xi: l.xi.map(onPitch(l)), note: lineupNote(l, feed) });
   const pitch = matchPitch(side(m.home, home), side(m.away, away), [home.bench.map(onPitch(home)), away.bench.map(onPitch(away))]);
-  return `${lineupFilters(m.gw)}${pitch}`;
+  return `${lineupFilters(m.gw)}${feed?.fixtures.some((f) => !f.started) ? dueFilters(m.gw) : ''}${pitch}`;
 }
 
 // How far through the gameweek the XI is, and the score after any double-gameweek penalty.
@@ -149,44 +180,83 @@ function lineupNote(l: Lineup, feed: SlimLive | null) {
     .join(' · ');
 }
 
+// On a pitch, a player still to play shows his expected points or when he kicks off, by
+// the filter (lineup-filters.ts).
+export function pitchPill(pid: number, gw: number, match: PlayerState | null) {
+  if (match?.state !== 'due' || gwPoints(pid, gw) !== 0 || dueShows(gw) !== 'ko') return roundPill(pid, gw, match);
+  return kickoffPill(match.ko, when(match.ko));
+}
+
 // A player's points in a gameweek. Before kick-off a 0 says nothing, so players still
-// to play show what FPL expects instead.
+// to play show their expected points instead.
 export function roundPill(pid: number, gw: number, match: PlayerState | null) {
   const pts = gwPoints(pid, gw);
   if (match?.state !== 'due' || pts !== 0) return ptsPill(pts, gwBonus(pid, gw));
-  const ep = D.live?.ep[pid] ?? player(pid).ep;
-  return `<span class="ptsp xp" data-tip="Expected points (not played yet)">${ep.toFixed(1)}</span>`;
+  return `<span class="ptsp xp" data-tip="Expected points (not played yet)">${liveXp(pid).toFixed(1)}</span>`;
 }
 
 function upcomingDetail(m: Match) {
   if (!m.odds) return `<div class="match-detail">${empty('Odds go up three gameweeks before the deadline')}</div>`;
   const [ph, pd, pa] = m.odds.p;
   const [eh, ea] = m.odds.expected;
-  const projected = (id: number, ids: number[]): PitchSide => ({
-    id,
-    xi: ids.map((pid) => {
-      const p = player(pid);
-      return {
-        pid,
-        badge: `<span class="ptsp xp">${p.ep.toFixed(1)}</span>`,
-        mark: p.status !== 'a' ? `<span class="pp-flag" data-tip="${esc(p.news || 'Flagged')}">!</span>` : '',
-      };
-    }),
-    note: `<span data-tip="Best legal XI by FPL expected points">${sum(ids.map((pid) => player(pid).ep)).toFixed(1)} xP</span>`,
-  });
+  // Each side's best XI by expected points, as the odds have it, or again by FPL's when
+  // the cog asks for those. The xP filter shows the numbers; without it, when each plays.
+  const showXp = dueShows(m.gw) === 'xp';
+  const xiOf = (id: number, priced: number[]) => {
+    if (state.xp !== 'fpl') return priced;
+    const squad = Object.keys(D.players)
+      .map(Number)
+      .filter((pid) => player(pid).owner === id);
+    return bestXi(squad, nextXp, (pid) => player(pid).pos, D.meta.xiLimits).ids;
+  };
+  const projected = (id: number, priced: number[]): PitchSide => {
+    const ids = xiOf(id, priced);
+    return {
+      id,
+      xi: ids.map((pid) => {
+        const p = player(pid);
+        return {
+          pid,
+          badge: showXp ? `<span class="ptsp xp">${nextXp(pid).toFixed(1)}</span>` : kickoffBadge(pid, m.gw),
+          mark: p.status !== 'a' ? `<span class="pp-flag" data-tip="${esc(p.news || 'Flagged')}">!</span>` : '',
+        };
+      }),
+      note: showXp ? `<span data-tip="Best legal XI by expected points">${sum(ids.map(nextXp)).toFixed(1)} xP</span>` : '',
+    };
+  };
   return `<div class="match-detail">
     <div class="prob">
       <div class="prob-bar"><span class="m${slotOf(m.home)}" style="flex:${ph}"></span><span class="prob-draw" style="flex:${pd}"></span><span class="m${slotOf(m.away)}" style="flex:${pa}"></span></div>
       <div class="prob-legend"><span>${first(m.home)} ${pct(ph)}</span><span>Draw ${pct(pd)}</span><span>${first(m.away)} ${pct(pa)}</span></div>
     </div>
-    <p class="detail-note">Model score ${eh} – ${ea}: league average, plus ${m.odds.xi ? 'form and each side’s best projected XI' : 'season form'}. Prices carry a ${Math.round((D.meta.oddsOverround - 1) * 100)}% margin.</p>
-    ${m.odds.xi ? matchPitch(projected(m.home, m.odds.xi[0]), projected(m.away, m.odds.xi[1])) : ''}
+    <p class="detail-note">Model score ${eh} – ${ea}: ${D.meta.hasProjections ? 'league average, plus how far each side’s best projected XI sits from the average one' : 'league average, until there are projections'}. Prices carry a ${Math.round((D.meta.oddsOverround - 1) * 100)}% margin.</p>
+    ${m.odds.xi ? `${dueFilters(m.gw)}${matchPitch(projected(m.home, m.odds.xi[0]), projected(m.away, m.odds.xi[1]))}` : ''}
   </div>`;
+}
+
+const when = (ko: string | null | undefined) => {
+  if (!ko) return 'Kick-off to be set';
+  const at = new Date(ko);
+  return `${at.toDateString() === new Date().toDateString() ? 'Today' : fmtWeekday.format(at)} ${fmtTime.format(at)}`;
+};
+
+// When a player kicks off.
+function kickoffPill(ko: string | null | undefined, tip: string) {
+  return `<span class="ptsp ko" data-tip="${esc(tip)}">${kickoffTime(ko)}</span>`;
+}
+
+// When a player's club plays in a gameweek still to come, with the opponent in the tip.
+function kickoffBadge(pid: number, gw: number) {
+  const team = player(pid).club;
+  const games = (gwInfo(gw)?.fixtures ?? []).filter(([h, a]) => h === team || a === team);
+  if (!games.length) return `<span class="ptsp ko" data-tip="No match this gameweek">–</span>`;
+  const tip = games.map(([h, a, ko]) => `${when(ko)}, ${h === team ? 'v' : 'at'} ${club(h === team ? a : h)?.short ?? '?'}`).join(' · ');
+  return kickoffPill(games[0][2], tip);
 }
 
 export function roundSubtitle(gw: number) {
   const info = gwInfo(gw);
-  if (isLive() && gw === D.meta.currentGw) return `Live now · scores update every ${LIVE_URL ? '30 seconds' : '10 minutes'}`;
+  if (isLive() && gw === D.meta.currentGw) return 'Live now';
   if (info?.finished) return 'Final scores';
   const parts = [];
   if (info?.deadline) parts.push(`Deadline ${fmtShortDay.format(new Date(info.deadline))}, ${fmtTime.format(new Date(info.deadline))}`);
@@ -200,9 +270,7 @@ export function roundSubtitle(gw: number) {
 // time; the waivers (also in the header) are left out on phones.
 export function deadlineNote(gw: number) {
   const info = gwInfo(gw);
-  if (isLive() && gw === D.meta.currentGw)
-    return `Live now<span class="wide-only"> · scores update every ${LIVE_URL ? '30 seconds' : '10 minutes'}</span>`;
-  if (!info?.deadline || info.finished) return roundSubtitle(gw);
+  if ((isLive() && gw === D.meta.currentGw) || !info?.deadline || info.finished) return roundSubtitle(gw);
   const waivers = gw === D.meta.nextGw && D.meta.nextWaivers ? new Date(D.meta.nextWaivers) : null;
   const waiverNote =
     waivers && waivers.getTime() > Date.now()

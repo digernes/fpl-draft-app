@@ -115,7 +115,7 @@
 }
 
 /* The photo sits on an opaque background over the kit silhouette, which only shows
-   once a missing photo has removed itself. */
+   while it loads or once a missing photo has removed itself. */
 .photo img {
   position: relative;
   width: 100%;
@@ -123,6 +123,10 @@
   background: var(--hover);
   object-fit: cover;
   object-position: top;
+}
+
+.photo img.loading {
+  background: none;
 }
 
 .photo .kit {
@@ -168,6 +172,15 @@
 .ptsp.xp {
   background: var(--hover);
   color: var(--text);
+}
+
+/* When a projected player plays, before his gameweek starts. */
+.ptsp.ko {
+  background: var(--hover);
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 400;
+  white-space: nowrap;
 }
 
 .tag {

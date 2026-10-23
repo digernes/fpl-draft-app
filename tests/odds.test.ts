@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import { normalCdf, price, rating, winDrawWin } from '../src/build/odds.ts';
+import { fromProjections, normalCdf, price, winDrawWin } from '../src/build/odds.ts';
 import { bestXi } from '../src/shared/best-xi.ts';
 import type { Position } from '../src/shared/data.ts';
 import { gaussian, mulberry32 } from '../src/build/simulation.ts';
@@ -41,15 +41,10 @@ describe('prices', () => {
   });
 });
 
-describe('rating', () => {
-  const results = [40, 60, 70].map((pf, i) => matchResult(i + 1, 0, pf, 50));
-  it('starts at the league mean', () => {
-    assert.equal(rating([], 50), 50);
-  });
-  it('weights recent weeks more', () => {
-    const recentFirst = rating(results, 50);
-    const recentLast = rating([...results].reverse(), 50);
-    assert.ok(recentFirst > recentLast);
+describe('expected scores', () => {
+  it('put each side as far from the league average as its projected XI is from the average one', () => {
+    const score = fromProjections({ 1: 50, 2: 40, 3: 45 }, 47);
+    assert.deepEqual([1, 2, 3].map(score), [52, 42, 47]);
   });
 });
 

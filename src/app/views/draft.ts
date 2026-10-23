@@ -3,7 +3,7 @@
 import type { DraftPick } from '../../shared/data.ts';
 import { squadStrip } from '../cards.ts';
 import { avatar, card, crest, listRow, photo, tag } from '../components.ts';
-import { esc, pct, plural } from '../format.ts';
+import { esc, pct } from '../format.ts';
 import { chevronSvg } from '../icons.ts';
 import { club, first, mgr, player, slotOf } from '../lookups.ts';
 import { D, state } from '../state.ts';
@@ -50,7 +50,6 @@ function originalSquadCard() {
     .join('');
   return card({
     title: 'Original squad',
-    sub: 'How much of each draft is still standing · tap a row for names',
     body: `<div class="squads">${body}</div>`,
   });
 }
@@ -103,7 +102,6 @@ function draftBoardCard() {
   const legend = `<div class="legend">${['GKP', 'DEF', 'MID', 'FWD'].map((pos) => `<span class="legend-item"><i class="pos-${pos}"></i>${pos}</span>`).join('')}<span class="legend-item"><i class="gone-key"></i>No longer with the manager who picked him</span></div>`;
   return card({
     title: 'Draft board',
-    sub: `${plural(rounds, 'round')}, snake order · faded picks have moved on`,
     body: `<div class="board" style="--managers:${order.length}"><div class="db-grid">${head}${rows}</div></div>${legend}`,
   });
 }

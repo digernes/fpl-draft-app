@@ -61,15 +61,20 @@ export function gameweekReviewCard(gw: number, { limit = Infinity, footer = null
   if (!games.length) return '';
   const live = games.some((m) => !m.finished);
   const scores = games.flatMap((m) => [
-    { id: m.home, pts: m.homePts, opp: m.away, oppPts: m.awayPts },
-    { id: m.away, pts: m.awayPts, opp: m.home, oppPts: m.homePts },
+    { id: m.home, pts: m.homePts, opp: m.away, oppPts: m.awayPts, over: m.finished },
+    { id: m.away, pts: m.awayPts, opp: m.home, oppPts: m.homePts, over: m.finished },
   ]);
   type Score = (typeof scores)[number];
-  const verdict = (s: Score) =>
-    `${s.pts > s.oppPts ? 'beat' : s.pts < s.oppPts ? 'lost to' : 'drew with'} ${first(s.opp)} ${s.pts}-${s.oppPts}`;
+  // A match still being played is led, trailed or level, not won or lost.
+  const verdict = (s: Score) => {
+    const [ahead, behind, level] = s.over ? ['beat', 'lost to', 'drew with'] : ['leads', 'trails', 'level with'];
+    return `${s.pts > s.oppPts ? ahead : s.pts < s.oppPts ? behind : level} ${first(s.opp)} ${s.pts}-${s.oppPts}`;
+  };
   const margin = (m: Played) => Math.abs(m.homePts - m.awayPts);
   const winnerOf = (m: Played) => (m.homePts > m.awayPts ? { id: m.home, loser: m.away, side: 0 } : { id: m.away, loser: m.home, side: 2 });
+  // The winner (or the leader) first; a draw as it stands, home first.
   const matchText = (m: Played) => {
+    if (!margin(m)) return `${first(m.home)} ${m.homePts}-${m.awayPts} ${first(m.away)}`;
     const { id, loser } = winnerOf(m);
     return `${first(id)} ${Math.max(m.homePts, m.awayPts)}-${Math.min(m.homePts, m.awayPts)} ${first(loser)}`;
   };
@@ -79,7 +84,7 @@ export function gameweekReviewCard(gw: number, { limit = Infinity, footer = null
   const top = maxOf(scores, (s) => s.pts);
   const low = maxOf(scores, (s) => -s.pts);
   const biggest = maxOf(decided, margin);
-  const closest = maxOf(decided, (m) => -margin(m));
+  const closest = maxOf(games, (m) => -margin(m)); // a draw is as close as it gets
   const star = maxOf(
     D.managers.flatMap((mg) => (lineupFor(mg.id, gw)?.xi ?? []).map((pid) => ({ pid, id: mg.id, pts: gwPoints(pid, gw) }))),
     (x) => x.pts,
@@ -88,7 +93,7 @@ export function gameweekReviewCard(gw: number, { limit = Infinity, footer = null
   const upset = maxOf(
     decided
       .filter((m) => m.odds)
-      .map((m) => ({ ...winnerOf(m), p: m.odds!.p[winnerOf(m).side], price: m.odds!.prices[winnerOf(m).side] }))
+      .map((m) => ({ ...winnerOf(m), over: m.finished, p: m.odds!.p[winnerOf(m).side], price: m.odds!.prices[winnerOf(m).side] }))
       .filter((u) => u.p < 0.4),
     (u) => -u.p,
   );
@@ -125,26 +130,32 @@ export function gameweekReviewCard(gw: number, { limit = Infinity, footer = null
         meta: `${esc(player(star.pid).name)} ${crest(player(star.pid).club, 14)} · for ${first(star.id)}`,
         value: star.pts,
       }),
-    biggest && listRow({ lead: pair(biggest), title: 'Biggest win', meta: matchText(biggest), value: `+${margin(biggest)}` }),
+    biggest &&
+      listRow({
+        lead: pair(biggest),
+        title: biggest.finished ? 'Biggest win' : 'Biggest lead',
+        meta: matchText(biggest),
+        value: `+${margin(biggest)}`,
+      }),
     upset &&
       listRow({
         lead: avatar(upset.id, 32),
         title: 'Upset',
-        meta: `${first(upset.id)} beat ${first(upset.loser)} at ${priceText(upset.price)}`,
+        meta: `${first(upset.id)} ${upset.over ? 'beat' : 'leads'} ${first(upset.loser)} at ${priceText(upset.price)}`,
         value: pct(upset.p),
       }),
     climber &&
       listRow({
         lead: avatar(climber.id, 32),
         title: 'Climber',
-        meta: `${first(climber.id)}, up to ${ordinal(climber.rank)}`,
+        meta: `${first(climber.id)}, up to ${ordinal(climber.rank)}${live ? ' as it stands' : ''}`,
         value: move(climber, 'good'),
       }),
     faller &&
       listRow({
         lead: avatar(faller.id, 32),
         title: 'Faller',
-        meta: `${first(faller.id)}, down to ${ordinal(faller.rank)}`,
+        meta: `${first(faller.id)}, down to ${ordinal(faller.rank)}${live ? ' as it stands' : ''}`,
         value: move(faller, 'bad'),
       }),
     signing &&
@@ -157,7 +168,12 @@ export function gameweekReviewCard(gw: number, { limit = Infinity, footer = null
     bench && bench.pts > 0 && listRow({ lead: avatar(bench.id, 32), title: 'Left on the bench', meta: first(bench.id), value: bench.pts }),
     closest &&
       closest !== biggest &&
-      listRow({ lead: pair(closest), title: 'Closest match', meta: matchText(closest), value: `+${margin(closest)}` }),
+      listRow({
+        lead: pair(closest),
+        title: 'Closest match',
+        meta: matchText(closest),
+        value: margin(closest) ? `+${margin(closest)}` : closest.finished ? 'Draw' : 'Level',
+      }),
     low && listRow({ lead: avatar(low.id, 32), title: 'Lowest score', meta: `${first(low.id)} · ${verdict(low)}`, value: low.pts }),
   ].filter(Boolean);
   const average = Math.round(sum(scores.map((s) => s.pts)) / scores.length);

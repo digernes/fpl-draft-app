@@ -1,6 +1,6 @@
 // Page chrome: routing, theme, settings, search, tooltips and click handling.
 
-import { avatar, crest, empty, photo, tag } from './components.ts';
+import { avatar, crest, empty, markLoadingPhotos, photo, tag } from './components.ts';
 import { esc } from './format.ts';
 import { applyLatestLive, applyLatestTransfers, loadData, pollTransfers, scheduleRefresh } from './live-scores.ts';
 import { club, first, matchKey, seasonSlug } from './lookups.ts';
@@ -59,6 +59,13 @@ function onClick(event: MouseEvent) {
   } else if (action === 'odds') {
     state.odds = value;
     store.set('draft.odds', value);
+    renderView();
+  } else if (action === 'due') {
+    state.due = value;
+    renderView();
+  } else if (action === 'xp') {
+    state.xp = value;
+    store.set('draft.xp', value);
     renderView();
   } else if (action === 'table-mode') {
     state.tableMode = value;
@@ -122,7 +129,8 @@ function goToGameweek(gw: number) {
 
 export function bindChrome() {
   document.addEventListener('click', onClick);
-  document.addEventListener('error', onPhotoError, true); // image errors don't bubble
+  document.addEventListener('error', onPhotoError, true); // image events don't bubble
+  document.addEventListener('load', (event) => (event.target as Element).classList?.remove('loading'), true);
   document.addEventListener('change', (event) => {
     const select = event.target as HTMLSelectElement;
     if (select.matches('[data-action="gw-select"]')) goToGameweek(Number(select.value));
@@ -162,6 +170,7 @@ function onPhotoError(event: Event) {
   if (img.dataset.fallback) {
     img.src = img.dataset.fallback;
     delete img.dataset.fallback;
+    img.classList.add('loading');
   } else {
     img.remove();
   }
@@ -201,6 +210,7 @@ function bindSearch() {
           })
           .join('')
       : empty('No players found');
+    markLoadingPhotos(panel);
     panel.hidden = false;
   };
   input.addEventListener('input', show);

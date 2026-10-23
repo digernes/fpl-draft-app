@@ -28,6 +28,8 @@ export interface Data {
   underlying?: ById<ById<Underlying>>;
   /** While a gameweek is being played: its live feed, so the page can tell who is still to play. */
   live?: LiveData;
+  /** FPL's chance of playing at each deadline for everyone it flagged (doubtful, injured or suspended), by gameweek: kept to test how the model reads flags. */
+  flags?: ById<ById<number>>;
   topGameweeks: TopGameweek[];
   worstGameweeks: GameweekScore[];
   seasonStats: SeasonStat[];
@@ -84,6 +86,8 @@ export interface Gameweek {
   finished: boolean;
   /** Clubs playing twice. */
   doubles: number[];
+  /** Its Premier League fixtures, [home, away, kick-off], while it is still to come. */
+  fixtures?: [number, number, string | null][];
 }
 
 export interface Price {
@@ -228,8 +232,8 @@ export interface Simulation {
   gameweeksLeft: number;
   model: {
     leagueAverage: number;
-    formWeight: number;
-    projectionWeight: number;
+    /** How many gameweeks ahead get their own projected XIs; 0 before there are projections. */
+    projected: number;
     levelSpread: number;
     spread: number;
     laterSpread: number;
@@ -262,8 +266,14 @@ export interface Lineup {
 
 export interface LiveData extends SlimLive {
   gw: number;
-  /** FPL's expected points for this gameweek, for everyone in a lineup. */
+  /** Expected points for this gameweek, for everyone in a lineup. */
   ep: ById<number>;
+  /** Of those, the appearance and clean-sheet points, which FPL hands out at 1 and 60 minutes (from the site's model only). */
+  milestones?: ById<[appearance: number, cleanSheet: number]>;
+  /** Points for a clean sheet, by position. */
+  cleanSheet?: Partial<Record<Position, number>>;
+  /** FPL's own expected points as they were at the deadline, for the setting that shows them; left out when `ep` is FPL's already. */
+  fplEp?: ById<number>;
 }
 
 export interface GameweekScore {
@@ -425,7 +435,10 @@ export interface Player {
   owner: number | null;
   status: string;
   news?: string;
+  /** Expected points for the next gameweek, from the site's model (FPL's before a gameweek has been played). */
   ep: number;
+  /** FPL's own, its form, for the setting that shows them instead; left out when `ep` is FPL's already. */
+  fpl?: number;
 }
 
 export interface SeasonIndex {

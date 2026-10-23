@@ -1,9 +1,20 @@
 // Data tables (fotmob-style grid with container-query column hiding) and the table views.
 
 import type { ClubRow, FormRow, LuckRow, Match, OverallRow, PointsRow, Simulation, XgRow } from '../shared/data.ts';
-import { avatar, clubCell, formPills, managerCell, markedHeader, PRIZE_MARKS, rankDelta, seg, simCell, withDiff } from './components.ts';
+import {
+  avatar,
+  clubCell,
+  formPills,
+  infoButton,
+  managerCell,
+  markedHeader,
+  PRIZE_MARKS,
+  rankDelta,
+  seg,
+  simCell,
+  withDiff,
+} from './components.ts';
 import { esc, ordinal, plural, signed, sum } from './format.ts';
-import { infoSvg } from './icons.ts';
 import { first, isLive } from './lookups.ts';
 import { D, state } from './state.ts';
 
@@ -48,7 +59,22 @@ export function dataTable<R extends Keyed>(
   rows: R[],
   { rowClass = () => '', qual = () => null, full = false }: TableOptions<R> = {},
 ) {
-  if (full) cols = cols.filter((c) => !c.until).map((c) => ({ ...c, from: 'xs', w: typeof c.w === 'object' ? c.w.lg : c.w }));
+  let minWidth = 0;
+  if (full) {
+    cols = cols.filter((c) => !c.until);
+    // The desktop widths, except that on a phone, where the table scrolls, the position
+    // keeps the narrow table's (controls.css sets --pos-w).
+    const phone = (c: Column<R>) => (typeof c.w === 'object' ? (c.cls === 'c-pos' ? c.w.xs : c.w.lg) : c.w);
+    // Wide enough for that: fixed columns, 12px gaps, 24px end padding and ~100px for the
+    // manager column (avatar and first name: phones leave the team name out); never under
+    // 560px so the form pills get desktop gaps.
+    minWidth = Math.max(560, sum(cols.map((c) => (/^\d+px$/.test(phone(c)) ? parseInt(phone(c), 10) : 100))) + 12 * (cols.length - 1) + 24);
+    cols = cols.map((c) => ({
+      ...c,
+      from: 'xs',
+      w: typeof c.w === 'object' ? (c.cls === 'c-pos' ? `var(--pos-w, ${c.w.lg})` : c.w.lg) : c.w,
+    }));
+  }
   const visible = (col: Column<R>, bp: Breakpoint) => {
     const i = BREAKPOINTS.indexOf(bp);
     return BREAKPOINTS.indexOf(col.from ?? 'xs') <= i && i <= BREAKPOINTS.indexOf(col.until ?? 'lg');
@@ -72,13 +98,6 @@ export function dataTable<R extends Keyed>(
       return `<div class="trow ${rowClass(row)}${q ? ' qual' : ''}" data-key="${rowKey(row)}"${open}${q ? ` style="--qual:${q}"` : ''}>${cols.map((col) => cell(col, col.cell(row))).join('')}</div>`;
     })
     .join('');
-  // Wide enough for the desktop layout: fixed columns, 12px gaps, 24px end padding and
-  // ~100px for the manager column (avatar and first name: phones leave the team name
-  // out); never under 560px so the form pills get desktop gaps.
-  const minWidth = Math.max(
-    560,
-    sum(cols.map((c) => (/^\d+px$/.test(c.w as string) ? parseInt(c.w as string, 10) : 100))) + 12 * (cols.length - 1) + 24,
-  );
   const table = `<div class="ftable${full ? ' full' : ''}" style="${templates}${full ? `;min-width:${minWidth}px` : ''}"><div class="trow thead">${head}</div>${body}</div>`;
   return full ? `<div class="table-scroll">${table}</div>` : table;
 }
@@ -200,16 +219,16 @@ export function tableModeToggle(viewId: string, cls = '') {
 // The simulation's formula with this season's numbers, for the (i) by the legend.
 function simulationFormula() {
   const m = D.simulation.model;
-  const share = (w: number) => `${Math.round(w * 100)}%`;
+  const weeks =
+    m.projected === 1 ? 'the next gameweek’s, and the same after' : `each of the next ${m.projected} gameweeks’ own, then their average`;
   return [
     'Each simulated week, a manager scores:',
     `league average (${m.leagueAverage})`,
-    `+ ${share(m.formWeight)} × (their form − league average)`,
-    m.projectionWeight ? `+ ${share(m.projectionWeight)} × (projected XI − average projected XI), next gameweek only` : null,
+    m.projected ? `+ how far their projected XI sits from the average one (${weeks})` : null,
     `+ their level for this run (typically ±${m.levelSpread} a week)`,
     `+ that week’s randomness (typically ±${m.spread}, ±${m.laterSpread} after next week)`,
     '',
-    'Form is this season’s average score, weighting recent weeks more and pulled towards the league average while there are few weeks. Higher score wins 3 points, level scores draw. Equal points split on points scored.',
+    'A projected XI is the best one their squad can field, by the site’s expected points. Higher score wins 3 points, level scores draw. Equal points split on points scored.',
   ]
     .filter((line) => line !== null)
     .join('\n');
@@ -369,7 +388,7 @@ export const TABLE_VIEWS: Record<string, RenderedView> = {
     info: simulationFormula,
     note: () =>
       D.simulation.gameweeksLeft
-        ? `The rest of the season played ${D.simulation.runs.toLocaleString()} times: ${plural(D.simulation.gameweeksLeft, 'gameweek')} to go. Each week’s scores are drawn around current form, the same way the odds are made, and ties on points go to points scored.`
+        ? `The rest of the season played ${D.simulation.runs.toLocaleString()} times: ${plural(D.simulation.gameweeksLeft, 'gameweek')} to go. Each week’s scores are drawn around each side’s projected XI, the same way the odds are made, and ties on points go to points scored.`
         : 'The season is over, so these are the final positions.',
   }),
   points: tableView<PointsRow>({
@@ -441,9 +460,7 @@ function renderTable<R extends Keyed>(view: TableView<R>) {
     qual: (r) => view.qual?.(r, rows),
     full: state.tableMode === 'full',
   });
-  const info = view.info
-    ? `<button type="button" class="info-btn" data-tip="${esc(view.info())}" aria-label="How this is worked out">${infoSvg}</button>`
-    : '';
+  const info = view.info ? infoButton(view.info(), 'How this is worked out') : '';
   const legend =
     view.legend || info
       ? `<div class="legend">${(view.legend ?? []).map(([color, label]) => `<span class="legend-item"><i style="background:${color}"></i>${label}</span>`).join('')}${info}</div>`

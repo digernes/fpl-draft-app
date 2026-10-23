@@ -34,3 +34,8 @@ export const seasonSlug = (season: string) => season.replace('/', '-');
 export const seasonLabel = (season: string) => `${Number(season.slice(0, 4))}/${Number(season.slice(0, 4)) + 1}`;
 export const seasonEntry = () => seasons.find((s) => seasonSlug(s.season) === state.season);
 export const isArchive = () => Boolean(seasonEntry() && !seasonEntry()!.current);
+
+// Expected points by the cog's setting: the site's own (by default) or FPL's form, for the
+// next gameweek and for the one being played.
+export const nextXp = (pid: number) => (state.xp === 'fpl' ? (player(pid).fpl ?? player(pid).ep) : player(pid).ep);
+export const liveXp = (pid: number) => (state.xp === 'fpl' ? D.live?.fplEp?.[pid] : undefined) ?? D.live?.ep[pid] ?? nextXp(pid);

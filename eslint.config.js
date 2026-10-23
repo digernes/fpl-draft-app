@@ -16,6 +16,6 @@ export default tseslint.config(
   },
   { files: ['src/app/**'], languageOptions: { globals: globals.browser } },
   { files: ['src/sw.ts', 'worker/**'], languageOptions: { globals: globals.serviceworker } },
-  { files: ['scripts/**', 'src/build/**', 'tests/**', '*.js'], languageOptions: { globals: globals.node } },
+  { files: ['scripts/**', 'src/build/**', 'src/model/**', 'tests/**', '*.js'], languageOptions: { globals: globals.node } },
   prettier,
 );

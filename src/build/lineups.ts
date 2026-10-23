@@ -2,8 +2,9 @@
 // the double-gameweek adjustment, bench points and expected points, and what the
 // players in it did.
 
-import type { ById, LiveData, Lineup, Manager, Match, Underlying } from '../shared/data.ts';
+import type { ById, Data, LiveData, Lineup, Manager, Match, Underlying } from '../shared/data.ts';
 import { scoreLineup, slimLive, type PlayerEvents, type SlimLive } from '../shared/live.ts';
+import { readScoring } from '../model/points.ts';
 import { DGW_PENALTY } from './config.ts';
 import type { Season } from './season.ts';
 import { round, sum } from './util.ts';
@@ -119,12 +120,52 @@ export function buildEvents(season: Season, lineups: Lineups): ById<ById<PlayerE
 
 // The gameweek being played, as the page needs it to show who is still to play and
 // to price the matches in play. Nothing once it is over.
-export function buildLiveData(season: Season, lineups: Lineups, expectedNow: (pid: number) => number): LiveData | undefined {
+//
+/** The expected points the live block carries, from oddsModel. */
+export interface LiveExpected {
+  /** The site's for the gameweek being played, or FPL's while those are all there is. */
+  now: (pid: number) => number;
+  fromFpl: boolean;
+  /** FPL's own for it. */
+  fplNow: (pid: number) => number;
+  /** Of the site's, the appearance and clean-sheet points. */
+  milestones?: (pid: number) => [number, number] | undefined;
+}
+
+// The gameweek being played, as the page needs it to show who is still to play and
+// to price the matches in play. Nothing once it is over.
+//
+// FPL's expected points come from form: the average over the last 30 days' gameweeks,
+// which from the deadline counts this one with nothing scored yet, so everyone's drops
+// until the points come in. So FPL's are kept from the last build before the deadline
+// (`previous`, whose players' expected points were for this gameweek), as every build
+// since keeps them, both when they stand in for the site's (until a gameweek has been
+// played) and next to them, for the setting that shows FPL's. The site's own don't move
+// at the deadline.
+export function buildLiveData(season: Season, lineups: Lineups, x: LiveExpected, previous: Partial<Data> | null): LiveData | undefined {
   const { currentGw: gw, finishedGws, live } = season;
   if (!gw || finishedGws.includes(gw) || !live[gw]) return undefined;
-  const ids = new Set(Object.values(lineups).flatMap((byGw) => byGw[gw]?.picks ?? []));
-  const ep = Object.fromEntries([...ids].sort((a, b) => a - b).map((pid) => [pid, round(expectedNow(pid), 1)]));
-  return { gw, ...slimLive(live[gw]), ep };
+  const ids = [...new Set(Object.values(lineups).flatMap((byGw) => byGw[gw]?.picks ?? []))].sort((a, b) => a - b);
+  const before = previous?.live?.gw === gw ? previous.live : null;
+  const atDeadline = !before && previous?.meta?.nextGw === gw ? previous.players : null;
+  const fpl = (pid: number) =>
+    (x.fromFpl ? before?.ep[pid] : before?.fplEp?.[pid]) ??
+    (x.fromFpl ? atDeadline?.[pid]?.ep : atDeadline?.[pid]?.fpl) ??
+    round(x.fplNow(pid), 1);
+  const feed = { gw, ...slimLive(live[gw]) };
+  if (x.fromFpl) return { ...feed, ep: Object.fromEntries(ids.map((pid) => [pid, fpl(pid)])) };
+  const milestones: ById<[number, number]> = {};
+  for (const pid of ids) {
+    const m = x.milestones?.(pid);
+    if (m) milestones[pid] = [round(m[0], 2), round(m[1], 2)];
+  }
+  return {
+    ...feed,
+    ep: Object.fromEntries(ids.map((pid) => [pid, round(x.now(pid), 1)])),
+    milestones,
+    cleanSheet: readScoring(season.boot.settings.scoring).cleanSheet,
+    fplEp: Object.fromEntries(ids.map((pid) => [pid, fpl(pid)])),
+  };
 }
 
 /** A manager's lineup in a gameweek, if they had one. */

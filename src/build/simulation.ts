@@ -4,7 +4,7 @@
 // points scored, as in the real table. A match still being played starts from scratch.
 
 import type { Match, OverallRow, Simulation } from '../shared/data.ts';
-import { FORM_WEIGHT, PROJECTION_WEIGHT, SIM_RUNS, SIM_SEED, SIM_SKILL_SPREAD } from './config.ts';
+import { SIM_RUNS, SIM_SEED, SIM_SKILL_SPREAD } from './config.ts';
 import type { OddsModel } from './odds.ts';
 import type { Season } from './season.ts';
 import { round } from './util.ts';
@@ -44,8 +44,7 @@ export function simulate(season: Season, managerIds: number[], matches: Match[],
     // The numbers behind the model, for the formula shown on the page.
     model: {
       leagueAverage: round(model.leagueMean, 1),
-      formWeight: FORM_WEIGHT,
-      projectionWeight: model.hasProjections ? PROJECTION_WEIGHT : 0,
+      projected: model.hasProjections ? model.priced.length : 0,
       levelSpread: SIM_SKILL_SPREAD,
       spread: round(model.sigma, 1),
       laterSpread: round(spreadFor(season.nextGw + 1), 1),

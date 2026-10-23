@@ -1,7 +1,7 @@
 // The Overview tab: this round, the latest review and table, the prize and the market.
 
 import { feed, feedRow, gameweekReviewCard, resultText, squadStrip } from '../cards.ts';
-import { avatar, card, empty, listRow } from '../components.ts';
+import { avatar, card, empty, infoButton, listRow } from '../components.ts';
 import { esc } from '../format.ts';
 import { first, isLive, lineupFor, player } from '../lookups.ts';
 import { featuredGw, matchList, oddsToggle, roundSubtitle } from '../matches.ts';
@@ -42,9 +42,12 @@ function tableCard() {
 
 function gwPrizeCard() {
   const title = 'Highest gameweek prize';
-  const sub = `Best score after −${D.meta.dgwPenalty} per double-gameweek player · earlier week wins a tie`;
+  const action = infoButton(
+    `Best score after −${D.meta.dgwPenalty} per double-gameweek player in the XI. An earlier week wins a tie.`,
+    'Rules',
+  );
   const holders = D.topGameweeks.filter((g) => g.rank === 1);
-  if (!holders.length) return card({ title, sub, body: empty('Up for grabs once the first gameweek finishes') });
+  if (!holders.length) return card({ title, action, body: empty('Up for grabs once the first gameweek finishes') });
   const seasonOver = D.gameweeks.every((g) => g.finished);
   const label = seasonOver ? 'Winner' : holders.length > 1 ? 'Joint holders' : 'Current holder';
   const hero = holders
@@ -87,7 +90,7 @@ function gwPrizeCard() {
     );
   return card({
     title,
-    sub,
+    action,
     body: `${hero}${live}${chasers.length ? `<div class="date-head"><span>Chasing</span></div><div class="list">${chasers.join('')}</div>` : ''}`,
     footer: { href: '#stats', label: 'All top gameweeks' },
   });

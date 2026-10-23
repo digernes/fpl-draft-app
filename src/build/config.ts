@@ -9,18 +9,15 @@ export const SCHEMA = 1;
 export const DGW_PENALTY = 4;
 export const TOP_GAMEWEEKS = 10;
 export const FORM_LENGTH = 5;
-// Odds: bookmaker overround and how many gameweeks ahead get prices. A manager's
-// expected score is the league average plus a share of how far their form, and (next
-// gameweek only) their best projected XI, sit from the league's. FPL's own expected
-// points spread far wider than real scores do, hence the small projection share.
+// Odds: bookmaker overround, how many gameweeks ahead get prices, and the least spread
+// of a score around its expected value. A manager's expected score is the league average
+// plus how far their best projected XI that gameweek sits from the league's average one.
 export const ODDS_OVERROUND = 1.05;
 export const ODDS_GAMEWEEKS = 3;
-export const FORM_WEIGHT = 0.6;
-export const PROJECTION_WEIGHT = 0.3;
 export const MIN_SCORE_SPREAD = 13;
 // Season simulation: runs of the remaining fixtures, and how far a manager's true
-// level may sit from their form (points a week), drawn once per run. Seeded, so the
-// same data always gives the same percentages.
+// level may sit from their projections (points a week), drawn once per run. Seeded, so
+// the same data always gives the same percentages.
 export const SIM_RUNS = 10000;
 export const SIM_SKILL_SPREAD = 3;
 export const SIM_SEED = 20262027;

@@ -28,6 +28,9 @@ let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 let liveTimer: ReturnType<typeof setTimeout> | undefined;
 let transfersTimer: ReturnType<typeof setTimeout> | undefined;
 let latestTransfers: SlimTransfers | null = null;
+// The relay has owners data.json hasn't caught up with, so the Worker is starting a build:
+// look for it as often as in a live gameweek.
+let behind = false;
 
 export async function loadSeasons() {
   try {
@@ -110,6 +113,10 @@ export async function pollLive() {
   liveTimer = setTimeout(pollLive, playing ? LIVE_POLL_MS : LIVE_IDLE_MS);
 }
 
+// Checked before the relay's owners are merged in, which makes them match.
+const ownersAhead = (slim: SlimTransfers) =>
+  Object.keys(slim.owners).length > 0 && Object.entries(D.players).some(([pid, p]) => (slim.owners[pid] ?? null) !== p.owner);
+
 // Moves made since data.json was built, so the feed and "Who owns…?" keep up between builds.
 export function applyLatestTransfers() {
   return latestTransfers && !isArchive() ? mergeTransfers(D, latestTransfers) : false;
@@ -123,6 +130,10 @@ export async function pollTransfers() {
       const res = await fetch(`${LIVE_URL}/transfers`, { cache: 'no-store' });
       if (res.ok) {
         latestTransfers = (await res.json()) as SlimTransfers;
+        if (!behind && ownersAhead(latestTransfers)) {
+          behind = true;
+          scheduleRefresh();
+        }
         if (applyLatestTransfers()) renderView();
       }
     } catch {
@@ -140,7 +151,7 @@ export function scheduleRefresh() {
       await refresh();
       scheduleRefresh();
     },
-    isLive() ? LIVE_REFRESH_MS : REFRESH_MS,
+    isLive() || behind ? LIVE_REFRESH_MS : REFRESH_MS,
   );
 }
 
@@ -149,6 +160,7 @@ export async function refresh() {
   try {
     if (await loadData()) {
       applyLatestLive();
+      behind = latestTransfers !== null && ownersAhead(latestTransfers);
       applyLatestTransfers();
       renderAll();
       pollLive();

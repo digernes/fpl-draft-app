@@ -5,15 +5,15 @@
 //   /live/<gameweek>   live scores, slimmed from ~450 KB to a few KB
 //   /transfers         this league's moves, trades and owners, between builds
 //
-// It also starts the data build on a timer (timer.ts). Deploy with `npx wrangler deploy`
-// from this folder.
+// It also starts the data build on a timer and after transfers (timer.ts). Deploy with
+// `npx wrangler deploy` from this folder.
 
 import type { z } from 'zod';
 
 import { ElementStatus, LiveFeed, Trades, Transactions } from '../src/shared/fpl-api.ts';
 import { slimLive } from '../src/shared/live.ts';
 import { slimTransfers } from '../src/shared/transfers.ts';
-import { buildDue, startBuild, type TimerEnv } from './timer.ts';
+import { buildDue, ownersMoved, startBuild, type TimerEnv } from './timer.ts';
 
 const API = 'https://draft.premierleague.com/api';
 const LIVE_SECONDS = 20; // everyone watching shares one fetch per 20 seconds
@@ -28,15 +28,19 @@ interface Env extends TimerEnv {
   LEAGUE_ID?: string;
 }
 
+const league = (env: Env) => Number(env.LEAGUE_ID ?? 23793);
+
 class Upstream extends Error {}
 
 export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    if (!buildDue(new Date(controller.scheduledTime))) return;
+    const due = buildDue(new Date(controller.scheduledTime));
     ctx.waitUntil(
-      startBuild(env).then((res) => {
+      (async () => {
+        if (!due && !(await ownersMoved(env, league(env)))) return;
+        const res = await startBuild(env);
         if (res && !res.ok) console.error(`GitHub answered ${res.status} when starting the build`);
-      }),
+      })(),
     );
   },
 
@@ -66,11 +70,11 @@ export default {
       if (route === 'live') {
         body = { gw: Number(gw), ...slimLive(await get(`event/${gw}/live`, LiveFeed)) };
       } else {
-        const league = Number(env.LEAGUE_ID ?? 23793);
+        const id = league(env);
         const [tx, trades, status] = await Promise.all([
-          get(`draft/league/${league}/transactions`, Transactions),
-          get(`draft/league/${league}/trades`, Trades),
-          get(`league/${league}/element-status`, ElementStatus),
+          get(`draft/league/${id}/transactions`, Transactions),
+          get(`draft/league/${id}/trades`, Trades),
+          get(`league/${id}/element-status`, ElementStatus),
         ]);
         body = slimTransfers(tx.transactions, trades.trades, status.element_status);
       }

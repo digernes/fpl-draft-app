@@ -42,22 +42,61 @@
   overscroll-behavior-x: contain;
 }
 
-/* In the Full table on a phone the manager column stays put while the numbers scroll
-   under it. (On wider screens the Full table fits, so nothing needs pinning.) */
+/* In the Full table on a phone the qualification mark, position and manager stay put
+   while the numbers scroll under them, with the narrow table's tighter left side. (On
+   wider screens the Full table fits, so nothing needs pinning.) */
 @media (max-width: 599px) {
+  .ftable.full {
+    --pos-w: 32px;
+  }
+
+  .ftable.full .c-pos,
   .ftable.full .c-team {
     position: sticky;
-    left: 0;
     z-index: 1;
     display: flex;
     align-items: center;
     align-self: stretch;
     background: var(--card);
+  }
+
+  .ftable.full .c-pos {
+    left: 0;
+    padding-left: 8px;
+    border-radius: 8px 0 0 8px;
+  }
+
+  /* Reaching back over the column gap, so nothing shows between the two. */
+  .ftable.full .c-team {
+    left: var(--pos-w);
+    margin-left: -12px;
+    padding-left: 12px;
     box-shadow: 8px 0 8px -8px rgba(0, 0, 0, 0.3);
   }
 
+  .ftable.full .trow.featured .c-pos,
   .ftable.full .trow.featured .c-team {
     background: var(--featured);
+  }
+
+  /* The mark moves onto the pinned position, as the row's own scrolls away. */
+  .ftable.full .trow.qual::before {
+    content: none;
+  }
+
+  .ftable.full .trow.qual .c-pos::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: 4px;
+    width: 2px;
+    height: 28px;
+    border-radius: 1px;
+    background: var(--qual);
+  }
+
+  .ftable.full .who {
+    gap: 8px;
   }
 
   /* Just the manager and the numbers: the team names would only widen the scroll. */

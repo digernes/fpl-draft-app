@@ -14,6 +14,7 @@ export function buildPlayers(
   draftPlayers: number[],
   lineups: ById<ById<Lineup>>,
   expected: (pid: number) => number,
+  fpl?: (pid: number) => number,
 ): ById<Player> {
   const { elements, ownerNow, transactions, trades, gws, pointsIn } = season;
   // Only players in the league's story get their points gameweek by gameweek.
@@ -39,6 +40,7 @@ export function buildPlayers(
       status: el.status,
       ...(el.news ? { news: el.news } : {}),
       ep: round(expected(pid), 1),
+      ...(fpl ? { fpl: round(fpl(pid), 1) } : {}),
     };
   }
   return players;

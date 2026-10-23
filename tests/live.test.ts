@@ -2,7 +2,9 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 
-import type { Position } from '../src/shared/data.ts';
+import { buildLiveData } from '../src/build/lineups.ts';
+import type { Season } from '../src/build/season.ts';
+import type { Data, Position } from '../src/shared/data.ts';
 import {
   clubState,
   liveProjection,
@@ -181,8 +183,33 @@ describe('slimLive', () => {
     });
     assert.deepEqual(slim.elements, { 5: [6, 90] });
     assert.deepEqual(slim.events, { 5: { goals: 1 } }); // no starts or per-match minutes: no substitutions
-    assert.deepEqual(slim.fixtures[0], { id: 9, h: 1, a: 2, started: true, done: false, min: 55, bps: [[5, 30]] });
+    assert.deepEqual(slim.fixtures[0], { id: 9, h: 1, a: 2, started: true, done: false, min: 55, score: [1, 0], bps: [[5, 30]] });
     assert.equal(slim.fixtures[1].bps, undefined);
+  });
+
+  it('takes the minute from the players, since FPL leaves the match’s at 0 while it is on', () => {
+    const slim = slimLive({
+      elements: {
+        5: {
+          stats: { total_points: 1, minutes: 23, goals_scored: 0, assists: 0, clean_sheets: 0, goals_conceded: 0 },
+          explain: [[[{ stat: 'minutes', value: 23 }], 9]],
+        },
+      },
+      fixtures: [
+        {
+          id: 9,
+          team_h: 1,
+          team_a: 2,
+          started: true,
+          finished: false,
+          finished_provisional: false,
+          team_h_score: 0,
+          team_a_score: 0,
+          minutes: 0,
+        },
+      ],
+    });
+    assert.equal(slim.fixtures[0].min, 23);
   });
 
   it('says what each player did, with substitutions from the minutes in each match', () => {
@@ -251,8 +278,74 @@ describe('who is still to play', () => {
   it('projects the final score from what is left', () => {
     const info = (id: number) => ({ pos: 'MID' as const, club: id });
     const scored = { xi: [1, 3, 5], bench: [], subs: [], pts: 20, points: () => 0 };
-    const { mean, variance } = liveProjection(scored, feed, info, () => 6);
+    const { mean, variance } = liveProjection(scored, feed, info, { points: () => 6 });
     assert.ok(Math.abs(mean - (20 + 6 / 3 + 6)) < 1e-9);
     assert.ok(Math.abs(variance - (1 / 3 + 1) * 9) < 1e-9);
+  });
+
+  it('works out appearance points and clean sheets from where the match stands', () => {
+    // A defender 60 minutes into a goalless match, 6 points in (2 for playing, 4 for the
+    // clean sheet FPL already shows), expecting 6 over the match: 2 for playing and 1.6
+    // for a clean sheet (a 40% chance at 4 points).
+    const live: SlimLive = {
+      elements: { 9: [6, 60] },
+      fixtures: [{ id: 1, h: 9, a: 10, started: true, done: false, min: 60, score: [0, 0] }],
+    };
+    const info = () => ({ pos: 'DEF' as const, club: 9 });
+    const scored = { xi: [9], bench: [], subs: [], pts: 6, points: () => 6 };
+    const expected = { points: () => 6, milestones: (): [number, number] => [2, 1.6], cleanSheet: { DEF: 4 } };
+    const { mean } = liveProjection(scored, live, info, expected);
+    // A third of the rest (2.4 / 3), nothing more for playing, and the clean sheet kept
+    // with a chance of 0.4^(1/3) instead of counted on top of the 4 already in.
+    assert.ok(Math.abs(mean - (6 + 2.4 / 3 + 4 * 0.4 ** (1 / 3) - 4)) < 1e-9);
+    // Once a goal goes in, the clean sheet is gone from the points and from the projection.
+    const behind = { ...live, fixtures: [{ ...live.fixtures[0], score: [0, 1] as [number, number] }] };
+    assert.ok(Math.abs(liveProjection({ ...scored, pts: 2 }, behind, info, expected).mean - (2 + 2.4 / 3)) < 1e-9);
+  });
+
+  it('counts the bench player who will come on for a starter who won’t play', () => {
+    const info = (id: number) => ({ pos: (id === 9 ? 'GKP' : 'MID') as Position, club: id, status: id === 6 ? 'i' : 'a' });
+    // 1's match is over without him and 6 is injured; 9 is the bench goalkeeper, so 5 and 3 come on.
+    const scored = { xi: [1, 6], bench: [9, 5, 3], subs: [], pts: 10, points: () => 0 };
+    const { mean } = liveProjection(scored, feed, info, { points: () => 6 }, { DEF: 0, MID: 0, FWD: 0 });
+    assert.ok(Math.abs(mean - (10 + 6 + 6 / 3)) < 1e-9);
+  });
+});
+
+describe('buildLiveData', () => {
+  const season = {
+    currentGw: 8,
+    finishedGws: [7],
+    live: { 8: { elements: {}, fixtures: [] } },
+    boot: { settings: { scoring: { clean_sheets_DEF: 4 } } },
+  } as unknown as Season;
+  const lineups = { 1: { 8: { picks: [5, 6, 7] } } } as unknown as Parameters<typeof buildLiveData>[1];
+  const fplNow = () => 2; // FPL's, after the deadline has cut everyone's form
+  const fromFpl = (previous: Partial<Data> | null) => buildLiveData(season, lineups, { now: fplNow, fromFpl: true, fplNow }, previous);
+  const fromModel = (previous: Partial<Data> | null) =>
+    buildLiveData(season, lineups, { now: () => 4, fromFpl: false, fplNow, milestones: () => [1.9, 1.2] }, previous);
+
+  it('keeps FPL’s expected points from the last build before the deadline', () => {
+    const before = { meta: { nextGw: 8 }, players: { 5: { ep: 6, fpl: 5 }, 6: { ep: 4.5, fpl: 3 } } } as unknown as Partial<Data>;
+    assert.deepEqual(fromFpl(before)?.ep, { 5: 6, 6: 4.5, 7: 2 }); // FPL's standing in
+    const model = fromModel(before);
+    assert.deepEqual(model?.ep, { 5: 4, 6: 4, 7: 4 }); // the site's own, which don't drop
+    assert.deepEqual(model?.fplEp, { 5: 5, 6: 3, 7: 2 });
+    assert.deepEqual(model?.milestones?.[5], [1.9, 1.2]);
+    assert.equal(model?.cleanSheet?.DEF, 4);
+  });
+
+  it('keeps them through the gameweek', () => {
+    const since = {
+      meta: { nextGw: 9 },
+      live: { gw: 8, ep: { 5: 6, 6: 4.5, 7: 3 }, fplEp: { 5: 5, 6: 3, 7: 1 } },
+      players: { 5: { ep: 1, fpl: 1 } },
+    } as unknown as Partial<Data>;
+    assert.deepEqual(fromFpl(since)?.ep, { 5: 6, 6: 4.5, 7: 3 });
+    assert.deepEqual(fromModel(since)?.fplEp, { 5: 5, 6: 3, 7: 1 });
+  });
+
+  it('falls back to FPL’s own without either', () => {
+    assert.deepEqual(fromFpl(null)?.ep, { 5: 2, 6: 2, 7: 2 });
   });
 });

@@ -2,7 +2,7 @@
 
 import type { MatchResult } from '../shared/data.ts';
 import { esc, ordinal, plural } from './format.ts';
-import { triangleSvg } from './icons.ts';
+import { infoSvg, triangleSvg } from './icons.ts';
 import { club, mgr, player, slotOf } from './lookups.ts';
 
 // The Premier League keeps photos in two places: newer signings only on the first,
@@ -34,8 +34,8 @@ export function clubCell(clubId: number) {
   return `<span class="who">${crest(clubId)}<span class="who-name">${esc(c.name)}</span></span>`;
 }
 
-// Behind every photo sits a silhouette in the club's shirt colours, which shows when
-// the Premier League has no picture of the player (see onPhotoError).
+// Behind every photo sits a silhouette in the club's shirt colours, which shows while
+// the picture loads and when the Premier League has none (see onPhotoError).
 function kitSvg(clubId: number | undefined) {
   const [shirt, trim] = club(clubId)?.kit ?? ['var(--kit-none)', 'var(--kit-none-trim)'];
   return `<svg class="kit" viewBox="0 0 40 40" aria-hidden="true"><circle class="kit-head" cx="20" cy="15" r="7.5"/><path d="M4.5 41c0-8.6 6.2-14.2 15.5-14.2S35.5 32.4 35.5 41Z" fill="${esc(shirt)}" stroke="var(--kit-edge)" stroke-width="1"/><path d="M15.4 27.5 20 32.6l4.6-5.1" fill="none" stroke="${esc(trim)}" stroke-width="2.2" stroke-linejoin="round"/></svg>`;
@@ -46,6 +46,13 @@ export function photo(pid: number | string, size = 32) {
   const [src, fallback] = p ? photoUrls(p.code) : [];
   const img = p ? `<img src="${src}" data-fallback="${fallback}" alt="" loading="lazy">` : '';
   return `<span class="photo" style="--s:${size}px">${kitSvg(p?.club)}${img}</span>`;
+}
+
+// Run on fresh HTML before it is drawn: photos still on their way show the silhouette
+// instead of a blank disc (the Premier League's server can be slow). A cached photo is
+// complete as soon as it is added, so a re-render doesn't flash it.
+export function markLoadingPhotos(root: ParentNode) {
+  for (const img of root.querySelectorAll<HTMLImageElement>('.photo img')) if (!img.complete) img.classList.add('loading');
 }
 
 export const pointsTier = (pts: number) => (pts >= 10 ? 'p4' : pts >= 6 ? 'p3' : pts >= 3 ? 'p2' : pts >= 1 ? 'p1' : 'p0');
@@ -96,6 +103,10 @@ export function card({ title = '', sub = '', action = '', header: custom = '', b
   const foot = footer ? `<a class="card-footer" href="${footer.href}"${footer.attrs ?? ''}>${footer.label}</a>` : '';
   return `<section class="card ${cls}">${header}${body}${foot}</section>`;
 }
+
+// An ⓘ whose tip explains the thing beside it. A tap keeps it up long enough to read.
+export const infoButton = (tip: string, label: string) =>
+  `<button type="button" class="info-btn" data-tip="${esc(tip)}" aria-label="${label}">${infoSvg}</button>`;
 
 interface ListRowOptions {
   lead?: string;

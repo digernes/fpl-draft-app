@@ -93,4 +93,31 @@ describe('build timer', () => {
     await fire('2026-10-27T09:20:00Z', { GITHUB_TOKEN: 'test-token', GITHUB_REPO: 'owner/repo' });
     assert.equal(github.mock.callCount(), 0);
   });
+
+  it('builds between times when a transfer has gone through since the last build', async () => {
+    const env = { GITHUB_TOKEN: 'test-token', GITHUB_REPO: 'owner/repo', SITE_URL: 'https://site.example' };
+    const players = { 1: { owner: 7 }, 2: { owner: null } };
+    // FPL's owner for player 2, against the site's null.
+    const respond = (owner: number | null) =>
+      mock.method(globalThis, 'fetch', async (url: string) =>
+        url.includes('element-status')
+          ? Response.json({
+              element_status: [
+                { element: 1, owner: 7 },
+                { element: 2, owner },
+              ],
+            })
+          : url.startsWith(env.SITE_URL)
+            ? Response.json({ players })
+            : new Response(null, { status: 204 }),
+      );
+    const unchanged = respond(null);
+    await fire('2026-10-27T09:20:00Z', env);
+    assert.equal(unchanged.mock.callCount(), 2); // the two checks, no build
+    mock.restoreAll();
+    const signed = respond(9);
+    await fire('2026-10-27T09:20:00Z', env);
+    assert.equal(signed.mock.callCount(), 3);
+    assert.match(signed.mock.calls[2].arguments[0] as string, /dispatches$/);
+  });
 });

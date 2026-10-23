@@ -150,22 +150,24 @@
     margin: 0 0 0 -2px;
   }
 
-  /* The goal lines at the ends: centred, then turned a quarter. */
+  /* The goal lines at the ends: centred, then turned a quarter. Each side resets
+     both of its narrow-layout edges, which `.mp-box` alone can't outrank. */
   .mp-box {
     --box-w: 180px;
-    top: 50%;
-    bottom: auto;
     max-width: none;
   }
 
   .mp-box.home {
+    top: 50%;
     left: calc(var(--box-h) / 2 - 3px);
     transform: translate(-50%, -50%) rotate(90deg);
   }
 
   .mp-box.away {
-    left: auto;
+    top: 50%;
     right: calc(var(--box-h) / 2 - 3px);
+    bottom: auto;
+    left: auto;
     transform: translate(50%, -50%) rotate(-90deg);
   }
 }

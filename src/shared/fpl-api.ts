@@ -104,6 +104,7 @@ export const Bootstrap = z.object({
       news: z.string().nullish(),
       form: numeric.nullish(),
       chance_of_playing_next_round: z.number().nullable(),
+      chance_of_playing_this_round: z.number().nullish(),
     }),
   ),
   teams: z.array(z.object({ id, code: id, name: z.string(), short_name: z.string() })),
@@ -203,6 +204,9 @@ export const LiveFeed = z.object({
         expected_goals: numeric.nullish(),
         expected_assists: numeric.nullish(),
         expected_goals_conceded: numeric.nullish(),
+        // For the expected-points model (src/model) only.
+        saves: z.number().optional(),
+        defensive_contribution: z.number().optional(),
       }),
       /** Per match: [the stats that scored, fixture id]. */
       explain: z.array(z.tuple([z.array(z.object({ stat: z.string(), value: z.number() })), id])).optional(),

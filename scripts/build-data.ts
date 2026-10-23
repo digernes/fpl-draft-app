@@ -2,8 +2,9 @@
 // Builds public/data.json for the FotMob Draft League page.
 //
 // Everything comes from the public FPL Draft API (no login needed), plus the main
-// FPL game's bootstrap for next-gameweek expected points. Node 24+ (it runs the
-// TypeScript directly). The pieces live in src/build/.
+// FPL game's bootstrap, whose expected points stand in for the site's own (src/model)
+// until a gameweek has been played. Node 24+ (it runs the TypeScript directly). The
+// pieces live in src/build/.
 //
 //   node scripts/build-data.ts                         league 23793 -> public/data.json
 //   node scripts/build-data.ts --league 12345 --out public/data.json
@@ -30,6 +31,7 @@ import {
   lineupOf,
   patchLiveScores,
 } from '../src/build/lineups.ts';
+import { deadlineFlags } from '../src/build/expected.ts';
 import { oddsModel, priceMatches } from '../src/build/odds.ts';
 import { buildClubs, buildMeta, buildPlayers, readPrevious, seasonSlug, writeIfChanged, writeSeasonIndex } from '../src/build/output.ts';
 import { readSeason } from '../src/build/season.ts';
@@ -52,7 +54,9 @@ const OUT_FILE = arg('out') ?? 'public/data.json';
 const CACHE_DIR = arg('cache') ?? null;
 const SEASONS_DIR = path.join(path.dirname(OUT_FILE), 'seasons');
 
-// The last build's output: started matches keep the odds it priced them at.
+// The last build's output: started matches keep the odds it priced them at, and the
+// gameweek being played FPL's expected points as they were at the deadline, while it
+// is FPL's that are in use.
 const previous = await readPrevious(OUT_FILE);
 const season = readSeason(await fetchLeague(LEAGUE_ID, CACHE_DIR));
 
@@ -74,20 +78,24 @@ const records = buildRecords(season, managerIds, matches, candidates, seasonStat
 const waiverOrder = [...managers].sort((a, b) => a.waiverPick - b.waiverPick).map((m) => m.id);
 const transfers = buildTransfers(season, managerIds, waiverOrder, lineup);
 const draft = buildDraft(season, managerIds, lineup);
-const model = oddsModel(season, managerIds, results, scoresByGw);
-priceMatches(matches, managerIds, results, model, season.nextGw, previous);
+const model = oddsModel(season, managerIds, scoresByGw);
+priceMatches(matches, model, season.nextGw, previous);
 const simulation = simulate(season, managerIds, matches, overall, model);
 
 const data: Data = {
   meta: buildMeta(season, LEAGUE_ID, model.hasProjections),
   managers,
   clubs: buildClubs(season),
-  gameweeks: season.events.map((e) => ({
-    id: e.id,
-    deadline: e.deadline_time,
-    finished: e.finished,
-    doubles: season.doubleClubs[e.id] ?? [],
-  })),
+  gameweeks: season.events.map((e) => {
+    const fixtures = season.boot.fixtures?.[e.id];
+    return {
+      id: e.id,
+      deadline: e.deadline_time,
+      finished: e.finished,
+      doubles: season.doubleClubs[e.id] ?? [],
+      ...(fixtures ? { fixtures: fixtures.map((f): [number, number, string | null] => [f.team_h, f.team_a, f.kickoff_time ?? null]) } : {}),
+    };
+  }),
   matches,
   tables: { overall, form, xg, luck, points: buildPointsTable(seasonStats), premierLeague: plTable },
   simulation,
@@ -95,7 +103,13 @@ const data: Data = {
   lineups,
   events: buildEvents(season, lineups),
   underlying: buildUnderlying(season, lineups),
-  live: buildLiveData(season, lineups, model.expectedNow),
+  flags: deadlineFlags(season, previous),
+  live: buildLiveData(
+    season,
+    lineups,
+    { now: model.expectedNow, fromFpl: model.fromFpl, fplNow: model.fplNow, milestones: model.milestones },
+    previous,
+  ),
   topGameweeks,
   worstGameweeks,
   seasonStats,
@@ -107,6 +121,7 @@ const data: Data = {
     draft.picks.map((p) => p.player),
     lineups,
     model.expected,
+    model.fromFpl ? undefined : model.fplExpected,
   ),
 };
 

@@ -46,6 +46,7 @@ export const state = {
   tab: 'overview',
   theme: store.get('draft.theme', 'system'),
   odds: store.get('draft.odds', 'decimal'),
+  xp: store.get('draft.xp', 'model'), // expected points: 'model' (the site's own) or 'fpl' (FPL's form)
   tableView: 'overall',
   tableMode: store.get('draft.tableMode', 'short'), // narrow screens: 'short' columns or 'form'
   gw: null as number | null, // gameweek shown on the Fixtures tab
@@ -56,6 +57,7 @@ export const state = {
   squadId: null as number | null, // manager on the Squads tab; null = the league leader
   lineupView: 'last', // the Squads tab's pitch: 'last' (the latest lineup) or 'all' (the season's best XI)
   lineupStat: '', // the pitches' lineup filter: '' (points), 'xp', 'xg', 'xa' or 'xcs'
+  due: '', // what the pitches' players still to play show: 'xp', 'ko' (kick-off) or '' (xP before a gameweek, kick-offs once it's on)
   squadScope: 'now', // the Squads tab: 'now' (the squad) or 'all' (everyone ever owned)
   squadSort: 'lineup', // the Squads tab's column: 'lineup' (XI, bench, new signings), 'gw', 'xp' or 'total'
   season: null as string | null, // slug of an archived season being viewed, e.g. "2025-26"; null = current

@@ -69,6 +69,11 @@
   background: var(--pitch-photo);
 }
 
+/* Still loading: the kit silhouette shows through (see avatars.css). */
+.pp .photo img.loading {
+  background: none;
+}
+
 .pp-badge {
   position: absolute;
   top: -8px;
@@ -104,6 +109,19 @@
 .pp-badge .ptsp.xp {
   border: 1px solid var(--pitch-chip-border);
   background: var(--pitch-chip);
+}
+
+/* A kick-off time sits centred on the photo's bottom edge rather than at its corner,
+   as quiet as it is on the bench. */
+.pp-badge:has(.ko) {
+  top: 35px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
+.pp-badge .ptsp.ko {
+  height: 16px;
+  font-size: 11px;
 }
 
 .pp-chip {

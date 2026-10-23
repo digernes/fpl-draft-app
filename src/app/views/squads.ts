@@ -9,10 +9,10 @@ import { clubState } from '../../shared/live.ts';
 import { avatar, card, chip, crest, empty, formPills, listRow, photo, pointsTier, seg, tag, tile } from '../components.ts';
 import { totalSlots } from '../event-icons.ts';
 import { esc, ordinal, pct, plural, signed, sum } from '../format.ts';
-import { club, first, gwEvents, gwPoints, isArchive, lineupFor, mgr, player, seasonStat, slotOf } from '../lookups.ts';
+import { club, first, gwEvents, gwPoints, isArchive, lineupFor, mgr, nextXp, player, seasonStat, slotOf } from '../lookups.ts';
 import { closeCalls, gameIn, nemesis, pointsByPosition, rivalries, type Rivalry } from '../manager-stats.ts';
-import { roundPill, stateLabel } from '../matches.ts';
-import { lineupFilters, showsEvents, statBadge } from '../lineup-filters.ts';
+import { pitchPill, roundPill, stateLabel } from '../matches.ts';
+import { dueFilters, lineupFilters, showsEvents, statBadge } from '../lineup-filters.ts';
 import { formationOf, pitch, subMark, type PitchPlayer } from '../pitch.ts';
 import { D, live, state } from '../state.ts';
 
@@ -124,7 +124,7 @@ function lastLineup(id: number) {
     const match = feed ? clubState(feed, player(pid).club) : null;
     return {
       pid,
-      badge: statBadge(pid, gw) ?? roundPill(pid, gw, match),
+      badge: statBadge(pid, gw) ?? pitchPill(pid, gw, match),
       events: showsEvents(gw) ? gwEvents(pid, gw) : undefined,
       mark: l.subs.includes(pid) ? subMark : '',
       note: match?.state === 'live' ? stateLabel(match) : '',
@@ -132,7 +132,8 @@ function lastLineup(id: number) {
   };
   return {
     sub: `GW ${gw} · ${plural(l.pts, 'pt')}${feed ? ' so far' : ''} · ${formationOf(l.xi)}`,
-    body: lineupFilters(gw) + pitch(l.xi.map(onPitch), l.bench.map(onPitch)),
+    body:
+      lineupFilters(gw) + (feed?.fixtures.some((f) => !f.started) ? dueFilters(gw) : '') + pitch(l.xi.map(onPitch), l.bench.map(onPitch)),
   };
 }
 
@@ -203,9 +204,9 @@ function squadCard(id: number) {
     showXp && {
       key: 'xp',
       label: 'xP',
-      tip: `FPL’s expected points for GW ${nextGw}`,
-      value: (pid: number) => (owned.has(pid) ? player(pid).ep : -1),
-      cell: (pid: number) => (owned.has(pid) ? `<span class="ptsp xp">${player(pid).ep.toFixed(1)}</span>` : dash),
+      tip: `Expected points for GW ${nextGw}${state.xp === 'fpl' ? ' (FPL’s form)' : ''}`,
+      value: (pid: number) => (owned.has(pid) ? nextXp(pid) : -1),
+      cell: (pid: number) => (owned.has(pid) ? `<span class="ptsp xp">${nextXp(pid).toFixed(1)}</span>` : dash),
     },
     {
       key: 'total',

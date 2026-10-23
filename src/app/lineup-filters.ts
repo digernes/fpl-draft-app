@@ -1,6 +1,7 @@
 // The pitches' lineup filters, as on fotmob.com: chips over a finished gameweek's
 // lineup that swap each player's points for his underlying numbers. xP keeps the
 // icons for what he did, like fotmob.com's Fantasy filter; the stats show alone.
+// Before and during a gameweek, the chips choose what players still to play show.
 
 import { chip, pointsTier } from './components.ts';
 import { gwPoints, gwUnderlying } from './lookups.ts';
@@ -40,3 +41,15 @@ export function statBadge(pid: number, gw: number): string | undefined {
   if (value === undefined) return '';
   return `<span class="ptsp xp" data-tip="${value.toFixed(2)} ${what}">${value.toFixed(2)}</span>`;
 }
+
+// Players still to play show their expected points or when they kick off: by default
+// the xP before a gameweek, and the kick-offs once it is on.
+const DUE: [value: string, label: string][] = [
+  ['xp', 'xP'],
+  ['ko', 'Kick-off'],
+];
+
+export const dueShows = (gw: number) => state.due || (gw > D.meta.currentGw ? 'xp' : 'ko');
+
+export const dueFilters = (gw: number) =>
+  `<div class="filter-bar lineup-filters">${DUE.map(([value, label]) => chip(label, 'due', value, dueShows(gw) === value)).join('')}</div>`;
