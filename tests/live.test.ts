@@ -180,8 +180,45 @@ describe('slimLive', () => {
       ],
     });
     assert.deepEqual(slim.elements, { 5: [6, 90] });
+    assert.deepEqual(slim.events, { 5: { goals: 1 } }); // no starts or per-match minutes: no substitutions
     assert.deepEqual(slim.fixtures[0], { id: 9, h: 1, a: 2, started: true, done: false, min: 55, bps: [[5, 30]] });
     assert.equal(slim.fixtures[1].bps, undefined);
+  });
+
+  it('says what each player did, with substitutions from the minutes in each match', () => {
+    const stats = { total_points: 2, minutes: 90, goals_scored: 0, assists: 0, clean_sheets: 0, goals_conceded: 0, starts: 1 };
+    const minutes = (...matches: [number, number][]) =>
+      matches.map(([fixture, value]): [{ stat: string; value: number }[], number] => [[{ stat: 'minutes', value }], fixture]);
+    const fixture = (id: number, over: boolean) => ({
+      id,
+      team_h: 1,
+      team_a: 2,
+      started: true,
+      finished: over,
+      finished_provisional: over,
+      team_h_score: 0,
+      team_a_score: 0,
+      minutes: over ? 90 : 60,
+    });
+    const slim = slimLive({
+      elements: {
+        1: { stats: { ...stats, goals_scored: 2, bonus: 3 }, explain: minutes([9, 90]) },
+        2: { stats: { ...stats, minutes: 63, assists: 1, yellow_cards: 1 }, explain: minutes([9, 63]) },
+        3: { stats: { ...stats, minutes: 27, starts: 0 }, explain: minutes([9, 27]) },
+        4: { stats: { ...stats, minutes: 40, red_cards: 1 }, explain: minutes([9, 40]) }, // sent off, not taken off
+        5: { stats: { ...stats, minutes: 55 }, explain: minutes([10, 55]) }, // his match is still on
+        6: { stats: { ...stats, minutes: 0, starts: 0 }, explain: minutes([9, 0]) },
+        7: { stats: { ...stats, minutes: 120 }, explain: minutes([9, 90], [11, 30]) }, // started one match, came on in the other
+      },
+      fixtures: [fixture(9, true), fixture(10, false), fixture(11, true)],
+    });
+    assert.deepEqual(slim.events, {
+      1: { goals: 2, bonus: 3 },
+      2: { assists: 1, yellow: 1, off: 1, min: 63 },
+      3: { on: 1, min: 27 },
+      4: { red: 1 },
+      7: { on: 1, min: 120 },
+    });
   });
 });
 

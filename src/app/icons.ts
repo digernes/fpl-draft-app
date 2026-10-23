@@ -9,3 +9,24 @@ export function chevronSvg(direction: 'left' | 'right' | 'down') {
   const paths = { left: 'M10 3 5 8l5 5', right: 'M6 3l5 5-5 5', down: 'M3 6l5 5 5-5' };
   return `<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="${paths[direction]}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
 }
+
+// What a player did, for the icons around his photo on the pitches (see event-icons.ts).
+// A real ball's panels (one pentagon facing us), white with a dark rim so it stands out
+// on a light or a dark chip (red for an own goal); the season's goals have it
+// see-through, in the text colour.
+export const ballSvg = (ink = '#222', face = '#fff') =>
+  `<svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14"><circle cx="7" cy="7" r="5.55" fill="${face}"/><path d="M5.93 8.47L8.07 8.47L8.73 6.44L7 5.18L5.27 6.44ZM8.07 11.42L9.14 11.76L10.87 10.51L10.87 9.38L9.14 9.94ZM5.27 2.8L7 3.36L8.73 2.8L8.07 1.89L5.93 1.89ZM1.81 6.44L2.47 7.35L3.54 5.88L3.54 4.06L2.47 4.4ZM10.46 5.88L11.53 7.35L12.19 6.44L11.53 4.4L10.46 4.06ZM4.86 11.76L5.93 11.42L4.86 9.94L3.13 9.38L3.13 10.51Z" fill="${ink}"/><path d="M8.07 8.47L9.14 9.94M8.07 8.47L8.73 6.44M8.07 8.47L5.93 8.47M9.14 9.94L10.87 9.38M9.14 9.94L8.07 11.42M5.27 2.8L3.54 4.06M5.27 2.8L7 3.36M3.54 4.06L3.54 5.88M7 5.18L5.27 6.44M7 5.18L8.73 6.44M7 5.18L7 3.36M5.27 6.44L5.93 8.47M5.27 6.44L3.54 5.88M8.73 2.8L7 3.36M8.73 2.8L10.46 4.06M2.47 7.35L3.54 5.88M2.47 7.35L3.13 9.38M10.46 5.88L11.53 7.35M10.46 5.88L8.73 6.44M10.46 5.88L10.46 4.06M11.53 7.35L10.87 9.38M4.86 9.94L5.93 11.42M4.86 9.94L5.93 8.47M4.86 9.94L3.13 9.38M5.93 11.42L8.07 11.42" fill="none" stroke="${ink}" stroke-width=".55" stroke-linecap="round"/><circle cx="7" cy="7" r="5.55" fill="none" stroke="${ink}" stroke-width="1.1"/></svg>`;
+export const ownGoalSvg = ballSvg('var(--lose)');
+// A boot, toe up, with small studs.
+export const bootSvg = (ink = 'var(--event-ink)') =>
+  `<svg aria-hidden="true" width="13" height="13" viewBox="0 0 14 14"><g transform="rotate(-28 7 7.4)" fill="${ink}"><path d="M1.8 5q.1-.6.7-.5l1.1.4q1.1.5 2.2-.2l4.6 1.7q2 .5 2 1.9v.9q0 .6-.6.6H2.4q-.6 0-.6-.6Z"/><path d="M2.6 9.8h1v.8h-1Zm2.5 0h1v.8h-1Zm3.4 0h1v.8h-1Zm2.2 0h1v.8h-1Z"/></g></svg>`;
+// A referee's card, held at a slight angle.
+export const cardSvg = (red: boolean) =>
+  `<svg aria-hidden="true" width="14" height="14" viewBox="0 0 14 14"><rect x="3.6" y="1.6" width="6.8" height="10.8" rx="1.3" transform="rotate(12 7 7)" fill="var(${red ? '--lose' : '--card-yellow'})"/></svg>`;
+// Coming on and going off: an arrow in or out of a coloured disc.
+export const subSvg = (on: boolean) =>
+  `<svg aria-hidden="true" width="12" height="12" viewBox="0 0 14 14"><circle cx="7" cy="7" r="6.5" fill="var(${on ? '--event-green' : '--lose'})"/><path d="${on ? 'M4.1 7h5.6M7.6 4.8 9.8 7l-2.2 2.2' : 'M9.9 7H4.3M6.4 4.8 4.2 7l2.2 2.2'}" fill="none" stroke="#fff" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// A missed penalty: the goal, with a red cross in it.
+export const missSvg = `<svg aria-hidden="true" width="12" height="12" viewBox="0 0 14 14"><path d="M1.5 11.5V3.9q0-1 1-1h9q1 0 1 1v7.6" fill="none" stroke="var(--event-ink)" stroke-width="1.5" stroke-linecap="round"/><path d="m5.2 6.1 3.6 3.6m0-3.6-3.6 3.6" stroke="var(--lose)" stroke-width="1.5" stroke-linecap="round"/></svg>`;
+// A saved penalty: the keeper's glove.
+export const gloveSvg = `<svg aria-hidden="true" width="12" height="12" viewBox="0 0 14 14"><g transform="rotate(-12 7 7)" fill="var(--event-ink)"><rect x="4.5" y="2.4" width="1.4" height="5.4" rx=".7"/><rect x="6.05" y="1.5" width="1.4" height="6.3" rx=".7"/><rect x="7.6" y="1.9" width="1.4" height="5.9" rx=".7"/><rect x="9.15" y="3" width="1.4" height="4.8" rx=".7"/><rect x="4.5" y="6.3" width="6.05" height="4.6" rx="1.5"/><rect x="2.4" y="5.6" width="1.5" height="4.2" rx=".75" transform="rotate(-38 3.15 7.7)"/><rect x="4.3" y="11.3" width="6.45" height="1.9" rx=".5"/></g></svg>`;

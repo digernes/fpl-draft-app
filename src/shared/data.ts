@@ -1,7 +1,7 @@
 // The shape of data.json (and the season archives), written by the build and read by
 // the page. Ids are FPL ids: managers by entry id, players by element id, clubs by team id.
 
-import type { SlimLive } from './live.ts';
+import type { PlayerEvents, SlimLive } from './live.ts';
 
 export type Position = 'GKP' | 'DEF' | 'MID' | 'FWD';
 export type Result = 'W' | 'D' | 'L';
@@ -22,6 +22,8 @@ export interface Data {
   plTwins: PlTwin[];
   /** entry id → gameweek → lineup */
   lineups: ById<ById<Lineup>>;
+  /** gameweek → player → what he did, for everyone in a lineup that gameweek. Missing from older archives. */
+  events?: ById<ById<PlayerEvents>>;
   /** While a gameweek is being played: its live feed, so the page can tell who is still to play. */
   live?: LiveData;
   topGameweeks: TopGameweek[];

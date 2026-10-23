@@ -67,6 +67,8 @@ export interface LiveState {
   feed: SlimLive;
   lineups: Record<number, LiveLineup>;
   points: (id: number) => number;
+  /** Bonus in those points, awarded or provisional. */
+  bonus: (id: number) => number;
 }
 
 // Live bindings: importers always see the current values, and change them through the
@@ -74,7 +76,7 @@ export interface LiveState {
 export let D: Data;
 export let managers = new Map<number, ManagerSlot>();
 export let seasons: SeasonEntry[] = []; // from seasons/index.json; the current season's file is data.json
-export let live: LiveState | null = null; // latest scores from the live relay: { gw, feed, lineups, points }
+export let live: LiveState | null = null; // latest scores from the live relay: { gw, feed, lineups, points, bonus }
 
 export function setData(data: Data) {
   D = data;

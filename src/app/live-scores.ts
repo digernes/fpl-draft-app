@@ -1,7 +1,7 @@
 // Loading data.json, refreshing it, and live scores and new transfers from the relay.
 
 import type { Data, SeasonEntry } from '../shared/data.ts';
-import { scoreLineup, type SlimLive } from '../shared/live.ts';
+import { provisionalBonus, scoreLineup, type SlimLive } from '../shared/live.ts';
 import { mergeTransfers, type SlimTransfers } from '../shared/transfers.ts';
 import { gwInfo, isArchive, isLive, player, seasonEntry, seasonSlug } from './lookups.ts';
 import { renderAll, renderView } from './render.ts';
@@ -70,7 +70,9 @@ function applyLive(feed: SlimLive) {
       benchPts: scored.bench.reduce((t, pid) => t + scored.points(pid), 0),
     };
   }
-  setLive({ gw, feed, lineups, points });
+  const provisional = provisionalBonus(feed.fixtures);
+  const bonus = (id: number) => (feed.events?.[id]?.bonus ?? 0) + (provisional.get(id) ?? 0);
+  setLive({ gw, feed, lineups, points, bonus });
   for (const m of D.matches) {
     if (m.gw !== gw || !m.started || m.finished) continue;
     m.homePts = lineups[m.home]?.pts ?? m.homePts;

@@ -213,8 +213,10 @@
   align-items: center;
   gap: 4px;
   margin-top: 2px;
+  overflow: hidden;
   color: var(--text-2);
   font-size: 11px;
+  white-space: nowrap;
 }
 
 /* Bench points don't count. */

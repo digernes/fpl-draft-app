@@ -46,6 +46,7 @@
   flex: 1 1 0;
   min-width: 0;
   max-width: 40%;
+  container: pp / inline-size;
 }
 
 .pp.faded .pp-head,
@@ -82,16 +83,26 @@
   font-size: 12px;
 }
 
+/* Five in a line on a phone leaves no room for a wide badge like 15+2, so it moves in a little. */
+@container pp (max-width: 72px) {
+  .pp-badge {
+    left: 22px;
+  }
+
+  .pp-badge .ptsp {
+    padding: 0 4px;
+  }
+}
+
 /* Expected points would vanish into the pitch in the usual grey. */
 .pp-badge .ptsp.xp {
   border: 1px solid var(--pitch-chip-border);
   background: var(--pitch-chip);
 }
 
-.pp-corner {
-  position: absolute;
-  top: 30px;
+.pp-chip {
   display: inline-flex;
+  flex: none;
   align-items: center;
   height: 18px;
   padding: 0 4px;
@@ -102,12 +113,91 @@
   white-space: nowrap;
 }
 
-.pp-left {
-  right: 30px;
+/* What the player did, around the photo where fotmob.com puts it: several of a kind
+   overlap. */
+.pp-ev {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 2px;
 }
 
-.pp-right {
-  left: 30px;
+.pp-ev.top-left {
+  top: -8px;
+  right: 32px;
+}
+
+.pp-ev.middle-left {
+  top: 13px;
+  right: 36px;
+}
+
+.pp-ev.middle-right {
+  top: 13px;
+  left: 36px;
+}
+
+.pp-ev.bottom-left {
+  top: 34px;
+  right: 32px;
+}
+
+.pp-ev.bottom-right {
+  top: 34px;
+  left: 32px;
+}
+
+.ev {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  padding: 1px;
+  border: 1px solid var(--event-border);
+  border-radius: 50%;
+  background: var(--pitch-chip);
+}
+
+.ev + .ev {
+  margin-left: -11px;
+}
+
+.ev svg {
+  display: block;
+}
+
+/* The season's goals and assists, a little higher and closer in than a match's icons,
+   as on fotmob.com's team pages. */
+.ev-total {
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px 2px 2px;
+  border: 1px solid var(--pitch-chip-border);
+  border-radius: 12px;
+  background: var(--pitch-chip);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+.bottom-left .ev-total {
+  translate: 7px -2px;
+}
+
+.bottom-right .ev-total {
+  translate: -5px -2px;
+}
+
+/* A bench row has them in a line before the points. */
+.ev-row {
+  display: flex;
+  flex: none;
+}
+
+.ev-row .ev + .ev {
+  margin-left: -4px;
 }
 
 .pp-sub {
@@ -138,6 +228,16 @@
 
 .pp-name .crest {
   flex: none;
+}
+
+.pp-note {
+  display: flex;
+  justify-content: center;
+  gap: 4px;
+  max-width: 100%;
+  color: var(--text-2);
+  font-size: 11px;
+  line-height: 14px;
 }
 
 .pitch-bench {

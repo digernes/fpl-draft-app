@@ -192,10 +192,20 @@ export const LiveFeed = z.object({
         assists: z.number(),
         clean_sheets: z.number(),
         goals_conceded: z.number(),
+        // For the icons on the pitches only, so a feed without them still parses.
+        own_goals: z.number().optional(),
+        penalties_saved: z.number().optional(),
+        penalties_missed: z.number().optional(),
+        yellow_cards: z.number().optional(),
+        red_cards: z.number().optional(),
+        bonus: z.number().optional(),
+        starts: z.number().optional(),
         expected_goals: numeric.nullish(),
         expected_assists: numeric.nullish(),
         expected_goals_conceded: numeric.nullish(),
       }),
+      /** Per match: [the stats that scored, fixture id]. */
+      explain: z.array(z.tuple([z.array(z.object({ stat: z.string(), value: z.number() })), id])).optional(),
     }),
   ),
   fixtures: z.array(

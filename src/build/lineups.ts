@@ -1,8 +1,9 @@
 // Managers, their head-to-head matches, and every lineup they have put out: points,
-// the double-gameweek adjustment, bench points and expected points.
+// the double-gameweek adjustment, bench points and expected points, and what the
+// players in it did.
 
 import type { ById, LiveData, Lineup, Manager, Match } from '../shared/data.ts';
-import { scoreLineup, slimLive, type SlimLive } from '../shared/live.ts';
+import { scoreLineup, slimLive, type PlayerEvents, type SlimLive } from '../shared/live.ts';
 import { DGW_PENALTY } from './config.ts';
 import type { Season } from './season.ts';
 import { round, sum } from './util.ts';
@@ -96,6 +97,24 @@ export function buildLineups(season: Season, matches: Match[]) {
     for (const [gw, l] of Object.entries(byGw)) l.xpf = round(sum(l.xi.map((pid) => expectedPointsIn(season, pid, Number(gw)))), 1);
   }
   return lineups;
+}
+
+// Goals, cards, substitutions and so on, gameweek by gameweek, for the players in a
+// lineup that week: the icons on the pitches.
+export function buildEvents(season: Season, lineups: Lineups): ById<ById<PlayerEvents>> {
+  const out: ById<ById<PlayerEvents>> = {};
+  for (const gw of season.gws) {
+    const { events = {} } = slimLive(season.live[gw]);
+    const ids = Object.values(lineups).flatMap((byGw) => [...(byGw[gw]?.xi ?? []), ...(byGw[gw]?.bench ?? [])]);
+    const week = Object.fromEntries(
+      ids
+        .filter((pid) => events[pid])
+        .sort((a, b) => a - b)
+        .map((pid) => [pid, events[pid]]),
+    );
+    if (Object.keys(week).length) out[gw] = week;
+  }
+  return out;
 }
 
 // The gameweek being played, as the page needs it to show who is still to play and
