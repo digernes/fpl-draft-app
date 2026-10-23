@@ -132,6 +132,36 @@
   padding: 0;
 }
 
+/* A finished match's expected points, like a fotmob.com match's top stats. */
+.xg-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 32px;
+}
+
+.xg-label {
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: center;
+}
+
+.xg-value {
+  flex: none;
+  min-width: 44px;
+  padding: 4px 8px;
+  border-radius: 17px;
+  font-size: 13px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.xg-value.higher {
+  color: var(--av-ink, #fff);
+}
+
 .odd-price {
   color: var(--odds-price);
 }

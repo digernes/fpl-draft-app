@@ -116,24 +116,33 @@ export function buildTables(
   // The xG table, after FotMob's: expected points for and against, and the
   // table points those would have earned. Each match is decided by a normal model
   // around both sides' expected scores, with the spread of actual-minus-expected.
+  // Every finished match keeps its own numbers too (match.xg), for the match itself.
   const played = matches.filter((m) => m.finished && lineup(m.home, m.gw) && lineup(m.away, m.gw));
   const xpfOf = (id: number, gw: number) => (lineup(id, gw) as NonNullable<ReturnType<LineupOf>>).xpf;
   const xgResiduals = played.flatMap((m) => [(m.homePts as number) - xpfOf(m.home, m.gw), (m.awayPts as number) - xpfOf(m.away, m.gw)]);
   const xgSpread = Math.max(4, Math.sqrt(sum(xgResiduals.map((r) => r * r)) / Math.max(1, xgResiduals.length)));
+  const xPtsOf = new Map<Match, [number, number]>();
+  for (const m of played) {
+    const xp: [number, number] = [xpfOf(m.home, m.gw), xpfOf(m.away, m.gw)];
+    const p = winDrawWin(xp[0], xp[1], xgSpread);
+    const xPts: [number, number] = [
+      scoring.h2h_win * p.home + scoring.h2h_draw * p.draw,
+      scoring.h2h_win * p.away + scoring.h2h_draw * p.draw,
+    ];
+    xPtsOf.set(m, xPts);
+    m.xg = { xp, xPts: [round(xPts[0], 2), round(xPts[1], 2)] };
+  }
   const xg: XgRow[] = managerIds
     .map((id) => {
       const row = { id, played: 0, pf: 0, pa: 0, xpf: 0, xpa: 0, xPts: 0 };
       for (const m of played.filter((x) => x.home === id || x.away === id)) {
         const home = m.home === id;
-        const mine = xpfOf(id, m.gw);
-        const theirs = xpfOf(home ? m.away : m.home, m.gw);
-        const p = winDrawWin(mine, theirs, xgSpread);
         row.played++;
         row.pf += (home ? m.homePts : m.awayPts) as number;
         row.pa += (home ? m.awayPts : m.homePts) as number;
-        row.xpf += mine;
-        row.xpa += theirs;
-        row.xPts += scoring.h2h_win * p.home + scoring.h2h_draw * p.draw;
+        row.xpf += m.xg!.xp[home ? 0 : 1];
+        row.xpa += m.xg!.xp[home ? 1 : 0];
+        row.xPts += xPtsOf.get(m)![home ? 0 : 1];
       }
       const official = overall.find((r) => r.id === id);
       return {

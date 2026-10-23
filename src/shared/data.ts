@@ -109,6 +109,15 @@ export interface Match {
   started: boolean;
   finished: boolean;
   odds?: Odds;
+  /** Once finished: the xG table's numbers for this match (home, away). */
+  xg?: MatchXg;
+}
+
+export interface MatchXg {
+  /** Expected points: each XI with goals, assists and clean sheets swapped for their expected values. */
+  xp: [number, number];
+  /** The table points those expected scores would have earned. */
+  xPts: [number, number];
 }
 
 export interface MatchResult {
