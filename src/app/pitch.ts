@@ -8,7 +8,8 @@ import { avatar, crest, photo } from './components.ts';
 import { eventRow, eventSlots, type EventSlots } from './event-icons.ts';
 import { esc } from './format.ts';
 import { arrowSvg } from './icons.ts';
-import { club, first, player } from './lookups.ts';
+import { club, first, mgr, player, slotOf } from './lookups.ts';
+import { href } from './router.ts';
 
 export interface PitchPlayer {
   pid: number;
@@ -18,8 +19,12 @@ export interface PitchPlayer {
   events?: PlayerEvents;
   /** Other icons around the photo instead, like the season's goals and assists. */
   icons?: EventSlots;
-  /** A chip at the top left, by any substitution: an auto-sub, or a doubt. */
+  /** By his name: the mark of an automatic substitute. */
   mark?: string;
+  /** In a real match's lineup: whose draft squad he is in (his name a pill in that manager's colours), or null for nobody's. No crest then. */
+  owner?: number | null;
+  /** And whether that manager has him on the bench, where his points don't count (the pill only outlined), or in the XI; unknown for a gameweek to come. */
+  benched?: boolean;
   /** Under the name: where their match stands, or that they play twice. */
   note?: string;
   tip?: string;
@@ -27,10 +32,18 @@ export interface PitchPlayer {
 }
 
 export interface PitchSide {
+  /** The manager, whose avatar and name head the side, unless `logo` and `name` are given (a club's). */
   id: number;
+  logo?: string;
+  name?: string;
   xi: PitchPlayer[];
+  /** A real formation's lines from the goalkeeper up, each from the right of the team to its left, and its shape; without them the XI goes in lines by FPL position. */
+  lines?: PitchPlayer[][];
+  shape?: string;
   /** Under the name: how far through the gameweek, or the projected total. */
   note?: string;
+  /** At the outer end of its header, as fotmob.com's team rating: the side's total. */
+  total?: string;
 }
 
 const LINES: Position[] = ['FWD', 'MID', 'DEF', 'GKP'];
@@ -39,26 +52,57 @@ const LINES: Position[] = ['FWD', 'MID', 'DEF', 'GKP'];
 const box = (cls: string) =>
   `<svg class="pitch-mark ${cls}" viewBox="0 0 316 174" aria-hidden="true"><path d="M3 174V40a10 10 0 0 1 10-10h290a10 10 0 0 1 10 10v134M102.6 30a76.8 76.8 0 0 1 110.8 0M84 174v-52a8 8 0 0 1 8-8h132a8 8 0 0 1 8 8v52"/></svg>`;
 
-export const subMark = `<span class="pp-sub" data-tip="Came on as an automatic substitute">${arrowSvg}</span>`;
+/** An automatic substitution's mark by a name: one who came on for `other`, or (off) a starter who didn't play and made way for him. */
+export function autoSubMark(dir: 'on' | 'off', other?: number) {
+  const name = other === undefined ? undefined : player(other)?.name;
+  const tip =
+    dir === 'on'
+      ? `Came on for ${name ?? 'a starter who didn’t play'}, an automatic substitution`
+      : `Didn’t play, so ${name ?? 'a substitute'} came on for him`;
+  return `<span class="pp-sub ${dir}" data-tip="${esc(tip)}">${arrowSvg}</span>`;
+}
+
+/** The mark for a player in a lineup, if he was in one of its automatic substitutions. */
+export function autoSubOf(l: { subs: number[]; off?: number[] }, pid: number) {
+  const on = l.subs.indexOf(pid);
+  if (on >= 0) return autoSubMark('on', l.off?.[on]);
+  const off = l.off?.indexOf(pid) ?? -1;
+  return off >= 0 ? autoSubMark('off', l.subs[off]) : '';
+}
 
 export const formationOf = (xi: number[]) =>
   (['DEF', 'MID', 'FWD'] as const).map((pos) => xi.filter((pid) => player(pid).pos === pos).length).join('-');
+
+// His name under the photo: with his club's crest, or in a real match as a pill in the
+// colours of the manager who has him, that manager's avatar at its left.
+function nameOf(p: PitchPlayer, club: number, name: string) {
+  if (p.owner === undefined) return `<div class="pp-name">${crest(club, 12)}<span>${esc(name)}</span>${p.mark ?? ''}</div>`;
+  if (p.owner === null) return `<div class="pp-name"><span>${esc(name)}</span>${p.mark ?? ''}</div>`;
+  return ownerPill(p.owner, p.benched, name, 'div');
+}
+
+/** An owned player's name in a real match: a pill in his manager's colours, their avatar at its left, only outlined on the bench. */
+export function ownerPill(owner: number, benched: boolean | undefined, name: string, tag = 'span') {
+  const who = mgr(owner)?.first ?? '?';
+  const where = benched ? `on ${who}’s bench` : benched === false ? `in ${who}’s XI` : `in ${who}’s squad`;
+  return `<${tag} class="pp-name owned m${slotOf(owner)}${benched ? ' benched' : ''}" data-tip="${esc(`${name}: ${where}`)}">${avatar(owner, 16)}<span>${esc(name)}</span></${tag}>`;
+}
 
 function pitchPlayer(p: PitchPlayer) {
   const pl = player(p.pid);
   const { topLeft = '', middleLeft, middleRight, bottomLeft, bottomRight } = p.icons ?? eventSlots(p.events);
   const at = (place: string, html?: string) => (html ? `<span class="pp-ev ${place}">${html}</span>` : '');
   const around = [
-    at('top-left', (p.mark ? `<span class="pp-chip">${p.mark}</span>` : '') + topLeft),
+    at('top-left', topLeft),
     at('middle-left', middleLeft),
     at('middle-right', middleRight),
     at('bottom-left', bottomLeft),
     at('bottom-right', bottomRight),
   ].join('');
-  return `<div class="pp${p.faded ? ' faded' : ''}"${p.tip ? ` data-tip="${esc(p.tip)}"` : ''}>
+  return `<a class="pp${p.faded ? ' faded' : ''}" href="${href.player(p.pid)}"${p.tip ? ` data-tip="${esc(p.tip)}"` : ''}>
     <div class="pp-head">${photo(p.pid, 44)}<span class="pp-badge">${p.badge}</span>${around}</div>
-    <div class="pp-name">${crest(pl.club, 12)}<span>${esc(pl.name)}</span></div>${p.note ? `<div class="pp-note">${p.note}</div>` : ''}
-  </div>`;
+    ${nameOf(p, pl.club, pl.name)}${p.note ? `<div class="pp-note">${p.note}</div>` : ''}
+  </a>`;
 }
 
 export function pitch(xi: PitchPlayer[], bench: PitchPlayer[] = []) {
@@ -74,33 +118,42 @@ export function pitch(xi: PitchPlayer[], bench: PitchPlayer[] = []) {
 
 // A match: home on the left with the goalkeeper at the edge and away on the right, or
 // home at the top and away at the bottom when there isn't room (see .mpitch).
-export function matchPitch(home: PitchSide, away: PitchSide, benches?: [PitchPlayer[], PitchPlayer[]]) {
-  const lines = (side: PitchSide, order: Position[]) =>
-    order
-      .map((pos) => side.xi.filter((p) => player(p.pid).pos === pos))
+export function matchPitch(home: PitchSide, away: PitchSide, benches?: [PitchPlayer[], PitchPlayer[]], benchTitle = 'Bench') {
+  const lines = (side: PitchSide, order: Position[]) => {
+    const byPosition = order.map((pos) => side.xi.filter((p) => player(p.pid).pos === pos));
+    // A real formation's lines go the other way for the away side, its goalkeeper at the far end.
+    const real = side.lines && (order[0] === 'GKP' ? side.lines : [...side.lines].reverse());
+    return (real ?? byPosition)
       .filter((line) => line.length)
       .map((line) => `<div class="mline">${line.map(pitchPlayer).join('')}</div>`)
       .join('');
+  };
   const team = (side: PitchSide, cls: string) => {
-    const formation = `<span class="mp-form">${formationOf(side.xi.map((p) => p.pid))}</span>`;
-    const name = `<span>${first(side.id)}</span>`;
-    return `<div class="mp-team ${cls}">${avatar(side.id, 24)}<div class="mp-team-text"><div class="mp-name">${cls === 'home' ? name + formation : formation + name}</div>${side.note ? `<div class="mp-note">${side.note}</div>` : ''}</div></div>`;
+    const formation = `<span class="mp-form">${side.shape ?? formationOf(side.xi.map((p) => p.pid))}</span>`;
+    const name = `<span>${side.name ?? first(side.id)}</span>`;
+    return `<div class="mp-team ${cls}">${side.total ?? ''}${side.logo ?? avatar(side.id, 24)}<div class="mp-team-text"><div class="mp-name">${name}${formation}</div>${side.note ? `<div class="mp-note">${side.note}</div>` : ''}</div></div>`;
   };
   const order: Position[] = ['GKP', 'DEF', 'MID', 'FWD'];
-  const bench = benches
-    ? `<div class="mp-bench"><div class="mp-bench-title">Bench</div><div class="mp-bench-cols">${benches
-        .map((list) => `<div>${list.map(benchRow).join('')}</div>`)
-        .join('')}</div></div>`
-    : '';
-  return `<div class="mp">
+  const bench = benches ? playerColumns(benchTitle, benches) : '';
+  return `<div class="mp-wrap"><div class="mp">
     <div class="mp-head">${team(home, 'home')}${team(away, 'away')}</div>
     <div class="mpitch"><i class="mp-halfway"></i><i class="mp-circle"></i>${box('mp-box home')}${box('mp-box away')}
       <div class="mhalf home">${lines(home, order)}</div><div class="mhalf away">${lines(away, [...order].reverse())}</div>
     </div>
-  </div>${bench}`;
+  </div>${bench}</div>`;
+}
+
+/** Two columns of players, home's and away's, as a match's bench under the pitch, or as a lineup of its own. */
+export function playerColumns(title: string, [home, away]: [PitchPlayer[], PitchPlayer[]]) {
+  return `<div class="mp-bench"><div class="mp-bench-title">${title}</div><div class="mp-bench-cols"><div>${home.map(benchRow).join('')}</div><div>${away.map(benchRow).join('')}</div></div></div>`;
 }
 
 function benchRow(p: PitchPlayer) {
   const pl = player(p.pid);
-  return `<div class="mp-sub">${photo(p.pid, 28)}<div class="mp-sub-main"><div class="mp-sub-name">${esc(pl.name)}</div><div class="mp-sub-meta">${crest(pl.club, 12)}${esc(club(pl.club).short)} · ${pl.pos}</div></div>${eventRow(p.events)}${p.badge}</div>`;
+  const name =
+    p.owner === undefined || p.owner === null
+      ? `<div class="mp-sub-name"><span>${esc(pl.name)}</span>${p.mark ?? ''}</div>`
+      : `<div class="mp-sub-name">${ownerPill(p.owner, p.benched, pl.name)}</div>`;
+  const where = p.owner === undefined ? `${crest(pl.club, 12)}${esc(club(pl.club).short)} · ` : '';
+  return `<a class="mp-sub" href="${href.player(p.pid)}">${photo(p.pid, 28)}<div class="mp-sub-main">${name}<div class="mp-sub-meta">${where}${pl.pos}${p.note ? ` · ${p.note}` : ''}</div></div>${eventRow(p.events)}${p.badge}</a>`;
 }

@@ -1,44 +1,7 @@
-/* --- Squads -------------------------------------------------------------------- */
+/* --- A team's squad and tiles ------------------------------------------------------ */
 
 .chip .av {
   margin: 0 6px 0 -4px;
-}
-
-.team-head {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  min-width: 0;
-}
-
-.team-name {
-  font-size: 18px;
-  font-weight: 500;
-  line-height: 22px;
-}
-
-.team-rank {
-  display: grid;
-  justify-items: end;
-  flex: none;
-  color: var(--text-2);
-  font-size: 12px;
-}
-
-.team-rank strong {
-  color: var(--text);
-  font-size: 22px;
-  font-weight: 500;
-  line-height: 1.1;
-}
-
-.tile-link {
-  width: 100%;
-}
-
-/* Four tiles, so wide screens stretch them rather than leave a gap. */
-.team-card .tiles {
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
 }
 
 .tile-value .form {

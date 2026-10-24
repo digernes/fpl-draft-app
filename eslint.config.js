@@ -4,7 +4,7 @@ import globals from 'globals';
 import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
-  { ignores: ['node_modules/', '_site/', '.cache/', 'public/assets/app.js', 'public/sw.js'] },
+  { ignores: ['node_modules/', '_site/', '.cache/', '**/.wrangler/', 'public/assets/app.js', 'public/sw.js'] },
   js.configs.recommended,
   tseslint.configs.recommended,
   {

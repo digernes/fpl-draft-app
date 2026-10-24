@@ -11,9 +11,11 @@
 //   node scripts/build-data.ts --cache .cache          reuse raw API responses (local dev)
 //   node scripts/build-data.ts --archive               freeze the season into seasons/ now
 //
-// A finished season is frozen into public/seasons/<2026-27>.json automatically, with a
-// summary for the next season's model to start from in public/seasons/model/, and
-// public/seasons/index.json lists every season the page can show.
+// Beside data.json go public/stats/<gw>.json, everyone's stats in each of a gameweek's
+// matches. A finished season is frozen into public/seasons/<2026-27>.json automatically,
+// its stats into public/seasons/<2026-27>/stats/, with a summary for the next season's
+// model to start from in public/seasons/model/, and public/seasons/index.json lists every
+// season the page can show.
 
 import { mkdir } from 'node:fs/promises';
 import path from 'node:path';
@@ -45,6 +47,7 @@ import {
   writeIfChanged,
   writeSeasonIndex,
 } from '../src/build/output.ts';
+import { buildPlMatches, buildPlStats, fetchFormations, fetchMoments, readMoments } from '../src/build/premier-league.ts';
 import { readSeason } from '../src/build/season.ts';
 import { simulate } from '../src/build/simulation.ts';
 import {
@@ -72,6 +75,8 @@ const previous = await readPrevious(OUT_FILE);
 const fetched = await fetchLeague(LEAGUE_ID, CACHE_DIR);
 // Last season's summary, which the model's shares and club ratings start from.
 const season = readSeason(fetched, await readSummary(SEASONS_DIR, seasonName(fetched.boot.events.data, 1)));
+// The real matches' formations, from the Premier League's match centre (once per match).
+const formations = await fetchFormations(season, previous, CACHE_DIR);
 
 const { managers, managerIds, entryByLeagueEntry } = buildManagers(season);
 const matches = buildMatches(season, entryByLeagueEntry);
@@ -116,6 +121,7 @@ const data: Data = {
   lineups,
   events: buildEvents(season, lineups),
   underlying: buildUnderlying(season, lineups),
+  plMatches: buildPlMatches(season, formations),
   flags: deadlineFlags(season, previous),
   live: buildLiveData(
     season,
@@ -150,11 +156,25 @@ if (await writeIfChanged(OUT_FILE, data)) {
   console.log(`No changes for GW${currentGw}; ${OUT_FILE} left as is.`);
 }
 
+// Everyone's stats in each match and what happened in it when, a file per gameweek, which
+// the Premier League's player stats and a match's commentary load when they're opened.
+// Moments asked for after full time stay as the last build's files had them (on the live
+// site, the deploy downloads them first).
+const STATS_DIR = path.join(path.dirname(OUT_FILE), 'stats');
+const moments = await fetchMoments(season, await readMoments(STATS_DIR), CACHE_DIR);
+const plStats = buildPlStats(season, data.plMatches ?? [], moments);
+const writeStats = async (dir: string) => {
+  await mkdir(dir, { recursive: true });
+  for (const s of plStats) await writeIfChanged(path.join(dir, `${s.gw}.json`), s);
+};
+await writeStats(STATS_DIR);
+
 await mkdir(SEASONS_DIR, { recursive: true });
 const seasonOver = season.events.length > 0 && season.events.every((e) => e.finished);
 if (seasonOver || args.archive) {
   const archive = path.join(SEASONS_DIR, `${seasonSlug(data.meta.season)}.json`);
   if (await writeIfChanged(archive, data)) console.log(`Archived ${data.meta.season} to ${archive}.`);
+  await writeStats(path.join(SEASONS_DIR, seasonSlug(data.meta.season), 'stats'));
   if (await writeSummary(SEASONS_DIR, summariseSeason(season, data.meta.season)))
     console.log(`Summed up ${data.meta.season} for next season's model.`);
 }

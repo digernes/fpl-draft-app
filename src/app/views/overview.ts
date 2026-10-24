@@ -1,47 +1,97 @@
-// The Overview tab: this round, the latest review and table, the prize and the market.
+// The draft league's Overview tab, laid out as fotmob.com's league overview: the table and
+// the latest review, then this round's matches, the prize, Manager of the Month, the recent
+// transfers and the original squads.
 
-import { dgwRule, feed, feedRow, gameweekReviewCard, resultText, squadStrip } from '../cards.ts';
-import { avatar, card, empty, infoButton, listRow } from '../components.ts';
-import { esc } from '../format.ts';
-import { first, isLive, lineupFor, player } from '../lookups.ts';
+import type { TopGameweek } from '../../shared/data.ts';
+import { monthlyAwards } from '../awards.ts';
+import { dgwRule, gameweekReviewCard, resultText, squadStrip } from '../cards.ts';
+import { avatar, card, empty, infoButton, listRow, teamName } from '../components.ts';
+import { esc, plural } from '../format.ts';
+import { first, isLive, lineupFor } from '../lookups.ts';
 import { featuredGw, matchList, oddsToggle, roundSubtitle } from '../matches.ts';
-import { D } from '../state.ts';
+import { recentTransfersCard } from '../pages/transfers.ts';
+import { href } from '../router.ts';
+import { D, state } from '../state.ts';
 import { standingsTable, tableModeToggle } from '../table.ts';
 
 export function viewOverview() {
   const reviewGw = D.meta.lastFinishedGw;
   const review = reviewGw
-    ? gameweekReviewCard(reviewGw, { limit: 5, footer: { href: `#fixtures/${reviewGw}`, label: 'Full review' } })
+    ? gameweekReviewCard(reviewGw, { limit: 5, footer: { href: href.league('fixtures', reviewGw), label: 'Full review' } })
     : '';
   return `<div class="cols">
-    <div class="col">${roundCard()}${review}${tableCard()}</div>
-    <div class="col">${gwPrizeCard()}${latestMovesCard()}${retentionMiniCard()}</div>
+    <div class="col">${tableCard()}${review}</div>
+    <div class="col">${roundCard()}${gwPrizeCard()}${awardsCard()}${recentTransfersCard()}${retentionMiniCard()}</div>
   </div>`;
 }
 
-function roundCard() {
-  const gw = featuredGw();
+export function roundCard(gw = featuredGw()) {
   const list = D.matches.filter((m) => m.gw === gw);
   return card({
     title: `Gameweek ${gw}`,
     sub: roundSubtitle(gw),
     action: list.some((m) => m.odds) ? oddsToggle() : '',
     body: matchList(list),
-    footer: { href: `#fixtures/${gw}`, label: 'All fixtures' },
+    footer: { href: href.league('fixtures', gw), label: 'All fixtures' },
   });
 }
 
-function tableCard() {
+/** The table; the home page's sidebar has it without the switch and the legend. */
+export function tableCard({ compact = false } = {}) {
   return card({
     title: 'Table',
-    action: tableModeToggle('overall'),
-    body: standingsTable('overall'),
-    footer: { href: '#table', label: 'Full table' },
+    action: compact ? '' : tableModeToggle('overall'),
+    body: standingsTable('overall', { legend: !compact }),
+    footer: { href: href.league('table'), label: 'Full table' },
   });
 }
 
-function gwPrizeCard() {
-  const title = 'Highest gameweek prize';
+// Manager of the Month: the month, its manager and the table points they took from it, as
+// the prize card has its holder, then the months before.
+export function awardsCard() {
+  const months = monthlyAwards(D);
+  if (!months.length) return '';
+  const [now, ...before] = months;
+  const span = (a: (typeof months)[number]) => (a.month.from === a.month.to ? `GW ${a.month.from}` : `GW ${a.month.from}–${a.month.to}`);
+  const top = now.managers[0];
+  const hero = `<div class="prize">
+    ${avatar(top.id, 48)}
+    <div class="prize-main">
+      <div class="prize-label">${esc(now.month.name)}${now.over ? '' : ' so far'}</div>
+      <div class="prize-name">${teamName(top.id)}</div>
+      <div class="prize-meta">W${top.won} D${top.drawn} L${top.lost} · ${top.pf} points scored</div>
+    </div>
+    <div class="prize-score"><span>${top.pts}</span><span class="prize-unit">pts</span></div>
+  </div>`;
+  const earlier = before.map((a) =>
+    listRow({
+      lead: avatar(a.managers[0].id, 32),
+      title: `<strong>${esc(a.month.name)}</strong>`,
+      meta: `${teamName(a.managers[0].id)} · ${span(a)} · ${a.managers[0].pf} points scored`,
+      value: `${a.managers[0].pts} pts`,
+    }),
+  );
+  return card({
+    title: 'Manager of the Month',
+    sub: span(now),
+    action: infoButton('The most table points from the month’s matches, then the most points scored', 'How it is decided'),
+    body: `${hero}${
+      earlier.length
+        ? `<div class="date-head"><span>Earlier</span><span class="muted">${plural(earlier.length, 'month')}</span></div><div class="list">${earlier.join('')}</div>`
+        : ''
+    }`,
+  });
+}
+
+// A top gameweek's result and score lead to the head-to-head it was scored in.
+function toMatch(g: TopGameweek, html: string, cls = '') {
+  const m = D.matches.find((x) => x.gw === g.gw && (x.home === g.id || x.away === g.id));
+  const attr = cls ? ` class="${cls}"` : '';
+  return m ? `<a${attr} href="${href.match(m)}">${html}</a>` : cls ? `<div${attr}>${html}</div>` : html;
+}
+
+export function gwPrizeCard() {
+  const title = 'Highest scoring GW';
   const action = infoButton(`Highest gameweek score. Ties go to the earlier week. ${dgwRule()}`, 'Rules');
   const holders = D.topGameweeks.filter((g) => g.rank === 1);
   if (!holders.length) return card({ title, action, body: empty('Up for grabs once the first gameweek finishes') });
@@ -52,15 +102,14 @@ function gwPrizeCard() {
       const adjusted = g.dgw
         ? `<span class="prize-adj" data-tip="${g.dgw} double-gameweek ${g.dgw === 1 ? 'player' : 'players'} × −${D.meta.dgwPenalty}">${g.pts} − ${g.dgw * D.meta.dgwPenalty}</span>`
         : '';
-      const star = g.star ? `${esc(player(g.star.player).name)} ${g.star.pts}` : '';
-      return `<div class="prize">
+      return `<div class="prize${g.id === state.myTeam ? ' mine' : ''}">
         ${avatar(g.id, 48)}
         <div class="prize-main">
           <div class="prize-label">${label}</div>
-          <div class="prize-name">${first(g.id)} <span class="muted">GW ${g.gw}</span></div>
-          <div class="prize-meta">${[resultText(g), star].filter(Boolean).join(' · ')}</div>
+          <div class="prize-name"><a href="${href.team(g.id)}">${first(g.id)}</a> <span class="muted">GW ${g.gw}</span></div>
+          <div class="prize-meta">${toMatch(g, resultText(g))}</div>
         </div>
-        <div class="prize-score"><span>${g.adj}</span>${adjusted}</div>
+        ${toMatch(g, `<span>${g.adj}</span>${adjusted}`, 'prize-score')}
       </div>`;
     })
     .join('');
@@ -80,25 +129,17 @@ function gwPrizeCard() {
       listRow({
         rank: g.rank,
         lead: avatar(g.id, 24),
-        title: `${first(g.id)} <span class="muted">GW ${g.gw}</span>`,
-        meta: resultText(g),
-        value: g.adj,
+        title: `${teamName(g.id)} <span class="muted">GW ${g.gw}</span>`,
+        meta: toMatch(g, resultText(g)),
+        value: toMatch(g, String(g.adj)),
+        mine: g.id === state.myTeam,
       }),
     );
   return card({
     title,
     action,
-    body: `${hero}${live}${chasers.length ? `<div class="date-head"><span>Chasing</span></div><div class="list">${chasers.join('')}</div>` : ''}`,
-    footer: { href: '#stats', label: 'All top gameweeks' },
-  });
-}
-
-function latestMovesCard() {
-  const items = feed().slice(0, 6);
-  return card({
-    title: 'Latest transfers',
-    body: items.length ? `<div class="list">${items.map(feedRow).join('')}</div>` : empty('No transfers yet'),
-    footer: { href: '#transfers', label: 'All transfers' },
+    body: `${hero}${live}${chasers.length ? `<div class="date-head"><span>Closest</span></div><div class="list">${chasers.join('')}</div>` : ''}`,
+    footer: { href: href.league('stats'), label: 'All top gameweeks' },
   });
 }
 
@@ -108,8 +149,8 @@ function retentionMiniCard() {
     title: 'Original squad',
     sub: 'Draft picks still in the squad',
     body: `<div class="list">${rows
-      .map((r) => listRow({ lead: avatar(r.id, 24), title: `${first(r.id)}`, meta: squadStrip(r), value: `${r.kept.length}/${r.size}` }))
+      .map((r) => listRow({ lead: avatar(r.id, 24), title: teamName(r.id), meta: squadStrip(r), value: `${r.kept.length}/${r.size}` }))
       .join('')}</div>`,
-    footer: { href: '#draft', label: 'Original squads' },
+    footer: { href: href.league('draft'), label: 'Original squads' },
   });
 }

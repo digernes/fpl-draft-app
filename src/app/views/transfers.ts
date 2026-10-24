@@ -1,22 +1,13 @@
-// The Transfers tab is the feed of moves, with the waiver order and trade offers. The
-// transfer stats (the market at a glance, per-manager numbers and awards) live on the
-// Stats tab, under Transfers.
+// The draft league's Transfer stats tab (the market at a glance, per-manager numbers and
+// awards), and the waiver order and trade offers the Transfer center shows.
 
 import type { TransferSummary } from '../../shared/data.ts';
-import { feed, feedRow, type FeedItem } from '../cards.ts';
-import { avatar, card, chip, crest, empty, listRow, photo, tag } from '../components.ts';
+import { avatar, card, crest, empty, listRow, playerName, playerPhoto, tag, teamName } from '../components.ts';
 import { ago, esc, plural, signed, sum } from '../format.ts';
 import { swapSvg } from '../icons.ts';
 import { first, mgr, player } from '../lookups.ts';
-import { D, state } from '../state.ts';
+import { D } from '../state.ts';
 import { dataTable, managerCol, posCol, type Column } from '../table.ts';
-
-export function viewTransfers() {
-  return `<div class="cols">
-    <div class="col">${transferLogCard()}</div>
-    <div class="col">${waiverOrderCard()}${tradesCard()}</div>
-  </div>`;
-}
 
 export function transferStats() {
   const t = D.transfers;
@@ -65,7 +56,7 @@ function transferTableCard() {
       w: '112px',
       from: 'lg',
       cls: 'c-left',
-      cell: (r) => (r.best ? `${esc(player(r.best.in).name)} <span class="muted">${signed(r.best.net)}</span>` : '–'),
+      cell: (r) => (r.best ? `${playerName(r.best.in)} <span class="muted">${signed(r.best.net)}</span>` : '–'),
     },
   ];
   return card({ title: 'Transfers by manager', body: dataTable(cols, rows) });
@@ -85,32 +76,6 @@ function movesByGwCard() {
   return card({ title: 'Moves per gameweek', sub: 'Waivers, free agents and trades', body: `<div class="bars">${bars}</div>` });
 }
 
-function transferLogCard() {
-  const items = feed().filter((item) => {
-    if (state.logManager === 'all') return true;
-    const id = Number(state.logManager);
-    return item.move ? item.move.manager === id : item.trade.offeredBy === id || item.trade.offeredTo === id;
-  });
-  const chips = [
-    chip('All', 'log', 'all', state.logManager === 'all'),
-    ...D.managers.map((m) => chip(esc(m.first), 'log', m.id, state.logManager === String(m.id))),
-  ].join('');
-  const groups: { gw: number; items: FeedItem[] }[] = [];
-  for (const item of items) {
-    if (groups.at(-1)?.gw !== item.gw) groups.push({ gw: item.gw, items: [] });
-    groups.at(-1)!.items.push(item);
-  }
-  const body = groups.length
-    ? groups
-        .map(
-          (g) =>
-            `<div class="date-head"><span>Gameweek ${g.gw}</span><span class="muted">${plural(g.items.length, 'move')}</span></div><div class="list">${g.items.map(feedRow).join('')}</div>`,
-        )
-        .join('')
-    : empty('No transfers');
-  return card({ title: 'Transfer log', body: `<div class="filter-bar">${chips}</div>${body}` });
-}
-
 function awardsCard() {
   const s = D.transfers.summary;
   const pick = (score: (x: TransferSummary) => number) => s.reduce((a, b) => (score(b) > score(a) ? b : a), s[0]);
@@ -123,14 +88,14 @@ function awardsCard() {
     ['Set and forget', pick((x) => -x.moves), (x) => (x.moves ? plural(x.moves, 'move') : 'Not a single move')],
   ];
   const rows = awards.map(([title, winner, meta]) =>
-    listRow({ lead: avatar(winner.id, 32), title: `${title}`, meta: `${first(winner.id)} · ${meta(winner)}` }),
+    listRow({ lead: avatar(winner.id, 32), title: `${title}`, meta: `${teamName(winner.id)} · ${meta(winner)}` }),
   );
   if (keeper)
     rows.push(
       listRow({
         lead: avatar(keeper.id, 32),
         title: 'Loyal to the draft',
-        meta: `${first(keeper.id)} · ${keeper.kept.length} of ${keeper.size} picks kept`,
+        meta: `${teamName(keeper.id)} · ${keeper.kept.length} of ${keeper.size} picks kept`,
       }),
     );
   return card({ title: 'Awards', body: `<div class="list">${rows.join('')}</div>` });
@@ -139,9 +104,9 @@ function awardsCard() {
 function bestPickupsCard() {
   const rows = D.transfers.bestPickups.map((mv, i) =>
     listRow({
-      lead: photo(mv.in),
-      title: `${esc(player(mv.in).name)} ${crest(player(mv.in).club, 14)}`,
-      meta: `${first(mv.manager)} · GW ${mv.gw} · for ${esc(player(mv.out).name)} · ${mv.banked} pts banked`,
+      lead: playerPhoto(mv.in),
+      title: `${playerName(mv.in)} ${crest(player(mv.in).club, 14)}`,
+      meta: `${teamName(mv.manager)} · GW ${mv.gw} · for ${playerName(mv.out)} · ${mv.banked} pts banked`,
       value: signed(mv.net),
       top: i === 0,
     }),
@@ -156,9 +121,9 @@ function bestPickupsCard() {
 function regretsCard() {
   const rows = D.transfers.regrets.map((mv, i) =>
     listRow({
-      lead: photo(mv.out),
-      title: `${esc(player(mv.out).name)} ${crest(player(mv.out).club, 14)}`,
-      meta: `Dropped by ${first(mv.manager)} · GW ${mv.gw} · for ${esc(player(mv.in).name)}`,
+      lead: playerPhoto(mv.out),
+      title: `${playerName(mv.out)} ${crest(player(mv.out).club, 14)}`,
+      meta: `Dropped by ${teamName(mv.manager)} · GW ${mv.gw} · for ${playerName(mv.in)}`,
       value: mv.outPts,
       top: i === 0,
     }),
@@ -173,9 +138,9 @@ function regretsCard() {
 function contestedCard() {
   const rows = D.transfers.contested.map((c) =>
     listRow({
-      lead: photo(c.player),
-      title: `${esc(player(c.player).name)} ${crest(player(c.player).club, 14)}`,
-      meta: `GW ${c.gw} · won by ${first(c.winner)}${c.pts != null ? ` · ${c.pts} pts since` : ''}`,
+      lead: playerPhoto(c.player),
+      title: `${playerName(c.player)} ${crest(player(c.player).club, 14)}`,
+      meta: `GW ${c.gw} · won by ${c.winner ? teamName(c.winner) : 'nobody'}${c.pts != null ? ` · ${c.pts} pts since` : ''}`,
       value: `<span class="stack">${c.claimants.map((id) => avatar(id)).join('')}</span>`,
     }),
   );
@@ -186,7 +151,7 @@ function contestedCard() {
   });
 }
 
-const TRADE_STATES: Record<string, string> = {
+export const TRADE_STATES: Record<string, string> = {
   o: 'Offered',
   a: 'Accepted',
   p: 'Processed',
@@ -197,9 +162,9 @@ const TRADE_STATES: Record<string, string> = {
   e: 'Expired',
 };
 
-function tradesCard() {
+export function tradesCard() {
   const trades = D.transfers.trades;
-  const names = (ids: number[]) => ids.map((pid) => `${esc(player(pid).name)}`).join(', ');
+  const names = (ids: number[]) => ids.map(playerName).join(', ');
   const rows = trades.map((t) => {
     const net = (ids: number[], outIds: number[]) => {
       if (t.gw > D.meta.lastFinishedGw) return '';
@@ -209,7 +174,7 @@ function tradesCard() {
     const gets = t.items.map((i) => i.gets);
     const gives = t.items.map((i) => i.gives);
     return `<div class="trade">
-      <div class="trade-head">${avatar(t.offeredBy, 24)}<span>${first(t.offeredBy)}</span><span class="swap-icon">${swapSvg}</span>${avatar(t.offeredTo, 24)}<span>${first(t.offeredTo)}</span>${tag(TRADE_STATES[t.state] ?? t.state)}</div>
+      <div class="trade-head">${avatar(t.offeredBy, 24)}<span>${teamName(t.offeredBy)}</span><span class="swap-icon">${swapSvg}</span>${avatar(t.offeredTo, 24)}<span>${teamName(t.offeredTo)}</span>${tag(TRADE_STATES[t.state] ?? t.state)}</div>
       <div class="trade-side"><span class="muted">${first(t.offeredBy)} gets</span> ${names(gets)}${net(gets, gives)}</div>
       <div class="trade-side"><span class="muted">${first(t.offeredTo)} gets</span> ${names(gives)}${net(gives, gets)}</div>
       <div class="trade-meta">GW ${t.gw} · ${ago(t.at)}</div>
@@ -218,9 +183,9 @@ function tradesCard() {
   return card({ title: 'Trades', body: rows.length ? rows.join('') : empty('No trades yet') });
 }
 
-function waiverOrderCard() {
+export function waiverOrderCard() {
   const rows = D.transfers.waiverOrder.map((id, i) =>
-    listRow({ rank: i + 1, lead: avatar(id, 24), title: first(id), meta: esc(mgr(id)!.team) }),
+    listRow({ rank: i + 1, lead: avatar(id, 24), title: teamName(id), meta: esc(mgr(id)!.team) }),
   );
   return card({ title: 'Waiver order', sub: `For gameweek ${D.meta.nextGw}`, body: `<div class="list">${rows.join('')}</div>` });
 }
@@ -228,16 +193,16 @@ function waiverOrderCard() {
 function hotPotatoesCard() {
   const potatoes = D.transfers.hotPotatoes.map((h) =>
     listRow({
-      lead: photo(h.player),
-      title: `${esc(player(h.player).name)} ${crest(player(h.player).club, 14)}`,
-      meta: `Owned by ${h.owners.map((id) => first(id)).join(', ')}`,
+      lead: playerPhoto(h.player),
+      title: `${playerName(h.player)} ${crest(player(h.player).club, 14)}`,
+      meta: `Owned by ${h.owners.map(teamName).join(', ')}`,
       value: `<span class="stack">${h.owners.map((id) => avatar(id)).join('')}</span>`,
     }),
   );
   const dropped = D.transfers.mostDropped.map((d) =>
     listRow({
-      lead: photo(d.player),
-      title: `${esc(player(d.player).name)} ${crest(player(d.player).club, 14)}`,
+      lead: playerPhoto(d.player),
+      title: `${playerName(d.player)} ${crest(player(d.player).club, 14)}`,
       meta: `${player(d.player).total} pts this season`,
       value: `${d.times}×`,
     }),

@@ -1,6 +1,6 @@
 // The best legal XI from a squad by a value per player: each position between its
 // minimum and maximum, eleven in all. The build uses it for projected XIs by expected
-// points, the Squads tab for each manager's best XI by the points scored for them.
+// points, a team's page for its best XI by the points scored for it.
 
 import type { Position, XiLimits } from './data.ts';
 

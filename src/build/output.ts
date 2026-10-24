@@ -4,8 +4,9 @@
 import { readdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import type { ById, Club, Data, Lineup, Meta, Player, SeasonEntry, SeasonIndex, XpParts } from '../shared/data.ts';
+import type { ById, Club, Data, Lineup, Meta, Month, Player, SeasonEntry, SeasonIndex, XpParts } from '../shared/data.ts';
 import { DGW_PENALTY, FORM_LENGTH, KIT_COLORS, ODDS_OVERROUND, POSITIONS, SCHEMA } from './config.ts';
+import { underlyingIn } from './lineups.ts';
 import type { Season } from './season.ts';
 import { round } from './util.ts';
 
@@ -27,6 +28,9 @@ export function buildPlayers(
     ...trades.flatMap((tr) => tr.tradeitem_set.flatMap((it) => [it.element_in, it.element_out])),
     ...Object.values(lineups).flatMap((byGw) => Object.values(byGw).flatMap((l) => [...l.xi, ...l.bench])),
   ]);
+  // Those FPL added after the draft: from the first gameweek whose deadline came after.
+  const draftEnd = Math.max(0, ...season.choices.map((c) => Date.parse(c.choice_time ?? '') || 0));
+  const firstGwAfter = (iso: string) => season.events.find((e) => Date.parse(e.deadline_time) > Date.parse(iso))?.id;
   const players: ById<Player> = {};
   for (const el of [...elements.values()].sort((a, b) => a.id - b.id)) {
     const pid = el.id;
@@ -37,9 +41,11 @@ export function buildPlayers(
       club: el.team,
       code: el.code,
       total: el.total_points,
+      ...seasonUnderlying(season, pid),
       ...(referenced.has(pid) ? { pts: gws.map((gw) => pointsIn(pid, gw)) } : {}),
       owner: ownerNow.get(pid) ?? null,
       status: el.status,
+      ...(el.added && draftEnd && Date.parse(el.added) > draftEnd ? { added: firstGwAfter(el.added) } : {}),
       ...(el.news ? { news: el.news } : {}),
       ep: round(expected(pid), 1),
       ...(fpl ? { fpl: round(fpl(pid), 1) } : {}),
@@ -55,6 +61,18 @@ export function buildPlayers(
     };
   }
   return players;
+}
+
+// The season's underlying numbers, summed over the finished gameweeks he played in.
+function seasonUnderlying(season: Season, pid: number) {
+  const weeks = season.finishedGws.map((gw) => underlyingIn(season, pid, gw)).filter((u) => u?.minutes && u.xg !== undefined);
+  if (!weeks.length) return {};
+  const total = (key: 'xg' | 'xa' | 'xp') =>
+    round(
+      weeks.reduce((t, u) => t + (u![key] ?? 0), 0),
+      key === 'xp' ? 1 : 2,
+    );
+  return { xs: [total('xg'), total('xa'), total('xp')] as [number, number, number] };
 }
 
 // In tenths, as the tooltip shows them.
@@ -99,13 +117,35 @@ export function buildMeta(season: Season, leagueId: number, hasProjections: bool
     nextWaivers: nextEvent?.waivers_time ?? null,
     nextTrades: nextEvent?.trades_time ?? null,
     scoring: { win: scoring.h2h_win, draw: scoring.h2h_draw, loss: scoring.h2h_lose },
+    rules: Object.fromEntries(Object.entries(season.boot.settings.scoring).filter((e): e is [string, number] => typeof e[1] === 'number')),
     dgwPenalty: DGW_PENALTY,
     formLength: FORM_LENGTH,
     oddsOverround: ODDS_OVERROUND,
     hasProjections,
     formation,
     xiLimits,
+    months: buildMonths(season),
   };
+}
+
+// The main game's months (its "phases"), within the league's gameweeks; without its
+// bootstrap, each gameweek goes to the month of its deadline.
+export function buildMonths(season: Pick<Season, 'league' | 'events' | 'fplBoot'>): Month[] {
+  const { league, events, fplBoot } = season;
+  const phases = (fplBoot?.phases ?? []).filter((p) => p.name !== 'Overall');
+  if (phases.length)
+    return phases
+      .map((p) => ({ name: p.name, from: Math.max(p.start_event, league.start_event), to: Math.min(p.stop_event, league.stop_event) }))
+      .filter((m) => m.from <= m.to);
+  const monthOf = new Intl.DateTimeFormat('en-GB', { month: 'long', timeZone: 'Europe/London' });
+  const months: Month[] = [];
+  for (const e of events.filter((x) => x.id >= league.start_event && x.id <= league.stop_event)) {
+    const name = monthOf.format(new Date(e.deadline_time));
+    const last = months.at(-1);
+    if (last?.name === name) last.to = e.id;
+    else months.push({ name, from: e.id, to: e.id });
+  }
+  return months;
 }
 
 /** The last build's output, if there is one. */

@@ -1,12 +1,20 @@
 // The Draft tab: original squads, the draft board, steals, busts and hauls.
 
 import type { DraftPick } from '../../shared/data.ts';
+import { onAction } from '../actions.ts';
 import { squadStrip } from '../cards.ts';
-import { avatar, card, crest, listRow, photo, tag } from '../components.ts';
+import { avatar, card, crest, listRow, playerName, playerPhoto, tag, teamName } from '../components.ts';
 import { esc, pct } from '../format.ts';
 import { caretSvg } from '../icons.ts';
 import { club, first, mgr, player, slotOf } from '../lookups.ts';
+import { renderView } from '../render.ts';
+import { href } from '../router.ts';
 import { D, state } from '../state.ts';
+
+onAction('squad', (value) => {
+  state.openSquad = state.openSquad === value ? null : value;
+  renderView();
+});
 
 export function viewDraft() {
   return `${originalSquadCard()}${draftBoardCard()}
@@ -26,7 +34,7 @@ function originalSquadCard() {
       const playerChip = (pid: number, owner?: number | null) => {
         const p = player(pid);
         const where = owner === undefined ? '' : owner ? avatar(owner) : tag('FA', 'Free agent now');
-        return `<span class="pchip">${crest(p.club, 14)}${esc(p.name)} <span class="muted">${p.total}</span>${where}</span>`;
+        return `<a class="pchip" href="${href.player(pid)}">${crest(p.club, 14)}${esc(p.name)} <span class="muted">${p.total}</span>${where}</a>`;
       };
       const detail = open
         ? `<div class="squad-detail">
@@ -95,7 +103,7 @@ function draftBoardCard() {
       const still = kept.get(id)?.has(pk.player);
       const owner = p.owner && p.owner !== id ? avatar(p.owner) : '';
       const tip = `#${pk.overall} · ${p.full} · ${p.total} pts${still ? '' : p.owner ? ` · now with ${mgr(p.owner)?.first}` : ' · free agent now'}${pk.auto ? ' · auto-pick' : ''}`;
-      return `<span class="db-cell pos-${p.pos}${still ? '' : ' gone'}" data-tip="${esc(tip)}"><span class="db-player">${esc(p.name)}</span><span class="db-meta">${esc(club(p.club).short)} · ${p.pos} ${owner}</span></span>`;
+      return `<a class="db-cell pos-${p.pos}${still ? '' : ' gone'}" href="${href.player(pk.player)}" data-tip="${esc(tip)}"><span class="db-player">${esc(p.name)}</span><span class="db-meta">${esc(club(p.club).short)} · ${p.pos} ${owner}</span></a>`;
     });
     return `<div class="db-row"><span class="db-round">${round}</span>${cells.join('')}</div>`;
   }).join('');
@@ -125,9 +133,9 @@ function draftListCard(title: string, sub: string, picks: DraftPick[], { highlig
   const rows = picks.map((pk, i) => {
     const p = player(pk.player);
     return listRow({
-      lead: photo(pk.player),
-      title: `${esc(p.name)} ${crest(p.club, 14)}`,
-      meta: `Round ${pk.round}, pick ${pk.overall} · ${first(pk.manager)}`,
+      lead: playerPhoto(pk.player),
+      title: `${playerName(pk.player)} ${crest(p.club, 14)}`,
+      meta: `Round ${pk.round}, pick ${pk.overall} · ${teamName(pk.manager)}`,
       value: p.total,
       top: highlight && i === 0,
     });
@@ -140,6 +148,6 @@ function draftHaulCard() {
   return card({
     title: 'Draft haul',
     sub: 'Season points of everyone each manager drafted, kept or not',
-    body: `<div class="list">${rows.map((r, i) => listRow({ rank: i + 1, lead: avatar(r.id, 24), title: first(r.id), value: r.draftHaul, top: i === 0 })).join('')}</div>`,
+    body: `<div class="list">${rows.map((r, i) => listRow({ rank: i + 1, lead: avatar(r.id, 24), title: teamName(r.id), value: r.draftHaul, top: i === 0 })).join('')}</div>`,
   });
 }

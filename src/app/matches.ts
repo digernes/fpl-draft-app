@@ -1,11 +1,11 @@
-// Head-to-head matches: the list, odds and the expanded match.
+// Head-to-head matches: the list, their odds, and the parts of a match's page.
 
 import { bestXi } from '../shared/best-xi.ts';
 import type { Lineup, Match, Odds } from '../shared/data.ts';
 import { liveProjection, playerState, type Expected, type PlayerState, type Scored, type SlimLive } from '../shared/live.ts';
 import { liveOdds } from '../shared/odds.ts';
 import { avatar, empty, ptsPill, seg, xpPill } from './components.ts';
-import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, plural, priceText, sum } from './format.ts';
+import { countdown, esc, fmtShortDay, fmtTime, fmtWeekday, pct, plural, priceText, sum } from './format.ts';
 import {
   clubFixtures,
   first,
@@ -17,7 +17,6 @@ import {
   lineupFor,
   liveParts,
   liveXp,
-  matchKey,
   mgr,
   opponents,
   partsAt,
@@ -26,8 +25,10 @@ import {
   versus,
   xpAt,
 } from './lookups.ts';
-import { dueFilters, dueShows, lineupFilters, showsEvents, statBadge } from './lineup-filters.ts';
-import { matchPitch, subMark, type PitchPlayer, type PitchSide } from './pitch.ts';
+import { gwUnderlying } from './pl-stats.ts';
+import { dueFilters, dueShows, hasLineupFilters, lineupFilters, showsEvents, statBadge } from './lineup-filters.ts';
+import { autoSubOf, matchPitch, type PitchPlayer, type PitchSide } from './pitch.ts';
+import { href } from './router.ts';
 import { D, live, state } from './state.ts';
 
 export function featuredGw() {
@@ -36,33 +37,83 @@ export function featuredGw() {
   return meta.nextGw;
 }
 
-export function matchList(list: Match[]) {
+// The followed team's match first. A side column's list is compact, without the odds,
+// with the match whose page it is on picked out.
+export function matchList(list: Match[], { compact = false, current = null as Match | null } = {}) {
   if (!list.length) return empty('No matches this gameweek');
-  return `<div class="matches">${list.map(matchBlock).join('')}</div>`;
+  const mine = (m: Match) => (m.home === state.myTeam || m.away === state.myTeam ? 0 : 1);
+  const rows = [...list].sort((a, b) => mine(a) - mine(b)).map((m) => matchBlock(m, compact, m === current));
+  return `<div class="matches${compact ? ' compact' : ''}">${rows.join('')}</div>`;
 }
 
-function matchBlock(m: Match) {
-  const key = matchKey(m);
-  const open = state.openMatch === key;
-  const inPlay = m.started && !m.finished ? inPlayOdds(m) : null;
+// fotmob.com's status chip, at the left of a match's row and under its score: FT once
+// it's over, and while it's on Live (or the minute) on the brand colour.
+export const statusDot = (state: 'live' | 'done' | 'due', label = state === 'live' ? 'Live' : 'FT') =>
+  state === 'due' ? '' : `<span class="status-dot${state === 'live' ? ' live' : ''}">${label}</span>`;
+
+// Where a head-to-head stands: live while a club with a player in either squad is playing,
+// done once every one of them is (or the gameweek is over), and neither between match
+// days or before the deadline.
+export function matchStatus(m: Match): 'live' | 'done' | 'due' {
+  if (m.finished) return 'done';
+  const feed = live?.gw === m.gw ? live.feed : D.live?.gw === m.gw ? D.live : null;
+  if (!m.started || !feed) return 'due';
+  const squads = [m.home, m.away].flatMap((id) => {
+    const l = lineupFor(id, m.gw);
+    return l ? [...l.xi, ...l.bench] : [];
+  });
+  const states = squads.map((pid) => playerState(feed, pid, player(pid)?.club).state);
+  if (states.some((s) => s === 'live' || s === 'off')) return 'live';
+  return states.every((s) => s === 'done' || s === 'blank') ? 'done' : 'due';
+}
+
+/** Between match days: when the next club with a player in either squad kicks off. */
+export function nextKickoff(m: Match): string | null {
+  const feed = live?.gw === m.gw ? live.feed : D.live?.gw === m.gw ? D.live : null;
+  if (!feed) return null;
+  const kickoffs = [m.home, m.away]
+    .flatMap((id) => {
+      const l = lineupFor(id, m.gw);
+      return l ? [...l.xi, ...l.bench] : [];
+    })
+    .flatMap((pid) => {
+      const s = playerState(feed, pid, player(pid)?.club);
+      return s.state === 'due' && s.ko ? [s.ko] : [];
+    })
+    .sort();
+  return kickoffs[0] ?? null;
+}
+
+/** A head-to-head's state under its score: Live, Full time, or the countdown to its next real match. */
+export function matchStatusText(m: Match) {
+  const state = matchStatus(m);
+  if (state === 'live') return statusDot('live');
+  if (state === 'done') return 'Full time';
+  const ko = nextKickoff(m);
+  const left = ko && countdown(ko);
+  return left ? `Next match in ${left}` : '';
+}
+
+function matchBlock(m: Match, compact = false, current = false) {
+  const inPlay = m.started && !m.finished && !compact ? inPlayOdds(m) : null;
   const deadline = gwInfo(m.gw)?.deadline;
   const center = m.started
-    ? `<span class="score${m.finished ? '' : ' is-live'}">${m.homePts} - ${m.awayPts}</span>${m.finished ? '' : '<span class="live-label">Live</span>'}`
+    ? `<span class="score">${m.homePts} - ${m.awayPts}</span>`
     : `<span class="kickoff">${deadline ? fmtTime.format(new Date(deadline)) : 'TBC'}</span>`;
+  const status = statusDot(matchStatus(m));
   const side = (id: number, cls: string) =>
     `<span class="side ${cls}">${cls === 'away' ? avatar(id, 22) : ''}<span class="side-text"><span class="side-name">${first(id)}</span><span class="side-team">${esc(mgr(id)!.team)}</span></span>${cls === 'home' ? avatar(id, 22) : ''}</span>`;
-  return `<div class="match-block${open ? ' open' : ''}">
-    <button type="button" class="match" data-action="match" data-value="${key}" aria-expanded="${open}">
-      ${side(m.home, 'home')}<span class="mid">${center}</span>${side(m.away, 'away')}
-    </button>
-    ${m.odds && !m.started ? oddsRow(m.odds, m) : inPlay ? oddsRow(inPlay, m, null, true) : ''}
-    ${open ? matchDetail(m) : ''}
+  const mine = m.home === state.myTeam || m.away === state.myTeam;
+  const odds = compact ? '' : m.odds && !m.started ? oddsRow(m.odds, m) : inPlay ? oddsRow(inPlay, m, null, true) : '';
+  return `<div class="match-block${mine ? ' mine' : ''}${current ? ' this' : ''}">
+    <a class="match" href="${href.match(m)}"><span class="status-slot">${status}</span>${side(m.home, 'home')}<span class="mid">${center}</span>${side(m.away, 'away')}<span></span></a>
+    ${odds}
   </div>`;
 }
 
 // `outcome` (0 home, 1 draw, 2 away) settles the row the way fotmob.com does after full
 // time: the losing selections go grey with their price struck through.
-function oddsRow(odds: Pick<Odds, 'p' | 'prices'>, m: Match, outcome: number | null = null, inPlay = false) {
+export function oddsRow(odds: Pick<Odds, 'p' | 'prices'>, m: Match, outcome: number | null = null, inPlay = false) {
   const labels = ['1', 'X', '2'];
   const who = [`${mgr(m.home)!.first} to win`, 'Draw', `${mgr(m.away)!.first} to win`];
   return `<div class="odds${inPlay ? ' in-play' : ''}">${odds.prices
@@ -76,26 +127,35 @@ function oddsRow(odds: Pick<Odds, 'p' | 'prices'>, m: Match, outcome: number | n
 const playerInfo = (pid: number) => player(pid) ?? { pos: undefined, club: undefined };
 
 // Live odds for a match in play: both scores so far, plus the expected points (by the
-// cog's setting) for whatever each XI still has to play, with the auto-subs it can count
-// on, the uncertainty shrinking as games finish.
-function inPlayOdds(m: Match) {
+// cog's setting) for whatever each XI still has to play from where its matches stand, with
+// the auto-subs it can count on, the uncertainty shrinking as games finish (see
+// liveProjection).
+export function inPlayOdds(m: Match) {
   const home = live?.gw === m.gw ? live.lineups[m.home] : undefined;
   const away = live?.gw === m.gw ? live.lineups[m.away] : undefined;
   if (!live || !home || !away) return null;
   const { feed } = live;
-  const ours = state.xp !== 'fpl'; // the appearance and clean-sheet parts are the model's
+  const ours = state.xp !== 'fpl'; // the parts are the model's
   const expected: Expected = {
     points: (pid) => (player(pid) ? liveXp(pid) : 0),
-    milestones: ours
-      ? (pid) => {
-          const parts = D.live?.parts?.[pid];
-          return parts && [parts[1], parts[5]];
-        }
-      : undefined,
+    parts: ours ? (pid) => D.live?.parts?.[pid] : undefined,
     cleanSheet: D.live?.cleanSheet,
+    named: namedIn(m.gw),
   };
   const projection = (scored: Scored) => liveProjection(scored, feed, playerInfo, expected, D.meta.formation);
   return liveOdds(projection(home), projection(away), D.meta.oddsOverround);
+}
+
+// Who each club has named for its fixtures in a gameweek, once the Premier League has the
+// lineups (from about an hour before kick-off).
+function namedIn(gw: number): Expected['named'] {
+  const teams = new Map((D.plMatches ?? []).flatMap((x) => (x.gw === gw && x.formations ? [[x.id, x.formations] as const] : [])));
+  return (pid, fixture) => {
+    const sides = teams.get(fixture);
+    if (!sides) return undefined;
+    if (sides.some((side) => side.lines.some((line) => line.includes(pid)))) return 'xi';
+    return sides.some((side) => side.subs.includes(pid)) ? 'bench' : 'out';
+  };
 }
 
 // FotMob-style match state next to each player in a live gameweek.
@@ -115,26 +175,19 @@ function kickoffTime(ko: string | null | undefined) {
   return `${today ? '' : `<span class="ko-day">${fmtWeekday.format(at)}</span> `}${fmtTime.format(at)}`;
 }
 
-function preMatchOdds(m: Match) {
+export function preMatchOdds(m: Match) {
   if (!m.odds) return '';
   const outcome = !m.finished ? null : m.homePts! > m.awayPts! ? 0 : m.homePts === m.awayPts ? 1 : 2;
-  // The first gameweek priced before its deadline, so kept rather than worked out afterwards.
-  const keptFrom = Math.min(...D.matches.filter((x) => x.odds && !x.odds.afterwards).map((x) => x.gw));
   const tip = m.odds.afterwards
-    ? `Worked out afterwards from each side’s projected XI, with only the gameweeks before it to go on; from GW ${keptFrom} on, the odds are the ones at the deadline`
+    ? 'Worked out afterwards from each side’s projected XI, with only the gameweeks before it to go on'
     : 'The odds at the deadline';
   // Faded while the match is on, under the live odds.
   return `<div class="detail-odds${m.started && !m.finished ? ' faded' : ''}"><div class="detail-label">Pre-match odds <span class="muted" data-tip="${tip}">${m.odds.afterwards ? '· worked out afterwards' : '· at the deadline'}</span></div>${oddsRow(m.odds, m, outcome)}</div>`;
 }
 
-function matchDetail(m: Match) {
-  if (!m.started) return upcomingDetail(m);
-  return `<div class="match-detail">${preMatchOdds(m)}${expectedStats(m)}${matchLineups(m)}</div>`;
-}
-
 // A finished match's numbers from the xG table, the way fotmob.com shows a match's xG:
 // the label in the middle and the higher figure in a pill of that side's colour.
-function expectedStats(m: Match) {
+export function expectedStats(m: Match) {
   if (!m.xg) return '';
   const row = (label: string, tip: string, [home, away]: [number, number]) => {
     const value = (v: number, id: number, higher: boolean) =>
@@ -151,7 +204,7 @@ function expectedStats(m: Match) {
 // Both XIs on one pitch with each player's points, what they did, auto-subs, double
 // gameweeks and, in a live gameweek, the minute; the benches below. A finished
 // gameweek gets the lineup filters on top.
-function matchLineups(m: Match) {
+export function matchLineups(m: Match) {
   const home = lineupFor(m.home, m.gw);
   const away = lineupFor(m.away, m.gw);
   if (!home || !away) return empty('No lineups');
@@ -167,13 +220,34 @@ function matchLineups(m: Match) {
         pid,
         badge: statBadge(pid, m.gw) ?? pitchPill(pid, m.gw, match),
         events: showsEvents(m.gw) ? gwEvents(pid, m.gw) : undefined,
-        mark: l.subs.includes(pid) ? subMark : '',
+        mark: autoSubOf(l, pid),
         note: match?.state === 'live' ? stateLabel(match) : twice, // one taken off has his minute by the arrow
       };
     };
-  const side = (id: number, l: Lineup): PitchSide => ({ id, xi: l.xi.map(onPitch(l)), note: lineupNote(l, feed) });
+  const side = (id: number, l: Lineup): PitchSide => ({
+    id,
+    xi: l.xi.map(onPitch(l)),
+    note: lineupNote(l, feed),
+    total: xiTotal(l, m.gw, feed),
+  });
   const pitch = matchPitch(side(m.home, home), side(m.away, away), [home.bench.map(onPitch(home)), away.bench.map(onPitch(away))]);
   return `${lineupFilters(m.gw)}${feed?.fixtures.some((f) => !f.started) ? dueFilters(m.gw) : ''}${pitch}`;
+}
+
+// The XI's total, at the end of its header as fotmob.com's team rating: its points, or what
+// the pitch's pills add up to with the xP filter (its expected points) or Projected (the
+// points so far and the expected points of those still to play).
+function xiTotal(l: Lineup, gw: number, feed: SlimLive | null) {
+  const pill = (value: string, tip: string) => `<span class="mp-total" data-tip="${tip}">${value}</span>`;
+  if (state.lineupStat === 'xp' && hasLineupFilters(gw))
+    return pill(sum(l.xi.map((pid) => gwUnderlying(pid, gw)?.[2] ?? 0)).toFixed(1), 'Expected points');
+  if (feed?.fixtures.some((f) => !f.started) && dueShows(gw) === 'xp') {
+    const due = (pid: number) => playerState(feed, pid, player(pid).club).state === 'due' && gwPoints(pid, gw) === 0;
+    const soFar = sum(l.xi.filter((pid) => !due(pid)).map((pid) => gwPoints(pid, gw)));
+    const projected = sum(l.xi.filter(due).map(liveXp));
+    return pill((soFar + projected).toFixed(1), soFar ? `${soFar} so far + ${projected.toFixed(1)} projected` : 'Projected');
+  }
+  return pill(String(sum(l.xi.map((pid) => gwPoints(pid, gw)))), 'Points');
 }
 
 // How far through the gameweek the XI is, and the score after any double-gameweek penalty.
@@ -205,12 +279,22 @@ export function roundPill(pid: number, gw: number, match: PlayerState | null) {
   return xpPill(liveXp(pid), liveParts(pid), opponents(player(pid).club, gw), ' (not played yet)');
 }
 
-function upcomingDetail(m: Match) {
-  if (!m.odds) return `<div class="match-detail">${empty('Odds go up three gameweeks before the deadline')}</div>`;
+// Before kick-off: each side's chance, and how the model got there.
+export function winChances(m: Match) {
+  if (!m.odds) return empty('Odds go up three gameweeks before the deadline');
   const [ph, pd, pa] = m.odds.p;
   const [eh, ea] = m.odds.expected;
-  // Each side's best XI by expected points, as the odds have it, or again by FPL's when
-  // the cog asks for those. The xP filter shows the numbers; without it, when each plays.
+  return `<div class="prob">
+      <div class="prob-bar"><span class="m${slotOf(m.home)}" style="flex:${ph}"></span><span class="prob-draw" style="flex:${pd}"></span><span class="m${slotOf(m.away)}" style="flex:${pa}"></span></div>
+      <div class="prob-legend"><span>${first(m.home)} ${pct(ph)}</span><span>Draw ${pct(pd)}</span><span>${first(m.away)} ${pct(pa)}</span></div>
+    </div>
+    <p class="detail-note">Model score ${eh} – ${ea}: ${D.meta.hasProjections ? 'league average, plus how far each side’s best projected XI sits from the average one' : 'league average, until there are projections'}. Prices carry a ${Math.round((D.meta.oddsOverround - 1) * 100)}% margin.</p>`;
+}
+
+// Each side's best XI by expected points, as the odds have it, or again by FPL's when
+// the cog asks for those. The xP filter shows the numbers; without it, when each plays.
+export function projectedLineups(m: Match) {
+  if (!m.odds?.xi) return '';
   const showXp = dueShows(m.gw) === 'xp';
   const xiOf = (id: number, priced: number[]) => {
     if (state.xp !== 'fpl') return priced;
@@ -241,14 +325,7 @@ function upcomingDetail(m: Match) {
         : '',
     };
   };
-  return `<div class="match-detail">
-    <div class="prob">
-      <div class="prob-bar"><span class="m${slotOf(m.home)}" style="flex:${ph}"></span><span class="prob-draw" style="flex:${pd}"></span><span class="m${slotOf(m.away)}" style="flex:${pa}"></span></div>
-      <div class="prob-legend"><span>${first(m.home)} ${pct(ph)}</span><span>Draw ${pct(pd)}</span><span>${first(m.away)} ${pct(pa)}</span></div>
-    </div>
-    <p class="detail-note">Model score ${eh} – ${ea}: ${D.meta.hasProjections ? 'league average, plus how far each side’s best projected XI sits from the average one' : 'league average, until there are projections'}. Prices carry a ${Math.round((D.meta.oddsOverround - 1) * 100)}% margin.</p>
-    ${m.odds.xi ? `${dueFilters(m.gw)}${matchPitch(projected(m.home, m.odds.xi[0]), projected(m.away, m.odds.xi[1]))}` : ''}
-  </div>`;
+  return `${dueFilters(m.gw)}${matchPitch(projected(m.home, m.odds.xi[0]), projected(m.away, m.odds.xi[1]))}`;
 }
 
 const when = (ko: string | null | undefined) => {

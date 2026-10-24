@@ -43,10 +43,12 @@
   letter-spacing: 0.08em;
 }
 
+/* Wide enough for the results' chips, shrinking when the bar is short of room. */
 .search {
   position: relative;
   flex: 1;
-  max-width: 276px;
+  min-width: 0;
+  max-width: 400px;
 }
 
 .search-icon {
@@ -88,7 +90,7 @@
 .search-results {
   top: 48px;
   left: 0;
-  width: min(360px, calc(100vw - 32px));
+  width: max(100%, min(400px, calc(100vw - 32px)));
   padding: 8px 0;
   overflow: hidden;
 }
@@ -131,10 +133,30 @@
 
 .topnav {
   display: none;
-  gap: 24px;
+  gap: 4px;
   margin-left: auto;
-  font-size: 19px;
+  font-size: 15px;
   font-weight: 700;
+  white-space: nowrap;
+}
+
+/* The page's own section, underlined. */
+.topnav a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: 18px;
+}
+
+.topnav .nav-icon {
+  display: inline-grid;
+}
+
+/* The page you're on, in a chip as subtle as the search box. */
+.topnav a[aria-current='page'] {
+  background: var(--search-bg);
 }
 
 .settings {
@@ -247,6 +269,16 @@
   }
 }
 
+@media (min-width: 769px) {
+  .topnav {
+    display: flex;
+  }
+
+  .settings {
+    margin-left: 0;
+  }
+}
+
 @media (min-width: 992px) {
   .topbar {
     height: 80px;
@@ -257,16 +289,54 @@
   }
 
   .topnav {
-    display: flex;
-  }
-
-  .settings {
-    margin-left: 0;
+    gap: 8px;
+    font-size: 19px;
   }
 }
 
 @media (min-width: 1280px) {
   .topnav {
-    gap: 40px;
+    gap: 20px;
   }
+}
+
+/* The search's chips for the kind of thing, as fotmob.com's. */
+.sr-kinds {
+  display: flex;
+  gap: 8px;
+  padding: 12px 12px 8px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.sr-kinds .chip {
+  height: 30px;
+  padding: 0 12px;
+  font-size: 13px;
+}
+
+.sr-icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+}
+
+.sr-icon svg {
+  width: 24px;
+  height: 24px;
+}
+
+/* A section's heading: the suggestions before anything is typed, or a kind among All. */
+.sr-head {
+  padding: 8px 16px 4px;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.search-results {
+  max-height: min(480px, calc(100vh - 120px));
+  overflow-y: auto;
 }

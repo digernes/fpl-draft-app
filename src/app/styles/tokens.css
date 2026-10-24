@@ -33,8 +33,15 @@
   --odds-price: #00985f;
   --group-bg: #f8f8f8;
   --match-hover: #eaeaea;
-  --match-open-border: #e8e8e8;
   --arrow-btn: #ededed;
+  /* fotmob.com's match status chips. */
+  --status-fill: #f5f5f5;
+  --status-text: #9f9f9f;
+  --status-live-fill: #00985f;
+  --status-live-text: #fff;
+  /* fotmob.com's momentum: its dotted x-axis, and the dot at the lead while a match is on. */
+  --axis-dots: #e8e8e8;
+  --live-dot: #00985f;
   --win: #00985f;
   --draw: #8d9499;
   --lose: #dd3636;
@@ -49,11 +56,18 @@
   --kit-edge: rgba(0, 0, 0, 0.28);
   --kit-none: #b5b5b5;
   --kit-none-trim: #e8e8e8;
-  --pitch: #f4f4f4;
-  --pitch-lines: #e6e6e6;
-  --pitch-photo: #e3e3e3;
+  /* fotmob.com's lineup pitch: the grass, its markings, the band above it for the teams
+     and the filters, and white names on it. */
+  --pitch: #01935c;
+  --pitch-lines: #0d9f68;
+  --pitch-band: #0d9f68;
+  --pitch-text: #fff;
+  --pitch-text-2: rgba(255, 255, 255, 0.8);
+  --pitch-photo: #fff;
   --pitch-chip: #fff;
   --pitch-chip-border: #e0e0e0;
+  /* fotmob.com's insight bubbles. */
+  --bubble: #f5f5f5;
   /* The event icons on the pitches. */
   --event-ink: #333;
   --card-yellow: #f7c331;
@@ -119,19 +133,28 @@
   --odds-price: #e8e8e8;
   --group-bg: #333;
   --match-hover: #333;
-  --match-open-border: #333;
   --arrow-btn: #4a4a4a;
+  --status-fill: #333;
+  --status-text: #9f9f9f;
+  --status-live-fill: #2ad572;
+  --status-live-text: #000;
+  --axis-dots: #282828;
+  --live-dot: #61df6e;
   --diff-good: #33c771;
   --diff-bad: #ff3030;
   --kit-head: #6b6b6b;
   --kit-edge: rgba(255, 255, 255, 0.18);
   --kit-none: #5a5a5a;
   --kit-none-trim: #8a8a8a;
-  --pitch: #2c2c2c; /* fotmob.com's lineup pitch */
+  --pitch: #2c2c2c;
   --pitch-lines: #343434;
+  --pitch-band: #343434;
+  --pitch-text: #fff;
+  --pitch-text-2: rgba(255, 255, 255, 0.6);
   --pitch-photo: #4a4a4a;
   --pitch-chip: #262626;
   --pitch-chip-border: #464646;
+  --bubble: #262626;
   --event-ink: #fff;
   --event-green: #33c771;
   --event-border: #717171;

@@ -2,7 +2,9 @@
 // can't call the FPL API directly (no CORS), so this fetches it, slims it down and adds
 // CORS headers. It answers only two things, so it can't be used as a general proxy:
 //
-//   /live/<gameweek>   live scores, slimmed from ~450 KB to a few KB
+//   /live/<gameweek>   live scores, slimmed from ~450 KB to a few KB, with everyone's
+//                      stats in the matches being played and their moments from the
+//                      Premier League's match centre, so the page needn't wait for a build
 //   /transfers         this league's moves, trades and owners, between builds
 //
 // It also starts the data build on a timer and after transfers (timer.ts). Deploy with
@@ -10,13 +12,20 @@
 
 import type { z } from 'zod';
 
-import { ElementStatus, LiveFeed, Trades, Transactions } from '../src/shared/fpl-api.ts';
+import type { PlMoment } from '../src/shared/data.ts';
+import { ElementStatus, LiveFeed, PlEvents, Trades, Transactions } from '../src/shared/fpl-api.ts';
 import { slimLive } from '../src/shared/live.ts';
+import { matchRows, momentsOf, playedIn } from '../src/shared/match-stats.ts';
 import { slimTransfers } from '../src/shared/transfers.ts';
 import { buildDue, ownersMoved, startBuild, type TimerEnv } from './timer.ts';
 
 const API = 'https://draft.premierleague.com/api';
+const MATCH_CENTRE = 'https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v1/matches';
 const LIVE_SECONDS = 20; // everyone watching shares one fetch per 20 seconds
+// A match is passed on from kick-off to full time, and on until this long after kick-off,
+// time enough for a build after full time to have it in the gameweek's stats file. (The
+// Draft feed's `finished` waits for the whole gameweek.)
+const RECENT_MS = 150 * 60 * 1000;
 const TRANSFER_SECONDS = 60;
 const HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -68,7 +77,8 @@ export default {
     let body: object;
     try {
       if (route === 'live') {
-        body = { gw: Number(gw), ...slimLive(await get(`event/${gw}/live`, LiveFeed)) };
+        const feed = await get(`event/${gw}/live`, LiveFeed);
+        body = { gw: Number(gw), ...slimLive(feed), ...(await matchesNow(feed)) };
       } else {
         const id = league(env);
         const [tx, trades, status] = await Promise.all([
@@ -90,3 +100,23 @@ export default {
     return response;
   },
 };
+
+// The matches being played or just over: everyone's stats in each, and its moments. A
+// match whose moments won't come goes without them rather than holding up the scores.
+async function matchesNow(feed: z.infer<typeof LiveFeed>, now = Date.now()) {
+  const recent = feed.fixtures.filter((f) => f.started && (!f.finished_provisional || now - Date.parse(f.kickoff_time ?? '') < RECENT_MS));
+  const matches = Object.fromEntries(recent.map((f) => [f.id, matchRows(feed, f.id, playedIn(feed, f.id))]));
+  const moments = await Promise.all(recent.map(async (f) => [f.id, f.code ? await momentsAt(f.code) : null] as const));
+  return { matches, moments: Object.fromEntries(moments.filter(([, list]) => list)) };
+}
+
+// Its players by their codes, as the match centre has them: the page knows their ids.
+async function momentsAt(code: number): Promise<PlMoment[] | null> {
+  try {
+    const res = await fetch(`${MATCH_CENTRE}/${code}/events`, { cf: { cacheTtl: LIVE_SECONDS, cacheEverything: true } });
+    const parsed = res.ok ? PlEvents.safeParse(await res.json()) : null;
+    return parsed?.success ? momentsOf(parsed.data, (c) => (c ? Number(c) : undefined)) : null;
+  } catch {
+    return null;
+  }
+}

@@ -82,6 +82,10 @@ export async function fetchLeague(leagueId: number, cacheDir: string | null): Pr
   };
 }
 
+/** A response that may fail (it is logged and comes back null), parsed by `schema`. */
+export const fetchOptional = <S extends z.ZodType>(url: string, schema: S, cacheDir: string | null) =>
+  getJSON(url, schema, cacheDir, { optional: true });
+
 async function getJSON<S extends z.ZodType>(url: string, schema: S, cacheDir: string | null): Promise<z.infer<S>>;
 async function getJSON<S extends z.ZodType>(
   url: string,

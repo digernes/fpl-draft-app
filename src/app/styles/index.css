@@ -8,7 +8,7 @@
 @import './top-bar.css';
 @import './layout.css';
 @import './cards.css';
-@import './league-header.css';
+@import './page-header.css';
 @import './avatars.css';
 @import './controls.css';
 @import './table.css';
@@ -24,6 +24,15 @@
 @import './squads.css';
 @import './pitch.css';
 @import './match-pitch.css';
+@import './front.css';
+@import './team.css';
+@import './player.css';
+@import './match-page.css';
+@import './commentary.css';
+@import './transfers.css';
+@import './player-stats.css';
+@import './bottom-bar.css';
+@import './sheet.css';
 @import './tooltip.css';
 @import './hover.css';
 @import './motion.css';

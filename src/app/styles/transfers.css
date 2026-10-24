@@ -1,0 +1,251 @@
+/* --- The Transfer center: fotmob.com's, with managers for clubs --------------------- */
+
+.tc-logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--brand-solid);
+  color: #fff;
+}
+
+.tc-logo svg {
+  width: 20px;
+  height: 20px;
+}
+
+@media (min-width: 992px) {
+  .tc-logo {
+    width: 56px;
+    height: 56px;
+  }
+
+  .tc-logo svg {
+    width: 26px;
+    height: 26px;
+  }
+}
+
+.tc-filter {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+}
+
+.tc-label {
+  display: grid;
+  gap: 8px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.tc-select select {
+  width: 100%;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--chip-border);
+  border-radius: 18px;
+  background: var(--chip-bg);
+  color: var(--text);
+  font-weight: 500;
+}
+
+.tc-filter .seg {
+  margin-bottom: 4px;
+}
+
+/* A row: from and to as pills either side of an arrow, the player, the move, when. */
+.tc-row {
+  display: grid;
+  grid-template-columns: 196px minmax(0, 1fr) minmax(0, 1fr) 48px;
+  align-items: center;
+  gap: 12px;
+  min-height: 56px;
+  padding: 8px 16px;
+  border-top: 1px solid var(--row-divider);
+  font-size: 13px;
+}
+
+.tc-head {
+  min-height: 40px;
+  border-top: 0;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.tc-head span:last-child,
+.tc-when {
+  text-align: right;
+}
+
+.tc-move {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.tc-pill {
+  display: inline-flex;
+  align-items: center;
+  flex: 1;
+  gap: 6px;
+  min-width: 0;
+  height: 28px;
+  padding: 0 8px 0 4px;
+  border-radius: 8px;
+  background: var(--hover);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.tc-pill > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tc-pill.free {
+  justify-content: center;
+  padding: 0 8px;
+  color: var(--text-2);
+}
+
+.tc-arrow {
+  flex: none;
+  color: var(--text-2);
+}
+
+.tc-player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tc-name {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  font-weight: 500;
+}
+
+.tc-name > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tc-meta {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-2);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.tc-how {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tc-when {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+/* On one column, the filter is in a sheet behind a pill at the header's right, as
+   fotmob.com's Edit, and the season's numbers and the waiver order are left to wider
+   screens. */
+.tc-edit {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--chip-border);
+  border-radius: 16px;
+  background: var(--chip-bg);
+  color: var(--text);
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tc-edit svg {
+  width: 16px;
+  height: 16px;
+}
+
+@media (max-width: 599px) {
+  .tc-header .poster {
+    flex-wrap: nowrap;
+  }
+
+  .tc-header .poster-side {
+    width: auto;
+    margin-left: auto;
+  }
+}
+
+@media (max-width: 768px) {
+  .tc-side {
+    display: none;
+  }
+}
+
+@media (min-width: 769px) {
+  .tc-edit {
+    display: none;
+  }
+}
+
+/* Phones: the player first, then from → to under him; the move goes. */
+@media (max-width: 767px) {
+  .tc-row {
+    grid-template-columns: minmax(0, 1fr) 44px;
+    grid-template-areas: 'player when' 'move move';
+    row-gap: 8px;
+  }
+
+  .tc-head {
+    display: none;
+  }
+
+  .tc-player {
+    grid-area: player;
+  }
+
+  .tc-move {
+    grid-area: move;
+  }
+
+  .tc-when {
+    grid-area: when;
+  }
+
+  .tc-how {
+    display: none;
+  }
+}
+
+/* A top transfer's mark by the name, what it means in its tip. */
+.top-move {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: -1px;
+  color: var(--brand-solid);
+}
+
+.top-move svg {
+  width: 13px;
+  height: 13px;
+}

@@ -16,6 +16,7 @@ import {
 } from './components.ts';
 import { esc, ordinal, plural, signed, sum } from './format.ts';
 import { first, isLive } from './lookups.ts';
+import { href } from './router.ts';
 import { D, state } from './state.ts';
 
 type Breakpoint = 'xs' | 'sm' | 'md' | 'lg';
@@ -93,9 +94,10 @@ export function dataTable<R extends Keyed>(
   const body = rows
     .map((row) => {
       const q = qual(row);
-      // A manager's row opens their squad.
+      // A manager's row opens their team's page; the team the visitor follows stands out.
       const open = row.type !== 'club' && row.id != null ? ` data-action="manager" data-value="${row.id}"` : '';
-      return `<div class="trow ${rowClass(row)}${q ? ' qual' : ''}" data-key="${rowKey(row)}"${open}${q ? ` style="--qual:${q}"` : ''}>${cols.map((col) => cell(col, col.cell(row))).join('')}</div>`;
+      const mine = row.type !== 'club' && row.id != null && row.id === state.myTeam ? ' mine' : '';
+      return `<div class="trow ${rowClass(row)}${mine}${q ? ' qual' : ''}" data-key="${rowKey(row)}"${open}${q ? ` style="--qual:${q}"` : ''}>${cols.map((col) => cell(col, col.cell(row))).join('')}</div>`;
     })
     .join('');
   const table = `<div class="ftable${full ? ' full' : ''}" style="${templates}${full ? `;min-width:${minWidth}px` : ''}"><div class="trow thead">${head}</div>${body}</div>`;
@@ -123,12 +125,21 @@ const numCol = <R>(label: string, value: (row: R) => Cell, from?: Breakpoint, ex
 interface LiveMatch {
   pf: number;
   pa: number;
+  match: Match;
 }
 
-function livePill(match: LiveMatch | undefined) {
-  if (!match) return '';
-  const res = match.pf > match.pa ? 'W' : match.pf < match.pa ? 'L' : 'D';
-  return `<span class="livep ${res}">${match.pf}-${match.pa}</span>`;
+// The match being played, as it stands; it opens the match.
+function livePill(live: LiveMatch | undefined) {
+  if (!live) return '';
+  const res = live.pf > live.pa ? 'W' : live.pf < live.pa ? 'L' : 'D';
+  return `<a class="livep ${res}" href="${href.match(live.match)}">${live.pf}-${live.pa}</a>`;
+}
+
+// The next opponent, a link to that match.
+function nextLink(r: StandingRow) {
+  if (!r.next) return '';
+  const m = D.matches.find((x) => x.gw === r.next!.gw && (x.home === r.id || x.away === r.id));
+  return m ? `<a href="${href.match(m)}">${avatar(r.next.opp)}</a>` : avatar(r.next.opp);
 }
 
 export interface TableFromRow {
@@ -173,7 +184,7 @@ export function tableFrom(matches: Match[]): TableFromRow[] {
       if (pf > pa) [r.won, r.pts] = [r.won + 1, r.pts + win];
       else if (pf === pa) [r.drawn, r.pts] = [r.drawn + 1, r.pts + draw];
       else [r.lost, r.pts] = [r.lost + 1, r.pts + loss];
-      if (!m.finished) r.liveMatch = { pf, pa };
+      if (!m.finished) r.liveMatch = { pf, pa, match: m };
     }
   }
   return [...rows.values()].sort((a, b) => b.pts - a.pts || b.pf - a.pf).map((r, i) => ({ ...r, rank: i + 1 }));
@@ -199,7 +210,7 @@ const standingsCols = (): Column<StandingRow>[] => {
     { label: 'GD', w: '36px', from: formMode ? 'md' : 'xs', tip: 'Points difference', cell: (r) => signed(r.pf - r.pa) },
     { label: 'PTS', w: '30px', cls: 'c-pts', cell: (r) => r.pts },
     { label: 'Form', w: FORM_WIDTH, from: formMode ? 'xs' : 'md', cls: 'c-form', cell: (r) => formPills(r.form) },
-    { label: 'Next', w: '28px', from: 'lg', cell: (r) => (r.next ? avatar(r.next.opp) : '') },
+    { label: 'Next', w: '28px', from: 'lg', cell: nextLink },
   ];
 };
 
@@ -291,12 +302,22 @@ interface TableView<R> {
 }
 
 // Each view's rows have their own shape, so the table only leaves here rendered.
-interface RenderedView {
-  label: string;
-  render: () => string;
+interface TableExtras {
+  /** Teams to pick out (a team's page, a match's). */
+  highlight?: number[];
+  /** The legend and notes under the table; a sidebar leaves them out. */
+  legend?: boolean;
 }
 
-const tableView = <R extends Keyed>(view: TableView<R>): RenderedView => ({ label: view.label, render: () => renderTable(view) });
+interface RenderedView {
+  label: string;
+  render: (extras: TableExtras) => string;
+}
+
+const tableView = <R extends Keyed>(view: TableView<R>): RenderedView => ({
+  label: view.label,
+  render: (highlight) => renderTable(view, highlight),
+});
 
 type ParallelRow = ({ type: 'club' } & ClubRow) | ({ type: 'manager'; wouldBe: number | undefined } & OverallRow);
 
@@ -448,23 +469,65 @@ export const TABLE_VIEWS: Record<string, RenderedView> = {
   }),
 };
 
+type ClubTableRow = { type: 'club' } & ClubRow;
+
+// The real Premier League table, as fotmob.com's, with each club's last five results.
+export function premierLeagueTable() {
+  const rows: ClubTableRow[] = D.tables.premierLeague.map((c) => ({ type: 'club', ...c }));
+  const form = (club: number) => {
+    const last = (D.plMatches ?? []).filter((m) => m.done && m.score && (m.home === club || m.away === club)).slice(-5);
+    return `<span class="form">${last
+      .map((m) => {
+        const [gf, ga] = m.home === club ? m.score! : [m.score![1], m.score![0]];
+        const res = gf > ga ? 'W' : gf < ga ? 'L' : 'D';
+        const tip = `GW ${m.gw}: ${D.clubs[m.home]?.short} ${m.score![0]}-${m.score![1]} ${D.clubs[m.away]?.short}`;
+        return `<a class="pill ${res}" href="${href.plMatch(m.id)}" data-tip="${esc(tip)}">${res}</a>`;
+      })
+      .join('')}</span>`;
+  };
+  const cols: Column<ClubTableRow>[] = [
+    posCol,
+    { label: '', w: 'minmax(0,1fr)', cls: 'c-team', cell: (r) => clubCell(r.club) },
+    numCol('PL', (r) => r.played),
+    numCol('W', (r) => r.won, 'sm'),
+    numCol('D', (r) => r.drawn, 'sm'),
+    numCol('L', (r) => r.lost, 'sm'),
+    { label: '+/-', w: '52px', from: 'md', cell: (r) => `${r.gf}-${r.ga}` },
+    { label: 'GD', w: '32px', cell: (r) => signed(r.gf - r.ga) },
+    { label: 'PTS', w: '30px', cls: 'c-pts', cell: (r) => r.pts },
+    { label: 'Form', w: FORM_WIDTH, from: 'lg', cls: 'c-form', cell: (r) => form(r.club) },
+  ];
+  const qual = (r: ClubTableRow) =>
+    r.rank <= 4 ? 'var(--qual-top)' : r.rank === 5 ? 'var(--qual-europe)' : r.rank >= 18 ? 'var(--qual-bottom)' : null;
+  const legend = `<div class="legend">${[
+    ['var(--qual-top)', 'Champions League'],
+    ['var(--qual-europe)', 'Europa League'],
+    ['var(--qual-bottom)', 'Relegation'],
+  ]
+    .map(([color, label]) => `<span class="legend-item"><i style="background:${color}"></i>${label}</span>`)
+    .join('')}</div>`;
+  return dataTable(cols, rows, { qual }) + legend;
+}
+
 function parallelRows(): ParallelRow[] {
   const clubs = D.tables.premierLeague.map((c) => ({ type: 'club' as const, ...c }));
   const people = D.tables.overall.map((r) => ({ type: 'manager' as const, ...r, wouldBe: D.plTwins.find((t) => t.id === r.id)?.wouldBe }));
   return [...clubs, ...people].sort((a, b) => b.pts - a.pts || (a.type === b.type ? a.rank - b.rank : a.type === 'club' ? -1 : 1));
 }
 
-export function standingsTable(viewId: string) {
-  return TABLE_VIEWS[viewId].render();
+/** One of the table views. */
+export function standingsTable(viewId: string, extras: TableExtras = {}) {
+  return TABLE_VIEWS[viewId].render(extras);
 }
 
-function renderTable<R extends Keyed>(view: TableView<R>) {
+function renderTable<R extends Keyed>(view: TableView<R>, { highlight = [], legend: withLegend = true }: TableExtras) {
   const rows = view.rows();
   const table = dataTable(view.cols(), rows, {
-    rowClass: view.rowClass,
+    rowClass: (r) => `${view.rowClass?.(r) ?? ''}${r.type !== 'club' && highlight.includes(r.id!) ? ' featured' : ''}`,
     qual: (r) => view.qual?.(r, rows),
     full: state.tableMode === 'full',
   });
+  if (!withLegend) return table;
   const info = view.info ? infoButton(view.info(), 'How this is worked out') : '';
   const legend =
     view.legend || info

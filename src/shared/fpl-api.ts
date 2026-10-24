@@ -59,6 +59,8 @@ export const LeagueDetails = z.object({
 
 export const Fixture = z.object({
   id,
+  /** The match's id in the Premier League's own match centre. */
+  code: z.number().optional(),
   team_h: id,
   team_a: id,
   started: z.boolean().nullable(),
@@ -101,6 +103,8 @@ export const Bootstrap = z.object({
       second_name: z.string(),
       total_points: z.number(),
       status: z.string(),
+      /** When FPL put him in the game: after the draft for a signing late in the window, or one later in the season. */
+      added: z.string().nullish(),
       news: z.string().nullish(),
       form: numeric.nullish(),
       chance_of_playing_next_round: z.number().nullable(),
@@ -170,6 +174,7 @@ export const DraftChoices = z.object({
       round: z.number(),
       pick: z.number(),
       was_auto: z.boolean(),
+      choice_time: z.string().nullish(),
     }),
   ),
 });
@@ -204,12 +209,21 @@ export const LiveFeed = z.object({
         expected_goals: numeric.nullish(),
         expected_assists: numeric.nullish(),
         expected_goals_conceded: numeric.nullish(),
-        // For the expected-points model (src/model) only.
+        // For the expected-points model (src/model), and the Premier League's player stats.
         saves: z.number().optional(),
         defensive_contribution: z.number().optional(),
+        // For the Premier League's player stats only (PlStats in data.ts).
+        bps: z.number().optional(),
+        influence: numeric.nullish(),
+        creativity: numeric.nullish(),
+        threat: numeric.nullish(),
+        ict_index: numeric.nullish(),
+        clearances_blocks_interceptions: z.number().optional(),
+        recoveries: z.number().optional(),
+        tackles: z.number().optional(),
       }),
-      /** Per match: [the stats that scored, fixture id]. */
-      explain: z.array(z.tuple([z.array(z.object({ stat: z.string(), value: z.number() })), id])).optional(),
+      /** Per match: [the stats that scored, with what each scored, fixture id]. */
+      explain: z.array(z.tuple([z.array(z.object({ stat: z.string(), value: z.number(), points: z.number().optional() })), id])).optional(),
     }),
   ),
   fixtures: z.array(
@@ -230,12 +244,36 @@ export const EntryPicks = z.object({
 
 export const FplBootstrap = z.object({
   elements: z.array(z.object({ code: id, ep_next: numeric.nullable(), ep_this: numeric.nullish(), penalties_order: z.number().nullish() })),
+  /** The season and its months, by gameweek. */
+  phases: z.array(z.object({ name: z.string(), start_event: z.number(), stop_event: z.number() })).optional(),
 });
 
 // --- Main FPL game: fixtures/?future=1 (projections only) ----------------------
 
 /** Every fixture still to come, with its gameweek (none while it is unscheduled). Clubs have the Draft game's ids. */
 export const FplFixtures = z.array(Fixture.extend({ event: z.number().nullable() }));
+
+// --- The Premier League's match centre: matches/{code}/lineups -----------------------
+
+/** Each side's formation, its XI line by line from the goalkeeper (as player codes, FPL's too) and its substitutes; empty until the lineups are out. */
+export const PlLineups = z.array(
+  z.object({
+    teamId: z.string(),
+    formation: z.string().nullish(),
+    lineup: z.array(z.array(z.string())),
+    subs: z.array(z.string()).nullish(),
+  }),
+);
+
+/** What happened in a match and when, each side's goals (with the assister), cards and substitutions, by player codes as in PlLineups. */
+const minute = z.object({ period: z.string(), time: z.string() });
+// Players can be missing (a coach's card), and those are left out.
+const PlEventSide = z.object({
+  goals: z.array(minute.extend({ goalType: z.string(), playerId: z.string().nullish(), assistPlayerId: z.string().nullish() })).nullish(),
+  cards: z.array(minute.extend({ type: z.string(), playerId: z.string().nullish() })).nullish(),
+  subs: z.array(minute.extend({ playerOnId: z.string().nullish(), playerOffId: z.string().nullish() })).nullish(),
+});
+export const PlEvents = z.object({ homeTeam: PlEventSide, awayTeam: PlEventSide });
 
 export type LeagueDetails = z.infer<typeof LeagueDetails>;
 export type Bootstrap = z.infer<typeof Bootstrap>;
@@ -249,3 +287,5 @@ export type LiveFeed = z.infer<typeof LiveFeed>;
 export type EntryPicks = z.infer<typeof EntryPicks>;
 export type FplBootstrap = z.infer<typeof FplBootstrap>;
 export type FplFixtures = z.infer<typeof FplFixtures>;
+export type PlLineups = z.infer<typeof PlLineups>;
+export type PlEvents = z.infer<typeof PlEvents>;

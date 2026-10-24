@@ -4,6 +4,9 @@ export const trophySvg = `<svg viewBox="0 0 48 48" aria-hidden="true"><circle cx
 export const swapSvg = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.5 2 1 5.5 4.5 9V6.5H11v-2H4.5V2Zm7 5v2.5H5v2h6.5V14L15 10.5 11.5 7Z" fill="currentColor"/></svg>`;
 export const infoSvg = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.25" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg>`;
 export const triangleSvg = `<svg class="tri" viewBox="0 0 8 8" aria-hidden="true"><path d="M4 1.5 7.5 6.5h-7Z" fill="currentColor"/></svg>`;
+// fotmob.com's mark under a table's sorted column: both arrows, the way it's sorted brighter.
+export const sortSvg = (asc: boolean) =>
+  `<svg class="sort-mark" viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 9.2 5H2.8Z" fill="currentColor" opacity="${asc ? 1 : 0.35}"/><path d="M6 10.5 2.8 7h6.4Z" fill="currentColor" opacity="${asc ? 0.35 : 1}"/></svg>`;
 export const arrowSvg = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 10.5 7H7.5v3.5h-3V7h-3L6 1.5Z" fill="currentColor"/></svg>`;
 // fotmob.com's previous and next arrow: square ends, a sharp point and arms that thicken
 // towards it, sitting a little towards the way it points.
@@ -37,3 +40,14 @@ export const subSvg = (on: boolean) =>
 export const missSvg = `<svg aria-hidden="true" width="12" height="12" viewBox="0 0 14 14"><path d="M1.5 11.5V3.9q0-1 1-1h9q1 0 1 1v7.6" fill="none" stroke="var(--event-ink)" stroke-width="1.5" stroke-linecap="round"/><path d="m5.2 6.1 3.6 3.6m0-3.6-3.6 3.6" stroke="var(--lose)" stroke-width="1.5" stroke-linecap="round"/></svg>`;
 // A saved penalty: the keeper's glove.
 export const gloveSvg = `<svg aria-hidden="true" width="12" height="12" viewBox="0 0 14 14"><g transform="rotate(-12 7 7)" fill="var(--event-ink)"><rect x="4.5" y="2.4" width="1.4" height="5.4" rx=".7"/><rect x="6.05" y="1.5" width="1.4" height="6.3" rx=".7"/><rect x="7.6" y="1.9" width="1.4" height="5.9" rx=".7"/><rect x="9.15" y="3" width="1.4" height="4.8" rx=".7"/><rect x="4.5" y="6.3" width="6.05" height="4.6" rx="1.5"/><rect x="2.4" y="5.6" width="1.5" height="4.2" rx=".75" transform="rotate(-38 3.15 7.7)"/><rect x="4.3" y="11.3" width="6.45" height="1.9" rx=".5"/></g></svg>`;
+
+// The bottom bar's: a ball for the home page's matches, a trophy for the draft league, a
+// shield for the Premier League and a shirt for the teams.
+export const matchesSvg = `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="m12 7.6 3.8 2.8-1.5 4.4H9.7l-1.5-4.4Z" fill="currentColor"/><path d="M12 7.6V3.2m3.8 7.2 4.1-1.4m-5.6 5.8 2.6 3.6m-7.2-3.6-2.6 3.6m-1.5-8 4.1 1.4" stroke="currentColor" stroke-width="1.6"/></svg>`;
+export const leagueSvg = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3.5h10v2.2h3v1.8a4 4 0 0 1-3.6 4A5.5 5.5 0 0 1 13 15.2v2.6h3.2v2.7H7.8v-2.7H11v-2.6a5.5 5.5 0 0 1-3.4-3.7A4 4 0 0 1 4 7.5V5.7h3Zm0 4v-.1H5.8v.1a2.2 2.2 0 0 0 1.3 2Zm10 0v2a2.2 2.2 0 0 0 1.2-2v-.1H17Z" fill="currentColor"/></svg>`;
+export const premierLeagueSvg = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 2.8 19.5 5.6v6c0 4.6-3.2 8.2-7.5 9.6-4.3-1.4-7.5-5-7.5-9.6v-6Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.5 9.5h7M8.5 12.5h7M10 15.5h4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+export const shirtSvg = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8.8 3.5 4 5.8 2.6 10.2l3.2 1.3.9-1.4v10.4h10.6V10.1l.9 1.4 3.2-1.3L20 5.8l-4.8-2.3a3.4 3.4 0 0 1-6.4 0Z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>`;
+// fotmob.com's Follow star, outlined until it's on.
+export const slidersSvg = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M2 4.5h6.5m4 0H14M2 11.5h1.5m4 0H14" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="10.5" cy="4.5" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/><circle cx="5.5" cy="11.5" r="2" fill="none" stroke="currentColor" stroke-width="1.5"/></svg>`;
+export const starSvg = (on: boolean) =>
+  `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="m8 1.6 1.9 4.1 4.5.5-3.4 3 1 4.4L8 11.3l-4 2.3 1-4.4-3.4-3 4.5-.5Z" fill="${on ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>`;

@@ -1,10 +1,11 @@
 // Cards and rows used on more than one tab.
 
 import type { Move, Retention, TopGameweek, Trade } from '../shared/data.ts';
-import { avatar, card, crest, listRow, photo, tag, type Footer } from './components.ts';
+import { avatar, card, crest, type Footer, listRow, playerName, playerPhoto, tag, teamName } from './components.ts';
 import { ago, esc, maxOf, ordinal, pct, priceText, signed, sum } from './format.ts';
 import { arrowSvg, swapSvg, triangleSvg } from './icons.ts';
 import { first, gwPoints, lineupFor, player, slotOf, type Played } from './lookups.ts';
+import { href } from './router.ts';
 import { D } from './state.ts';
 import { tableFrom } from './table.ts';
 
@@ -30,10 +31,10 @@ export const MOVE_TYPES = { waiver: 'Waiver', free: 'Free agent', trade: 'Trade'
 export function feedRow(item: FeedItem) {
   if (item.trade) {
     const t = item.trade;
-    const names = (ids: number[]) => ids.map((pid) => esc(player(pid).name)).join(', ');
+    const names = (ids: number[]) => ids.map(playerName).join(', ');
     return listRow({
       lead: `<span class="swap-icon">${swapSvg}</span>`,
-      title: `${first(t.offeredBy)} ⇄ ${first(t.offeredTo)}`,
+      title: `${teamName(t.offeredBy)} ⇄ ${teamName(t.offeredTo)}`,
       meta: `${first(t.offeredBy)} gets ${names(t.items.map((i) => i.gets))} · ${first(t.offeredTo)} gets ${names(t.items.map((i) => i.gives))} · ${ago(t.at)}`,
       value: tag('Trade'),
     });
@@ -45,10 +46,10 @@ export function feedRow(item: FeedItem) {
       ? ` · <span data-tip="Points since: ${esc(pin.name)} ${mv.inPts}, ${esc(player(mv.out).name)} ${mv.outPts}">${signed(mv.net)} net</span>`
       : '';
   return listRow({
-    lead: photo(mv.in),
-    title: `<span class="arrow-in" aria-label="In">${arrowSvg}</span>${esc(pin.name)} ${crest(pin.club, 14)}`,
-    meta: `<span class="arrow-out" aria-label="Out">${arrowSvg}</span>${esc(player(mv.out).name)} · ${MOVE_TYPES[mv.type]} · ${ago(mv.at)}${net}`,
-    value: avatar(mv.manager, 24),
+    lead: playerPhoto(mv.in),
+    title: `<span class="arrow-in" aria-label="In">${arrowSvg}</span>${playerName(mv.in)} ${crest(pin.club, 14)}`,
+    meta: `<span class="arrow-out" aria-label="Out">${arrowSvg}</span>${playerName(mv.out)} · ${MOVE_TYPES[mv.type]} · ${ago(mv.at)}${net}`,
+    value: `<a href="${href.team(mv.manager)}">${avatar(mv.manager, 24)}</a>`,
   });
 }
 
@@ -128,9 +129,9 @@ export function gameweekReviewCard(gw: number, { limit = Infinity, footer = null
     top && listRow({ lead: avatar(top.id, 32), title: 'Top score', meta: `${first(top.id)} · ${verdict(top)}`, value: top.pts, top: true }),
     star &&
       listRow({
-        lead: photo(star.pid),
+        lead: playerPhoto(star.pid),
         title: 'Player of the week',
-        meta: `${esc(player(star.pid).name)} ${crest(player(star.pid).club, 14)} · for ${first(star.id)}`,
+        meta: `${playerName(star.pid)} ${crest(player(star.pid).club, 14)} · for ${teamName(star.id)}`,
         value: star.pts,
       }),
     biggest &&
@@ -163,9 +164,9 @@ export function gameweekReviewCard(gw: number, { limit = Infinity, footer = null
       }),
     signing &&
       listRow({
-        lead: photo(signing.mv.in),
+        lead: playerPhoto(signing.mv.in),
         title: 'Best new signing',
-        meta: `${esc(player(signing.mv.in).name)} · ${MOVE_TYPES[signing.mv.type]} for ${first(signing.mv.manager)}`,
+        meta: `${playerName(signing.mv.in)} · ${MOVE_TYPES[signing.mv.type]} for ${teamName(signing.mv.manager)}`,
         value: signing.pts,
       }),
     bench && bench.pts > 0 && listRow({ lead: avatar(bench.id, 32), title: 'Left on the bench', meta: first(bench.id), value: bench.pts }),

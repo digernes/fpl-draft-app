@@ -7,7 +7,7 @@
 //   node scripts/fake-live.ts             fake it
 //   node scripts/fake-live.ts --restore   put the real data.json back
 //
-// Open the page with ?relay=off (say http://localhost:8765/?relay=off#fixtures), or the
+// Open the page with ?relay=off (say http://localhost:8765/?relay=off#/), or the
 // live relay replaces the faked scores with the real, finished ones.
 
 import { existsSync } from 'node:fs';

@@ -75,6 +75,32 @@
   .cols-even {
     grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   }
+
+  /* A match's page, as fotmob.com's: a wide column for the pitch, a narrow one beside it. */
+  .cols-match {
+    grid-template-columns: minmax(0, 1fr) 308px;
+  }
+}
+
+/* The Transfer center: its filter and numbers on the left, as fotmob.com's, from a
+   tablet's width. */
+.cols-side {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+}
+
+@media (min-width: 769px) {
+  .cols-side {
+    grid-template-columns: 268px minmax(0, 1fr);
+  }
+}
+
+@media (min-width: 1280px) {
+  .cols-side {
+    grid-template-columns: 308px minmax(0, 1fr);
+  }
 }
 
 .footer {

@@ -2,16 +2,8 @@
 
 import type { Data, Lineup, Manager, SeasonEntry } from '../shared/data.ts';
 import type { Scored, SlimLive } from '../shared/live.ts';
+import type { Route } from './router.ts';
 
-export const TABS = [
-  { id: 'overview', label: 'Overview' },
-  { id: 'table', label: 'Table' },
-  { id: 'fixtures', label: 'Fixtures' },
-  { id: 'squads', label: 'Squads' },
-  { id: 'stats', label: 'Stats' },
-  { id: 'transfers', label: 'Transfers' },
-  { id: 'draft', label: 'Draft' },
-];
 export const COLOR_SLOTS = 8; // --m1 … --m8 in styles.css; any later manager gets grey
 export const REFRESH_MS = 10 * 60 * 1000;
 export const LIVE_REFRESH_MS = 2 * 60 * 1000; // data.json itself changes about every 10 minutes during matches
@@ -43,23 +35,28 @@ export const store = {
 };
 
 export const state = {
-  tab: 'overview',
+  route: { page: 'home', tab: '' } as Route, // the page shown, from the address (router.ts)
   theme: store.get('draft.theme', 'system'),
   odds: store.get('draft.odds', 'decimal'),
   xp: store.get('draft.xp', 'model'), // expected points: 'model' (the site's own) or 'fpl' (FPL's form)
   tableView: 'overall',
   tableMode: store.get('draft.tableMode', 'short'), // narrow screens: 'short' columns or 'form'
-  gw: null as number | null, // gameweek shown on the Fixtures tab
-  openMatch: null as string | null, // "gw:home:away" of the expanded match
-  logManager: 'all', // transfer log filter
-  statsView: 'season', // the Stats tab's 'season' or 'transfers'
+  myTeam: Number(store.get('draft.myTeam', '')) || null, // the team the visitor follows
+  logManager: 'all', // the Transfer center's team: 'all' or a manager's id
+  moveType: 'all', // and its kind of move: 'all', 'waiver', 'free' or 'trade'
+  moveGw: 'all', // its gameweek: 'all' or one
+  movePos: 'all', // its players' position: 'all', 'GKP', 'DEF', 'MID' or 'FWD'
   openSquad: null as string | null, // manager whose original squad is expanded
-  squadId: null as number | null, // manager on the Squads tab; null = the league leader
-  lineupView: 'last', // the Squads tab's pitch: 'last' (the latest lineup) or 'all' (the season's best XI)
+  moves: 'all', // a team's moves, on its Transfers tab and in the Transfer center: 'all', 'in' or 'out'
+  lineupView: 'last', // a team's pitch: 'last' (the latest lineup) or 'all' (the season's best XI)
   lineupStat: '', // the pitches' lineup filter: '' (points), 'xp', 'xg', 'xa' or 'xcs'
   due: '', // what the pitches' players still to play show: 'xp' (projected points), 'ko' (kick-off) or '' (projections before a gameweek, kick-offs once it's on)
-  squadScope: 'now', // the Squads tab: 'now' (the squad) or 'all' (everyone ever owned)
-  squadSort: 'lineup', // the Squads tab's column: 'lineup' (XI, bench, new signings), 'gw', 'xp' or 'total'
+  squadScope: 'now', // a team's squad: 'now' (the squad) or 'all' (everyone ever owned)
+  squadSort: 'lineup', // a team's squad's column: 'lineup' (XI, bench, new signings), 'gw', 'xp' or 'total'
+  statsCategory: 'top', // a Premier League match's player stats: 'top', 'attack', 'defence', 'goalkeeping' or 'fpl'
+  statsSort: 'points', // and the column they're sorted by, highest first unless statsAsc
+  statsAsc: false,
+  commentaryBench: false, // a head-to-head's commentary: the benches' players too
   season: null as string | null, // slug of an archived season being viewed, e.g. "2025-26"; null = current
 };
 

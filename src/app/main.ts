@@ -5,7 +5,7 @@ import { applyTheme, bindChrome, readRoute } from './chrome.ts';
 import { card, empty } from './components.ts';
 import { esc } from './format.ts';
 import { applyLatestLive, loadData, loadSeasons, pollLive, pollTransfers, refresh, scheduleRefresh } from './live-scores.ts';
-import { renderAll, seasonChip, statusChips } from './render.ts';
+import { renderAll, statusChips } from './render.ts';
 import { live } from './state.ts';
 
 async function init() {
@@ -30,8 +30,8 @@ async function init() {
   pollLive();
   pollTransfers();
   setInterval(() => {
-    const side = document.querySelector('.poster-side');
-    if (side && !document.hidden) side.innerHTML = statusChips() + seasonChip();
+    if (document.hidden) return;
+    for (const chips of document.querySelectorAll('.status-chips')) chips.innerHTML = statusChips();
   }, 30 * 1000);
   document.addEventListener('visibilitychange', () => {
     refresh();

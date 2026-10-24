@@ -39,3 +39,8 @@
     padding: 20px 24px;
   }
 }
+
+/* A single row of tiles stretches across its card rather than leave a gap. */
+.tiles.tiles-row {
+  grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+}

@@ -1,21 +1,58 @@
 /* --- Match pitch ---------------------------------------------------------------
    fotmob.com's match lineup: both XIs on one pitch, side by side with the goalkeepers
-   at the ends, or home above away when the match is narrower than 560px. */
+   at the ends, or home above away when it is narrower than 560px. */
 
-.match-detail {
+.mp-wrap {
   container-type: inline-size;
 }
 
 .mp {
-  margin: 0 -16px;
   background: var(--pitch);
+  color: var(--pitch-text);
 }
 
+/* A real match's owned players: the name a pill in the manager's colours, the avatar
+   at its left a shade darker. */
+.pp-name.owned {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 100%;
+  padding: 1px 6px 1px 1px;
+  border-radius: 10px;
+  background: var(--av-bg);
+  color: var(--av-ink, #fff);
+  font-weight: 500;
+}
+
+.pp-name.owned .av {
+  filter: brightness(0.8);
+}
+
+/* On the manager's bench, where his points don't count: only the outline. */
+.pp-name.owned.benched {
+  background: none;
+  box-shadow: inset 0 0 0 1.5px var(--av-bg);
+  color: inherit;
+}
+
+.pp-name.owned.benched .av {
+  filter: none;
+}
+
+.pp-name.owned > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The teams in a band above the grass, as on fotmob.com. */
 .mp-head {
   display: flex;
   justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px 4px;
+  padding: 12px 16px;
+  background: var(--pitch-band);
 }
 
 .mp-team {
@@ -34,27 +71,93 @@
   min-width: 0;
 }
 
+/* The side's total, as fotmob.com's team rating. */
+.mp-total {
+  display: inline-grid;
+  flex: none;
+  place-items: center;
+  min-width: 32px;
+  height: 24px;
+  padding: 0 8px;
+  border-radius: 12px;
+  background: var(--pitch-chip);
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
 .mp-name {
+  display: flex;
+  gap: 6px;
   font-size: 13px;
   font-weight: 500;
 }
 
+.mp-team.away .mp-name {
+  flex-direction: row-reverse;
+}
+
 .mp-form {
-  margin: 0 6px;
-  color: var(--text-2);
+  color: var(--pitch-text-2);
   font-weight: 400;
 }
 
 .mp-note {
   margin-top: 2px;
-  color: var(--text-2);
+  color: var(--pitch-text-2);
   font-size: 12px;
 }
 
+/* On a phone, a band for each team, as on fotmob.com: home's above the grass and away's
+   below it, each with its name, formation and note on one line. */
+@container (width < 560px) {
+  .mp {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .mp-head {
+    display: contents;
+  }
+
+  .mp-team,
+  .mp-team.away {
+    flex-direction: row;
+    min-height: 56px;
+    padding: 0 16px;
+    background: var(--pitch-band);
+    text-align: left;
+  }
+
+  .mp-team.away {
+    order: 1;
+  }
+
+  .mp-team.away .mp-name {
+    flex-direction: row;
+  }
+
+  .mp-team-text {
+    display: flex;
+    flex: 1;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: 0 12px;
+  }
+
+  .mp-note {
+    margin-top: 0;
+  }
+}
+
+/* Both halves as tall as the taller, so the halfway line stays between them when one side
+   has a line more (a 5-4-1 against a 4-2-3-1); the other's lines spread out to fill it. */
 .mpitch {
   position: relative;
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-rows: 1fr 1fr;
   overflow: hidden;
 }
 
@@ -103,11 +206,20 @@
   flex-direction: column;
 }
 
+/* Room over each photo for a substitution's minute, clear of the names (and live notes)
+   of the line before: fotmob.com spaces its lines 106px apart, without the notes. */
 .mline {
   display: flex;
+  flex: 1 0 auto;
   justify-content: center;
-  min-height: 92px;
-  padding-top: 12px;
+  min-height: 112px;
+  padding-top: 22px;
+}
+
+/* A real formation lists each line from the right of the team to its left: as it is for
+   home, facing down the pitch, and the other way round for away, facing up it. */
+.mhalf.away .mline {
+  flex-direction: row-reverse;
 }
 
 .pp-flag {
@@ -116,9 +228,10 @@
 }
 
 @container (min-width: 560px) {
+  /* Tall enough for five in a line, each with a substitution's minute over his photo. */
   .mpitch {
-    flex-direction: row;
-    min-height: 420px;
+    display: flex;
+    min-height: 480px;
   }
 
   .mhalf {
@@ -139,6 +252,15 @@
     flex: none;
     width: 100%;
     max-width: none;
+  }
+
+  /* Side by side, home faces right (its right side at the bottom) and away left. */
+  .mhalf.home .mline {
+    flex-direction: column-reverse;
+  }
+
+  .mhalf.away .mline {
+    flex-direction: column;
   }
 
   .mp-halfway {
@@ -173,7 +295,7 @@
 }
 
 .mp-bench {
-  padding-top: 12px;
+  padding: 12px 16px 4px;
 }
 
 .mp-bench-title {
@@ -203,9 +325,16 @@
 }
 
 .mp-sub-name {
-  overflow: hidden;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
   font-size: 13px;
   font-weight: 500;
+}
+
+.mp-sub-name > span:first-child {
+  overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -227,4 +356,8 @@
   height: 20px;
   font-size: 12px;
   opacity: 0.6;
+}
+
+.mp-sub-name .pp-name.owned {
+  margin-top: 0;
 }

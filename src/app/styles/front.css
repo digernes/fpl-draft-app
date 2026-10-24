@@ -1,0 +1,213 @@
+/* --- Home page: fotmob.com's front page --------------------------------------------
+   The round in the middle, the leagues and teams on the left and everything else on the
+   right. As on fotmob.com the right column comes in at 769px and the left at 1120px; on
+   phones the right column's cards, then the left's, go under the round. */
+
+.front {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: 'main' 'right' 'left';
+  align-items: start;
+  gap: 16px;
+}
+
+.front-main,
+.front-right,
+.front-left {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 16px;
+  min-width: 0;
+}
+
+.front-main {
+  grid-area: main;
+}
+
+.front-right {
+  grid-area: right;
+}
+
+.front-left {
+  grid-area: left;
+}
+
+@media (min-width: 769px) {
+  .front {
+    grid-template-columns: minmax(0, 1fr) 268px;
+    grid-template-areas: 'main right';
+  }
+
+  .front-left {
+    display: none;
+  }
+}
+
+@media (min-width: 1120px) {
+  .front {
+    grid-template-columns: 268px minmax(0, 1fr) 268px;
+    grid-template-areas: 'left main right';
+  }
+
+  .front-left {
+    display: grid;
+  }
+}
+
+@media (min-width: 1280px) {
+  .front {
+    grid-template-columns: 308px minmax(0, 1fr) 308px;
+  }
+}
+
+/* The round's picker spans its card, the arrows at either end. */
+.round-card .card-header {
+  padding-left: 12px;
+  padding-right: 12px;
+}
+
+.round-nav {
+  display: flex;
+  flex: 1;
+}
+
+.round-nav .gw-nav {
+  flex: 1;
+  justify-content: space-between;
+}
+
+.round-sub {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 48px;
+  padding: 8px 16px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* A league's group of matches, headed by its name, as on fotmob.com's front page. */
+.group-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+}
+
+.group-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 24px;
+  height: 24px;
+}
+
+.group-icon svg {
+  width: 20px;
+  height: 20px;
+}
+
+.group-name {
+  overflow: hidden;
+  font-size: 14px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.group-note {
+  flex: none;
+  margin-left: auto;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.match-group .date-head:first-child {
+  border-top: 0;
+}
+
+/* The left column's leagues and teams, as fotmob.com's league list. */
+.side-links {
+  padding: 4px 0 8px;
+}
+
+.side-link {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 40px;
+  padding: 8px 16px;
+  font-size: 14px;
+}
+
+.side-link.mine {
+  background: var(--featured);
+}
+
+.side-link-text {
+  display: grid;
+  flex: 1;
+  min-width: 0;
+}
+
+.side-link-text > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.side-link-text .muted {
+  font-size: 12px;
+}
+
+.side-link-value {
+  color: var(--text-2);
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The team followed, under the leagues with a header of its own, or the way to one. */
+.side-head {
+  border-top: 1px solid var(--divider);
+}
+
+.side-hint {
+  margin: 0;
+  padding: 0 16px 8px 52px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.countdown {
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* The next deadline, compact: the countdown beside it, the times under it. */
+.deadline {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.deadline-main {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-weight: 500;
+}
+
+.deadline-main strong {
+  font-size: 18px;
+  font-weight: 500;
+}
+
+.deadline-sub {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 18px;
+}

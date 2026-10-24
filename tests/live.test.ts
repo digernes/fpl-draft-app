@@ -4,7 +4,7 @@ import { describe, it } from 'node:test';
 
 import { buildLiveData } from '../src/build/lineups.ts';
 import type { Season } from '../src/build/season.ts';
-import type { Data, Position } from '../src/shared/data.ts';
+import type { Data, Position, XpParts } from '../src/shared/data.ts';
 import {
   liveProjection,
   provisionalBonus,
@@ -113,6 +113,7 @@ describe('scoreLineup live', () => {
     const midfielderFirst = [...order.slice(0, 11), 12, 14, 13, 15];
     const scored = scoreLineup(midfielderFirst, feedWith(rest), info, { DEF: 4, MID: 2, FWD: 1 });
     assert.deepEqual(scored.subs, [13]); // the midfielder ahead of him would leave three defenders
+    assert.deepEqual(scored.off, [2]);
     assert.ok(scored.xi.includes(13) && scored.bench.includes(2));
   });
 
@@ -311,43 +312,94 @@ describe('who is still to play', () => {
     assert.deepEqual(playerState(on, 42, 3), { state: 'off', min: 59 });
     assert.deepEqual(playerState(on, 43, 3), { state: 'live', min: 60 });
     assert.equal(shareToCome(on, 42, 3), 0);
-    const scored = { xi: [42], bench: [], subs: [], pts: 3, points: () => 3 };
+    const scored = { xi: [42], bench: [], subs: [], off: [], pts: 3, points: () => 3 };
     assert.equal(liveProjection(scored, on, () => ({ pos: 'MID' as const, club: 3 }), { points: () => 6 }).mean, 3);
   });
+  // The share of a match's goals still to come with half an hour left: they come more
+  // often late on, so it's 7/18 rather than a third.
+  const lastHalfHour = 7 / 18;
+
   it('projects the final score from what is left', () => {
+    // 3 is on the pitch an hour into his match and 5 is still to kick off; 1's match is
+    // over without him, with nobody on the bench to come on.
+    const on: SlimLive = { ...feed, elements: { 3: [2, 60] } };
     const info = (id: number) => ({ pos: 'MID' as const, club: id });
-    const scored = { xi: [1, 3, 5], bench: [], subs: [], pts: 20, points: () => 0 };
-    const { mean, variance } = liveProjection(scored, feed, info, { points: () => 6 });
-    assert.ok(Math.abs(mean - (20 + 6 / 3 + 6)) < 1e-9);
-    assert.ok(Math.abs(variance - (1 / 3 + 1) * 9) < 1e-9);
+    const scored = { xi: [1, 3, 5], bench: [], subs: [], off: [], pts: 20, points: () => 0 };
+    // FPL's expected points come whole: a share of them for what's left of his match.
+    const { mean, variance } = liveProjection(scored, on, info, { points: () => 6 });
+    assert.ok(Math.abs(mean - (20 + 6 * lastHalfHour + 6)) < 1e-9);
+    assert.ok(Math.abs(variance - (lastHalfHour + 1) * 9) < 1e-9);
   });
 
-  it('works out appearance points and clean sheets from where the match stands', () => {
-    // A defender 60 minutes into a goalless match, 6 points in (2 for playing, 4 for the
-    // clean sheet FPL already shows), expecting 6 over the match: 2 for playing and 1.6
-    // for a clean sheet (a 40% chance at 4 points).
+  it('works out appearance points, clean sheets and bonus from where the match stands', () => {
+    // A defender 60 minutes into a goalless match with 9 points (2 for playing, 4 for the
+    // clean sheet FPL shows from 60 minutes and 3 provisional bonus). He's expected to
+    // play 81 minutes (and play at all 95% of the time) for 4.9 points: 1.9 for playing,
+    // 1.6 for a clean sheet, 0.6 bonus and 0.8 from the rest.
     const live: SlimLive = {
       elements: { 9: [6, 60] },
-      fixtures: [{ id: 1, h: 9, a: 10, started: true, done: false, min: 60, score: [0, 0] }],
+      fixtures: [{ id: 1, h: 9, a: 10, started: true, done: false, min: 60, score: [0, 0], bps: [[9, 30]] }],
     };
     const info = () => ({ pos: 'DEF' as const, club: 9 });
-    const scored = { xi: [9], bench: [], subs: [], pts: 6, points: () => 6 };
-    const expected = { points: () => 6, milestones: (): [number, number] => [2, 1.6], cleanSheet: { DEF: 4 } };
-    const { mean } = liveProjection(scored, live, info, expected);
-    // A third of the rest (2.4 / 3), nothing more for playing, and the clean sheet kept
-    // with a chance of 0.4^(1/3) instead of counted on top of the 4 already in.
-    assert.ok(Math.abs(mean - (6 + 2.4 / 3 + 4 * 0.4 ** (1 / 3) - 4)) < 1e-9);
+    const parts: XpParts = [81, 1.9, 0.4, 0, 0.3, 1.6, -0.4, 0.6, 0, 0.6, -0.1];
+    const expected = { points: () => 4.9, parts: () => parts, cleanSheet: { DEF: 4 } };
+    const scored = { xi: [9], bench: [], subs: [], off: [], pts: 9, points: () => 9 };
+    const onFor = 90 * lastHalfHour * (81 / 0.95 / 90); // the time he's likely to stay on, weighted by when goals come
+    const keepsIt = (1.6 / 4 / 0.95) ** (onFor / 90);
+    // Nothing more for playing; the rest at his rate a minute; the clean sheet kept with
+    // that chance instead of counted on top of the 4 in; the bonus a third of the way back
+    // from 3 to his 0.6 / 0.95.
+    const rest = (0.8 / 81) * onFor + 4 * (keepsIt - 1) + (0.6 / 0.95 - 3) / 3;
+    assert.ok(Math.abs(liveProjection(scored, live, info, expected).mean - (9 + rest)) < 1e-9);
     // Once a goal goes in, the clean sheet is gone from the points and from the projection.
     const behind = { ...live, fixtures: [{ ...live.fixtures[0], score: [0, 1] as [number, number] }] };
-    assert.ok(Math.abs(liveProjection({ ...scored, pts: 2 }, behind, info, expected).mean - (2 + 2.4 / 3)) < 1e-9);
+    const after = (0.8 / 81) * onFor + (0.6 / 0.95 - 3) / 3;
+    assert.ok(Math.abs(liveProjection({ ...scored, pts: 5 }, behind, info, expected).mean - (5 + after)) < 1e-9);
   });
 
   it('counts the bench player who will come on for a starter who won’t play', () => {
     const info = (id: number) => ({ pos: (id === 9 ? 'GKP' : 'MID') as Position, club: id, status: id === 6 ? 'i' : 'a' });
-    // 1's match is over without him and 6 is injured; 9 is the bench goalkeeper, so 5 and 3 come on.
-    const scored = { xi: [1, 6], bench: [9, 5, 3], subs: [], pts: 10, points: () => 0 };
-    const { mean } = liveProjection(scored, feed, info, { points: () => 6 }, { DEF: 0, MID: 0, FWD: 0 });
-    assert.ok(Math.abs(mean - (10 + 6 + 6 / 3)) < 1e-9);
+    // 1's match is over without him and 6 is injured; 9 is the bench goalkeeper, so 5 (still
+    // to play) and 3 (on the pitch an hour in) come on.
+    const on: SlimLive = { ...feed, elements: { 3: [0, 60] } };
+    const scored = { xi: [1, 6], bench: [9, 5, 3], subs: [], off: [], pts: 10, points: () => 0 };
+    const { mean } = liveProjection(scored, on, info, { points: () => 6 }, { DEF: 0, MID: 0, FWD: 0 });
+    assert.ok(Math.abs(mean - (10 + 6 + 6 * lastHalfHour)) < 1e-9);
+  });
+
+  it('counts the bench player by the chance a starter doesn’t come on', () => {
+    // Club 5 has named 5 among its substitutes and club 6 has named 8 to start; 4 has no
+    // minutes an hour into his match. A substitute comes on two times in three for 1.3
+    // points; the bench player next in line comes on for him the other time.
+    const info = (id: number) => ({ pos: 'MID' as const, club: id === 8 ? 6 : id === 4 ? 3 : id });
+    const named = (id: number) => (id === 5 ? 'bench' : id === 8 ? 'xi' : undefined);
+    const expected = { points: () => 6, named };
+    const free = { DEF: 0, MID: 0, FWD: 0 };
+    const sub = 0.65 * 1.3;
+    const before = liveProjection({ xi: [5], bench: [8], subs: [], off: [], pts: 0, points: () => 0 }, feed, info, expected, free);
+    assert.ok(Math.abs(before.mean - (sub + 0.35 * 6)) < 1e-9);
+    const during = liveProjection({ xi: [4], bench: [8], subs: [], off: [], pts: 0, points: () => 0 }, feed, info, expected, free);
+    assert.ok(Math.abs(during.mean - (sub + 0.35 * 6)) < 1e-9);
+    // Left out of his club's squad, he won't play: the bench player counts in full.
+    const out = liveProjection(
+      { xi: [5], bench: [8], subs: [], off: [], pts: 0, points: () => 0 },
+      feed,
+      info,
+      { ...expected, named: (id: number) => (id === 5 ? 'out' : 'xi') },
+      free,
+    );
+    assert.ok(Math.abs(out.mean - 6) < 1e-9);
+  });
+
+  it('keeps a double gameweek’s first clean sheet', () => {
+    // Club 7's first match is over, with a clean sheet in his 6 points; half his gameweek's
+    // expected points are still to come in the second.
+    const on: SlimLive = { ...feed, elements: { 70: [6, 90] } };
+    const info = () => ({ pos: 'DEF' as const, club: 7 });
+    const parts: XpParts = [170, 3.8, 0.4, 0, 0.4, 2.4, -0.6, 0.8, 0, 0.8, -0.2];
+    const expected = { points: () => 7.8, parts: () => parts, cleanSheet: { DEF: 4 } };
+    const { mean } = liveProjection({ xi: [70], bench: [], subs: [], off: [], pts: 6, points: () => 6 }, on, info, expected);
+    assert.ok(Math.abs(mean - (6 + 7.8 / 2)) < 1e-9);
   });
 });
 

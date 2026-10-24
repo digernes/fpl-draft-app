@@ -1,6 +1,6 @@
-/* --- League header ("poster" + tabs) ------------------------------------------ */
+/* --- Page header ("poster" + tabs): every page but the home page ---------------- */
 
-.league-header {
+.page-header {
   margin: -16px -16px 0;
   background: var(--card);
   border-bottom: 1px solid var(--card-border);
@@ -14,7 +14,7 @@
   padding: 16px 16px 8px;
 }
 
-.league-logo svg {
+.poster-logo svg {
   display: block;
   width: 40px;
   height: 40px;
@@ -25,13 +25,13 @@
   min-width: 0;
 }
 
-.league-name {
+.poster-name {
   font-size: 19px;
   font-weight: 500;
   line-height: 1.15;
 }
 
-.league-sub {
+.poster-sub {
   margin-top: 4px;
   color: var(--text-2);
   font-size: 14px;
@@ -183,7 +183,7 @@
 }
 
 @media (min-width: 992px) {
-  .league-header {
+  .page-header {
     margin: 0;
     border: 1px solid var(--card-border);
     border-radius: 16px;
@@ -196,16 +196,16 @@
     padding: 16px 32px 8px;
   }
 
-  .league-logo svg {
+  .poster-logo svg {
     width: 56px;
     height: 56px;
   }
 
-  .league-name {
+  .poster-name {
     font-size: 23px;
   }
 
-  .league-sub {
+  .poster-sub {
     font-size: 16px;
   }
 

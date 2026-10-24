@@ -12,19 +12,7 @@
   border-top: 0;
 }
 
-/* An open match sits in a box with everything it shows, so it's clear where it ends. */
-.matches > .match-block.open {
-  margin: 8px;
-  border: 1px solid var(--match-open-border);
-  border-radius: 12px;
-  overflow: hidden;
-}
-
-.match-block.open + .match-block {
-  border-top-color: transparent;
-}
-
-.match-block.open > .match {
+.match {
   width: 100%;
   margin: 0;
   border-radius: 0;
@@ -37,7 +25,7 @@
 
 .match {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
+  grid-template-columns: 32px minmax(0, 1fr) 72px minmax(0, 1fr) 32px;
   align-items: center;
   column-gap: 2px;
   width: calc(100% - 16px);
@@ -95,14 +83,40 @@
   white-space: nowrap;
 }
 
-.score.is-live,
-.live-label {
-  color: var(--green-text);
+/* fotmob.com's status chip: FT in grey, and while a match is on, Live or its minute on
+   the brand colour. On a match's row it sits at the left, balanced by an empty column on
+   the right so the score stays in the middle. */
+.status-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 24px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: 10px;
+  background: var(--status-fill);
+  color: var(--status-text);
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.live-label {
-  font-size: 11px;
-  font-weight: 500;
+.status-dot.live {
+  background: var(--status-live-fill);
+  color: var(--status-live-text);
+}
+
+.status-slot {
+  display: flex;
+  align-items: center;
+}
+
+@media (max-width: 768px) {
+  .status-dot {
+    height: 16px;
+    padding: 0 4px;
+    font-size: 10px;
+  }
 }
 
 .kickoff {
@@ -320,4 +334,24 @@
   .side-team {
     display: block;
   }
+}
+
+/* A side column's list of a round's matches: tighter, without the team names, and the
+   page's own match picked out. */
+.matches.compact .match {
+  grid-template-columns: 28px minmax(0, 1fr) 56px minmax(0, 1fr) 8px;
+  column-gap: 6px;
+  min-height: 48px;
+}
+
+.matches.compact .side-team {
+  display: none;
+}
+
+.matches.compact .side-name {
+  font-size: 13px;
+}
+
+.match-block.this > .match {
+  background: var(--featured);
 }

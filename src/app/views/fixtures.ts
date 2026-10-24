@@ -1,28 +1,19 @@
-// The Fixtures tab: one gameweek's matches, its review and earlier meetings.
+// The draft league's Fixtures tab: one gameweek's matches, its review and earlier meetings.
 
 import { gameweekReviewCard } from '../cards.ts';
-import { avatar, card, listRow } from '../components.ts';
+import { avatar, card, gwNav, listRow } from '../components.ts';
 import { esc, fmtDay } from '../format.ts';
-import { caretSvg, chevronSvg } from '../icons.ts';
 import { club, first, gwInfo } from '../lookups.ts';
 import { deadlineNote, featuredGw, matchList, oddsToggle } from '../matches.ts';
-import { D, state } from '../state.ts';
+import { href } from '../router.ts';
+import { D } from '../state.ts';
 
-export function viewFixtures() {
+export function viewFixtures(wanted?: number) {
   const { meta } = D;
-  const gw = Math.min(Math.max(state.gw ?? featuredGw(), meta.firstGw), meta.lastGw);
-  state.gw = gw;
+  const gw = Math.min(Math.max(wanted ?? featuredGw(), meta.firstGw), meta.lastGw);
   const list = D.matches.filter((m) => m.gw === gw);
   const info = gwInfo(gw);
-  const options = D.gameweeks
-    .filter((g) => g.id >= meta.firstGw && g.id <= meta.lastGw)
-    .map((g) => `<option value="${g.id}"${g.id === gw ? ' selected' : ''}>Gameweek ${g.id}</option>`)
-    .join('');
-  const nav = `<div class="gw-nav">
-    <button type="button" class="gw-step" data-action="gw" data-value="${gw - 1}" ${gw <= meta.firstGw ? 'disabled' : ''} aria-label="Previous gameweek">${chevronSvg('left')}</button>
-    <label class="gw-select"><select data-action="gw-select" aria-label="Gameweek">${options}</select>${caretSvg}</label>
-    <button type="button" class="gw-step" data-action="gw" data-value="${gw + 1}" ${gw >= meta.lastGw ? 'disabled' : ''} aria-label="Next gameweek">${chevronSvg('right')}</button>
-  </div>`;
+  const nav = gwNav(gw, meta.firstGw, meta.lastGw, (g) => href.league('fixtures', g), { current: featuredGw() });
   const day = info?.deadline ? fmtDay.format(new Date(info.deadline)) : '';
   const groupHead = `<div class="date-head"><span>${day}</span><span class="muted">${deadlineNote(gw)}</span></div>`;
   const doubles = info?.doubles?.length

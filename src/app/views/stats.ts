@@ -1,25 +1,18 @@
-// The Stats tab: the season (records, top and worst gameweeks, the heatmap, season
-// leaders) and, under Transfers, the transfer stats.
+// The draft league's Stats tab: the season's records, top and worst gameweeks, the
+// heatmap and its leaders.
 
 import type { Decided } from '../../shared/data.ts';
 import { dgwRule, resultText } from '../cards.ts';
-import { avatar, card, chip, crest, empty, infoButton, listRow, photo, tag, tile } from '../components.ts';
-import { esc } from '../format.ts';
+import { avatar, card, crest, empty, infoButton, listRow, playerName, playerPhoto, tag, teamName, tile } from '../components.ts';
 import { first, mgr, player, seasonStat } from '../lookups.ts';
+import { href } from '../router.ts';
 import { D, state } from '../state.ts';
-import { transferStats } from './transfers.ts';
 
 const HEAT_STEPS = [35, 45, 55, 65]; // gameweek score bands for the heatmap
 
 export function viewStats() {
-  const chips = [
-    chip('Season', 'stats-view', 'season', state.statsView === 'season'),
-    chip('Transfers', 'stats-view', 'transfers', state.statsView === 'transfers'),
-  ];
-  const filters = card({ body: `<div class="filter-bar">${chips.join('')}</div>`, cls: 'filter-card' });
-  if (state.statsView === 'transfers') return `${filters}${transferStats()}`;
   // One column on phones, with the top gameweeks first (see .stats-layout).
-  return `<div class="stats-layout">${filters}${recordsCard()}
+  return `<div class="stats-layout">${recordsCard()}
   <div class="cols">
     <div class="col">${topGameweeksCard(D.topGameweeks.length)}${heatmapCard()}</div>
     <div class="col">${mvpCard()}${worstGameweeksCard()}${benchCard()}</div>
@@ -31,7 +24,7 @@ function topGameweeksCard(limit: number) {
   if (!list.length) return card({ title: 'Top gameweeks', body: empty('No finished gameweeks yet') });
   const rows = list.map((g, i) => {
     const result = resultText(g);
-    const star = g.star ? `${esc(player(g.star.player).name)} ${g.star.pts}` : '';
+    const star = g.star ? `${playerName(g.star.player)} ${g.star.pts}` : '';
     const best = g.guaranteed ? tag('Best GW', `${mgr(g.id)!.first}’s best week, included so every manager makes the list`) : '';
     const prize = g.rank === 1 ? tag('Prize', 'Holds the highest-gameweek prize', 'tag-prize') : '';
     const penalty = g.dgw
@@ -40,10 +33,11 @@ function topGameweeksCard(limit: number) {
     return listRow({
       rank: g.rank,
       lead: avatar(g.id, 32),
-      title: `${first(g.id)} <span class="muted">GW ${g.gw}</span>${prize}${best}`,
+      title: `${teamName(g.id)} <span class="muted">GW ${g.gw}</span>${prize}${best}`,
       meta: [result, star].filter(Boolean).join(' · '),
       value: `${g.adj}${penalty}`,
       top: i === 0,
+      mine: g.id === state.myTeam,
     });
   });
   return card({
@@ -54,7 +48,7 @@ function topGameweeksCard(limit: number) {
       'Rules',
     ),
     body: `<div class="list">${rows.join('')}</div>`,
-    footer: limit < D.topGameweeks.length ? { href: '#stats', label: 'All top gameweeks' } : null,
+    footer: limit < D.topGameweeks.length ? { href: href.league('stats'), label: 'All top gameweeks' } : null,
   });
 }
 
@@ -115,9 +109,9 @@ function mvpCard() {
       .map((s, i) => {
         const p = player(s.mvp!.player);
         return listRow({
-          lead: photo(s.mvp!.player),
-          title: `${esc(p.name)} ${crest(p.club, 14)}`,
-          meta: `For ${first(s.id)} · ${p.pos}`,
+          lead: playerPhoto(s.mvp!.player),
+          title: `${playerName(s.mvp!.player)} ${crest(p.club, 14)}`,
+          meta: `For ${teamName(s.id)} · ${p.pos}`,
           value: s.mvp!.pts,
           top: i === 0,
         });
@@ -131,7 +125,7 @@ function worstGameweeksCard() {
     title: 'Worst gameweeks',
     body: `<div class="list">${D.worstGameweeks
       .map((g, i) =>
-        listRow({ rank: i + 1, lead: avatar(g.id, 24), title: `${first(g.id)} <span class="muted">GW ${g.gw}</span>`, value: g.pts }),
+        listRow({ rank: i + 1, lead: avatar(g.id, 24), title: `${teamName(g.id)} <span class="muted">GW ${g.gw}</span>`, value: g.pts }),
       )
       .join('')}</div>`,
   });
@@ -141,6 +135,6 @@ function benchCard() {
   const rows = [...D.seasonStats].sort((a, b) => b.bench - a.bench);
   return card({
     title: 'Points left on the bench',
-    body: `<div class="list">${rows.map((s, i) => listRow({ rank: i + 1, lead: avatar(s.id, 24), title: first(s.id), value: s.bench, top: i === 0 })).join('')}</div>`,
+    body: `<div class="list">${rows.map((s, i) => listRow({ rank: i + 1, lead: avatar(s.id, 24), title: teamName(s.id), value: s.bench, top: i === 0 })).join('')}</div>`,
   });
 }

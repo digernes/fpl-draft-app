@@ -4,6 +4,7 @@
 
 import type { ById, Data, LiveData, Lineup, Manager, Match, Underlying, XpParts } from '../shared/data.ts';
 import { scoreLineup, slimLive, type PlayerEvents, type SlimLive } from '../shared/live.ts';
+import { packUnderlying, underlyingOf } from '../shared/underlying.ts';
 import { readScoring } from '../model/points.ts';
 import { DGW_PENALTY } from './config.ts';
 import type { Season } from './season.ts';
@@ -66,6 +67,7 @@ export function buildLineups(season: Season, matches: Match[]) {
       let xi = order.slice(0, 11);
       let bench = order.slice(11);
       let subs = (res.subs ?? []).map((s) => s.element_in);
+      let off = (res.subs ?? []).map((s) => s.element_out);
       let pts: number;
       if (finished) {
         // Finished weeks come back with the auto-subs already made.
@@ -75,7 +77,7 @@ export function buildLineups(season: Season, matches: Match[]) {
       } else {
         // Still being played: score it as the page does live (provisional bonus and
         // auto-subs) rather than wait for the draft site's own head-to-head numbers.
-        ({ xi, bench, subs, pts } = scoreLineup(order, (liveFeeds[gw] ??= slimLive(live[gw])), playerInfo, formation));
+        ({ xi, bench, subs, off, pts } = scoreLineup(order, (liveFeeds[gw] ??= slimLive(live[gw])), playerInfo, formation));
       }
       const doubles = new Set(doubleClubs[gw]);
       const dgw = xi.filter((id) => doubles.has(clubOf(id) as number)).length;
@@ -87,6 +89,7 @@ export function buildLineups(season: Season, matches: Match[]) {
         xi,
         bench,
         subs,
+        ...(off.length ? { off } : {}),
         ...(finished ? {} : { picks: order }), // the page re-scores live weeks from the picks
         xpf: 0, // set below
       };
@@ -190,44 +193,18 @@ export function buildUnderlying(season: Season, lineups: Lineups): ById<ById<Und
     const ids = Object.values(lineups).flatMap((byGw) => [...(byGw[gw]?.xi ?? []), ...(byGw[gw]?.bench ?? [])]);
     const week: ById<Underlying> = {};
     for (const pid of [...ids].sort((a, b) => a - b)) {
-      const u = underlyingIn(season, pid, gw);
-      if (!u?.minutes || u.xg === undefined) continue;
-      week[pid] = [round(u.xg, 2), round(u.xa, 2), round(u.xp, 1), ...(u.xcs === undefined ? [] : [round(u.xcs, 2)])] as Underlying;
+      const u = packUnderlying(underlyingIn(season, pid, gw));
+      if (u) week[pid] = u;
     }
     if (Object.keys(week).length) out[gw] = week;
   }
   return out;
 }
 
-// Expected ("underlying") points, in the spirit of FotMob's xG: the returns that
-// swing on finishing (goals, assists, clean sheets, goals conceded) are swapped
-// for what the player's xG, xA and xGC were worth. Minutes, bonus, saves, cards
-// and defensive contributions stay as scored. xCS, the expected clean sheets, is
-// only there for positions where a clean sheet scores.
-function underlyingIn(season: Season, pid: number, gw: number) {
-  const rules = season.boot.settings.scoring;
-  const rule = (key: string) => {
-    const value = rules[key];
-    return typeof value === 'number' ? value : 0;
-  };
+// A player's underlying numbers in a finished gameweek (shared/underlying.ts).
+export function underlyingIn(season: Season, pid: number, gw: number) {
   const s = season.live[gw]?.elements[pid]?.stats;
   if (!s) return undefined;
-  if (s.expected_goals == null) return { minutes: s.minutes, xp: s.total_points };
-  const pos = season.positionOf(pid);
-  const goal = rule(`goals_scored_${pos}`);
-  const cleanSheet = rule(`clean_sheets_${pos}`);
-  const conceded = rule(`goals_conceded_${pos}`); // per `concede_limit` goals
   const fixtures = season.doubleClubs[gw]?.includes(season.clubOf(pid) as number) ? 2 : 1;
-  const fullGames = Math.min(fixtures, Math.floor(s.minutes / rules.long_play_limit));
-  const xConceded = Number(s.expected_goals_conceded);
-  const actual =
-    goal * s.goals_scored +
-    rules.assists * s.assists +
-    cleanSheet * s.clean_sheets +
-    conceded * Math.floor(s.goals_conceded / rules.concede_limit);
-  const xg = Number(s.expected_goals);
-  const xa = Number(s.expected_assists);
-  const xcs = fullGames * Math.exp(-xConceded / fixtures); // the chance of a clean sheet, per full game
-  const expected = goal * xg + rules.assists * xa + cleanSheet * xcs + (conceded * xConceded) / rules.concede_limit;
-  return { minutes: s.minutes, xg, xa, xcs: cleanSheet ? xcs : undefined, xp: s.total_points - actual + expected };
+  return underlyingOf(s, season.boot.settings.scoring, season.positionOf(pid), fixtures);
 }

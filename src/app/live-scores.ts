@@ -93,6 +93,9 @@ export function applyLatestLive() {
 }
 
 const liveScores = () => JSON.stringify(D.matches.filter((m) => m.gw === D.meta.currentGw).map((m) => [m.homePts, m.awayPts]));
+// What the pages show of a gameweek beyond its scores: what each player did, his stats in
+// the matches being played, and their moments.
+const liveDetail = () => JSON.stringify([live?.feed.events, live?.feed.matches, live?.feed.moments]);
 
 export async function pollLive() {
   clearTimeout(liveTimer);
@@ -101,9 +104,10 @@ export async function pollLive() {
     try {
       const res = await fetch(`${LIVE_URL}/live/${D.meta.currentGw}`, { cache: 'no-store' });
       if (res.ok) {
-        const before = liveScores();
+        const [scores, detail] = [liveScores(), liveDetail()];
         applyLive(await res.json());
-        if (liveScores() !== before) withRowMoves(renderView);
+        if (liveScores() !== scores) withRowMoves(renderView);
+        else if (liveDetail() !== detail) renderView();
       }
     } catch {
       // Keep the last scores; data.json still refreshes on its own.

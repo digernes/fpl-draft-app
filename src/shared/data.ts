@@ -40,6 +40,8 @@ export interface Data {
   events?: ById<ById<PlayerEvents>>;
   /** Finished gameweek → player → his underlying numbers, for everyone in a lineup who played. Missing from older archives. */
   underlying?: ById<ById<Underlying>>;
+  /** The real Premier League's matches, the whole season's, in kick-off order. Missing from older archives. */
+  plMatches?: PlMatch[];
   /** While a gameweek is being played: its live feed, so the page can tell who is still to play. */
   live?: LiveData;
   /** FPL's chance of playing at each deadline for everyone it flagged (doubtful, injured or suspended), by gameweek: kept to test how the model reads flags. */
@@ -70,12 +72,22 @@ export interface Meta {
   nextWaivers: string | null;
   nextTrades: string | null;
   scoring: { win: number; draw: number; loss: number };
+  /** FPL's points for what a player does, as the Draft game's settings name them (goals_scored_DEF, assists and so on). Missing from older archives. */
+  rules?: Record<string, number>;
   dgwPenalty: number;
   formLength: number;
   oddsOverround: number;
   hasProjections: boolean;
   formation: Formation;
   xiLimits: XiLimits;
+  /** The season's months by gameweek, as FPL's main game splits them, for the monthly awards. Missing from older archives. */
+  months?: Month[];
+}
+
+export interface Month {
+  name: string;
+  from: number;
+  to: number;
 }
 
 export interface Manager {
@@ -103,6 +115,95 @@ export interface Gameweek {
   /** Its Premier League fixtures, [home, away, kick-off], while it is still to come. */
   fixtures?: [number, number, string | null][];
 }
+
+/** A real Premier League match. */
+export interface PlMatch {
+  /** FPL's fixture id. */
+  id: number;
+  gw: number;
+  /** Clubs. */
+  home: number;
+  away: number;
+  /** Kick-off, while it is set. */
+  ko: string | null;
+  /** Home and away goals, once it has kicked off. */
+  score?: [number, number];
+  /** Over, provisionally or for good. */
+  done?: true;
+  /** Everyone who played in it, home side and away side, starters first. */
+  lineups?: [PlLine[], PlLine[]];
+  /** What they did in this match alone, for anyone who did something. */
+  events?: ById<PlayerEvents>;
+  /** Home's and away's formations, from the Premier League's match centre, once the lineups are out. */
+  formations?: [PlFormation, PlFormation];
+}
+
+/**
+ * stats/<gw>.json (for a finished season, seasons/<2026-27>/stats/<gw>.json): everyone's
+ * FPL stats in each of a gameweek's matches. Only the Premier League's player stats want
+ * them, so they stay out of data.json. A player's numbers are in PL_STATS' order, null
+ * where FPL gives one only for the gameweek and he played twice in it.
+ */
+export interface PlStats {
+  gw: number;
+  /** fixture id → player id → his stats */
+  matches: ById<ById<(number | null)[]>>;
+  /** fixture id → what happened in it and when, from the Premier League's match centre, in order. */
+  moments?: ById<PlMoment[]>;
+  /** The matches whose moments were asked for after full time, so they're kept as they are. */
+  final?: number[];
+}
+
+/**
+ * A moment in a Premier League match: its minute (stoppage time added on, so 47 in the
+ * first half is 45+2) and half, what it was, who, and the assister of a goal or the one
+ * who went off for a substitute.
+ */
+export type PlMoment = [
+  minute: number,
+  half: 1 | 2,
+  kind: 'goal' | 'pen' | 'own' | 'yellow' | 'second' | 'red' | 'sub',
+  pid: number,
+  other?: number,
+];
+
+/** The stats in a PlStats row, by FPL's names for them; his minutes and points are in the match's lineups. */
+export const PL_STATS = [
+  'goals_scored',
+  'assists',
+  'expected_goals',
+  'expected_assists',
+  'expected_goals_conceded',
+  'clean_sheets',
+  'goals_conceded',
+  'own_goals',
+  'penalties_saved',
+  'penalties_missed',
+  'yellow_cards',
+  'red_cards',
+  'saves',
+  'bonus',
+  'bps',
+  'influence',
+  'creativity',
+  'threat',
+  'ict_index',
+  'clearances_blocks_interceptions',
+  'recoveries',
+  'tackles',
+  'defensive_contribution',
+] as const;
+export type PlStat = (typeof PL_STATS)[number];
+
+/** A side's formation: its shape, its XI line by line from the goalkeeper, and its named substitutes. */
+export interface PlFormation {
+  shape: string;
+  lines: number[][];
+  subs: number[];
+}
+
+/** A player in a match: his minutes, his FPL points from it (bonus once awarded), and 1 if he started. */
+export type PlLine = [pid: number, minutes: number, points: number, started: 0 | 1];
 
 export interface Price {
   dec: number;
@@ -133,8 +234,8 @@ export interface Match {
   xg?: MatchXg;
 }
 
-/** xG, xA and expected points; then expected clean sheets, where a clean sheet scores for his position. */
-export type Underlying = [xg: number, xa: number, xp: number, xcs?: number];
+/** xG, xA and expected points; then, where a clean sheet scores for his position, expected clean sheets and the xG his club conceded while he played. */
+export type Underlying = [xg: number, xa: number, xp: number, xcs?: number, xgc?: number];
 
 export interface MatchXg {
   /** Expected points: each XI with goals, assists and clean sheets swapped for their expected values. */
@@ -273,6 +374,8 @@ export interface Lineup {
   xi: number[];
   bench: number[];
   subs: number[];
+  /** The starters those automatic substitutes came on for, in the same order. Missing from older archives. */
+  off?: number[];
   /** Picks in order, for weeks still being played (the page re-scores them live). */
   picks?: number[];
   xpf: number;
@@ -448,7 +551,11 @@ export interface Player {
   pts?: number[];
   owner: number | null;
   status: string;
+  /** For one FPL added after the draft (so nobody could draft him): the first gameweek he was in the game. */
+  added?: number;
   news?: string;
+  /** The season's xG, xA and expected points (as the xG table counts them) over the finished gameweeks, for anyone who has played. */
+  xs?: [xg: number, xa: number, xp: number];
   /** Expected points for the next gameweek, from the site's model (FPL's before a gameweek has been played). */
   ep: number;
   /** FPL's own, its form, for the setting that shows them instead; left out when `ep` is FPL's already. */

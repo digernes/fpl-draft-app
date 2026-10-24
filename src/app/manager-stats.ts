@@ -1,4 +1,4 @@
-// One manager's season against the rest of the league, for the Squads tab: their record
+// One manager's season against the rest of the league, for their team's page: their record
 // against each opponent, the opposing player who has hurt them most, their closest calls
 // and where their points come from. Finished matches only, so a live gameweek waits.
 

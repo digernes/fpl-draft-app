@@ -1,9 +1,12 @@
 // Small components shared across the views.
 
 import type { MatchResult, XpParts } from '../shared/data.ts';
+import { onAction } from './actions.ts';
 import { esc, ordinal, plural } from './format.ts';
-import { infoSvg, triangleSvg } from './icons.ts';
+import { caretSvg, chevronSvg, infoSvg, triangleSvg } from './icons.ts';
 import { club, mgr, player, slotOf } from './lookups.ts';
+import { href } from './router.ts';
+import { D } from './state.ts';
 
 // The Premier League keeps photos in two places: newer signings only on the first,
 // some older players only on the second.
@@ -17,6 +20,11 @@ export function avatar(id: number | null | undefined, size = 18) {
   if (!m) return `<span class="av av-${size} m0"></span>`;
   return `<span class="av av-${size} m${slotOf(m.id)}" data-tip="${esc(m.first)} · ${esc(m.team)}" role="img" aria-label="${esc(m.first)}">${esc(m.initials)}</span>`;
 }
+
+/** A player's name and his photo, as links to his page; a manager's first name, a link to their team. */
+export const playerName = (pid: number) => `<a href="${href.player(pid)}">${esc(player(pid)?.name ?? '?')}</a>`;
+export const playerPhoto = (pid: number, size = 32) => `<a class="photo-link" href="${href.player(pid)}">${photo(pid, size)}</a>`;
+export const teamName = (id: number) => `<a href="${href.team(id)}">${esc(mgr(id)?.first ?? '?')}</a>`;
 
 export function managerCell(id: number) {
   const m = mgr(id)!;
@@ -96,6 +104,26 @@ export function seg(action: string, options: [string, string][], current: string
     .join('')}</div>`;
 }
 
+// A bottom sheet over the page, as fotmob.com's on a phone: opened by a button with the
+// `sheet-open` action and the sheet's id, and closed by its own button, a tap on the page
+// around it (chrome.ts) or Escape.
+onAction('sheet-open', (id) => {
+  const sheet = document.getElementById(id);
+  if (!(sheet instanceof HTMLDialogElement)) return;
+  sheet.classList.remove('kept');
+  sheet.showModal();
+});
+onAction('sheet-close', (id) => (document.getElementById(id) as HTMLDialogElement | null)?.close());
+
+export function sheet(id: string, title: string, body: string, done: string) {
+  return `<dialog class="sheet" id="${id}" aria-label="${esc(title)}"><div class="sheet-panel">
+    <div class="sheet-handle" aria-hidden="true"></div>
+    <div class="sheet-title" tabindex="-1" autofocus>${title}</div>
+    <div class="sheet-body">${body}</div>
+    <div class="sheet-foot"><button type="button" class="sheet-done" data-action="sheet-close" data-value="${id}">${done}</button></div>
+  </div></dialog>`;
+}
+
 export interface Footer {
   href: string;
   label: string;
@@ -131,10 +159,12 @@ interface ListRowOptions {
   value?: string | number;
   top?: boolean;
   rank?: number | null;
+  /** The followed team's row, picked out. */
+  mine?: boolean;
 }
 
-export function listRow({ lead = '', title, meta = '', value = '', top = false, rank = null }: ListRowOptions) {
-  return `<div class="lrow">
+export function listRow({ lead = '', title, meta = '', value = '', top = false, rank = null, mine = false }: ListRowOptions) {
+  return `<div class="lrow${mine ? ' mine' : ''}">
     ${rank != null ? `<span class="lrow-rank">${rank}</span>` : ''}
     ${lead}
     <div class="lrow-main"><div class="lrow-title">${title}</div>${meta ? `<div class="lrow-meta">${meta}</div>` : ''}</div>
@@ -147,12 +177,14 @@ export const empty = (text: string) => `<div class="empty">${text}</div>`;
 export const tile = (label: string, value: string | number, meta: string, tip = '') =>
   `<div class="tile"${tip ? ` data-tip="${esc(tip)}"` : ''}><div class="tile-label">${label}</div><div class="tile-value">${value}</div><div class="tile-meta">${meta}</div></div>`;
 
+// The last results, each a link to its match.
 export function formPills(form: MatchResult[]) {
   if (!form.length) return '<span class="form"></span>';
   return `<span class="form">${form
     .map((f, i) => {
       const tip = `GW ${f.gw}: ${f.pf} - ${f.pa} vs ${mgr(f.opp)?.first ?? '?'}`;
-      return `<button type="button" class="pill ${f.res}${i === form.length - 1 ? ' latest' : ''}" data-tip="${esc(tip)}" data-action="match" data-value="${f.gw}" data-a="${f.opp}" data-go="1">${f.res}</button>`;
+      const m = D.matches.find((x) => x.gw === f.gw && (x.home === f.opp || x.away === f.opp));
+      return `<a class="pill ${f.res}${i === form.length - 1 ? ' latest' : ''}" data-tip="${esc(tip)}"${m ? ` href="${href.match(m)}"` : ''}>${f.res}</a>`;
     })
     .join('')}</span>`;
 }
@@ -182,4 +214,50 @@ export function rankDelta(r: { tableRank: number | undefined; rank: number }) {
   const tone = d === 0 ? 'even' : d > 0 ? 'bad' : 'good';
   const tip = `${ordinal(tableRank)} in the real table, ${ordinal(r.rank)} on expected points`;
   return `<span class="rank-delta ${tone}" data-tip="${tip}">${d > 0 ? '+' : ''}${d}${d ? triangleSvg : ''}</span>`;
+}
+
+// fotmob.com's round picker: the previous and next arrows, and every round in between,
+// the current one as fotmob.com's Today is. `to` gives each one's address.
+export function gwNav(
+  gw: number,
+  from: number,
+  last: number,
+  to: (gw: number) => string,
+  { label = 'Gameweek', short = 'GW', current = 0 } = {},
+) {
+  const options = Array.from({ length: last - from + 1 }, (_, i) => from + i)
+    .map(
+      (g) =>
+        `<option value="${to(g)}"${g === gw ? ' selected' : ''}>${g === current ? `Current (${short} ${g})` : `${label} ${g}`}</option>`,
+    )
+    .join('');
+  return `<div class="gw-nav">
+    <button type="button" class="gw-step" data-action="go" data-value="${to(gw - 1)}" ${gw <= from ? 'disabled' : ''} aria-label="Previous ${label.toLowerCase()}">${chevronSvg('left')}</button>
+    <label class="gw-select"><select data-action="go" aria-label="${label}">${options}</select>${caretSvg}</label>
+    <button type="button" class="gw-step" data-action="go" data-value="${to(gw + 1)}" ${gw >= last ? 'disabled' : ''} aria-label="Next ${label.toLowerCase()}">${chevronSvg('right')}</button>
+  </div>`;
+}
+
+export interface RoundRow {
+  href: string;
+  /** Home's line and away's: a crest or avatar, the name, and the score once there is one. */
+  lines: [{ icon: string; name: string; score?: number }, { icon: string; name: string; score?: number }];
+  /** On the right: FT, a Live chip or the minute, or the kick-off. */
+  status: string;
+  current?: boolean;
+}
+
+// fotmob.com's matches-in-the-round card on a match's page: the league and round over the
+// matches, each a team on a line with its score and the status on the right, the page's
+// own match picked out.
+export function roundCard({ title, sub, logo, to, rows }: { title: string; sub: string; logo: string; to: string; rows: RoundRow[] }) {
+  const line = (l: RoundRow['lines'][number]) =>
+    `<span class="rc-line">${l.icon}<span class="rc-name">${l.name}</span><span class="rc-score">${l.score ?? ''}</span></span>`;
+  const body = rows
+    .map(
+      (r) =>
+        `<a class="rc-row${r.current ? ' this' : ''}" href="${r.href}"><span class="rc-teams">${line(r.lines[0])}${line(r.lines[1])}</span><span class="rc-status">${r.status}</span></a>`,
+    )
+    .join('');
+  return `<section class="card round-matches"><a class="rc-head" href="${to}"><span><span class="rc-title">${title}</span><span class="rc-sub">${sub}</span></span><span class="rc-logo">${logo}</span></a>${body}</section>`;
 }

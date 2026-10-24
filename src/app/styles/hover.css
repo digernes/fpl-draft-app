@@ -4,8 +4,11 @@
    underline for text links. A table row highlights too, as it opens that manager's squad. */
 
 .logo,
+.topnav a,
 .tab,
 .chip,
+.tc-edit,
+.sheet-done,
 .pill,
 .icon-btn,
 .gw-step,
@@ -13,6 +16,15 @@
 .gw-select select,
 .match,
 .squad-summary,
+.side-link,
+.rc-row,
+.fx-row,
+.h2h-row,
+.team-link,
+.sq-row,
+.sr,
+.follow,
+.mh-back .chev,
 .bar {
   transition:
     opacity 0.15s ease,
@@ -25,8 +37,8 @@
     opacity: 0.6;
   }
 
-  .topnav a:hover {
-    text-decoration: underline;
+  .topnav a:not([aria-current='page']):hover {
+    background: var(--hover);
   }
 
   .card-footer:hover {
@@ -39,6 +51,20 @@
 
   .chip:not([aria-pressed='true']):hover {
     opacity: 0.75;
+  }
+
+  .tc-edit:hover,
+  .sheet-done:hover {
+    opacity: 0.75;
+  }
+
+  .ps-sort:not(.on):hover {
+    color: var(--text);
+  }
+
+  .ps-table tbody tr:hover td,
+  .h2h-row:hover {
+    background: var(--hover);
   }
 
   .pill:hover {
@@ -67,14 +93,60 @@
     background: var(--match-hover);
   }
 
+  .side-link:hover,
+  .rc-row:hover,
+  .fx-row:hover,
+  .sq-row:hover,
+  .sr:hover,
+  .group-head:hover .group-name {
+    background: var(--hover);
+  }
+
+  .group-head:hover .group-name {
+    background: none;
+    text-decoration: underline;
+  }
+
+  .team-link:hover .team-title,
+  .ml-match:hover > span:not(.livep),
+  .mh-team:is(a):hover .mh-name,
+  .mh-scorers a:hover,
+  .tl-text a:hover,
+  .tl-main a:hover,
+  .lrow a:hover,
+  .mp-sub:hover .mp-sub-name,
+  .pp:hover .pp-name span,
+  .tile-who:is(a):hover .tile-name {
+    text-decoration: underline;
+  }
+
+  .mh-back:hover .chev {
+    background: var(--chip-active-bg);
+    color: var(--chip-active-text);
+  }
+
+  .follow:hover {
+    opacity: 0.8;
+  }
+
+  .form-item:hover,
+  .next-match:hover {
+    opacity: 0.75;
+  }
+
+  .mo-col:hover i,
+  .tl-pts a:hover .ptsp,
+  .tl-who a:hover .av {
+    opacity: 0.75;
+  }
+
   .trow:not(.thead):hover,
   .ftable.full .trow:not(.thead):hover .c-pos,
   .ftable.full .trow:not(.thead):hover .c-team {
     background: var(--hover);
   }
 
-  .squad-summary:hover,
-  .tile-link:hover {
+  .squad-summary:hover {
     background: var(--hover);
   }
 

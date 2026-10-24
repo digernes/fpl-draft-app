@@ -29,6 +29,56 @@ describe('live relay', () => {
     assert.equal(upstream.mock.calls[0].arguments[0], 'https://draft.premierleague.com/api/event/7/live');
   });
 
+  // A match on: player 7 has played half an hour of it and scored, with his xG.
+  const playing = {
+    elements: {
+      ...feed.elements,
+      7: {
+        stats: { total_points: 7, minutes: 30, goals_scored: 1, assists: 0, clean_sheets: 0, goals_conceded: 0, expected_goals: '0.45' },
+        explain: [[[{ stat: 'minutes', value: 30 }], 2]],
+      },
+    },
+    fixtures: [
+      ...feed.fixtures,
+      {
+        id: 2,
+        code: 999,
+        team_h: 3,
+        team_a: 4,
+        started: true,
+        finished: false,
+        finished_provisional: false,
+        team_h_score: 1,
+        team_a_score: 0,
+        stats: [],
+      },
+    ],
+  };
+  const events = {
+    homeTeam: { goals: [{ period: 'FirstHalf', time: '12', goalType: 'Goal', playerId: '1007', assistPlayerId: null }] },
+    awayTeam: {},
+  };
+
+  it('adds the stats and moments of the matches being played, its players by their codes', async () => {
+    const upstream = mock.method(globalThis, 'fetch', async (url: string) => Response.json(url.includes('pulselive') ? events : playing));
+    const body = await (await call('/live/7')).json();
+    assert.deepEqual(Object.keys(body.matches), ['2']); // not the match long over
+    assert.equal(body.matches[2][7][2], 0.45); // PL_STATS' expected_goals
+    assert.deepEqual(body.moments, { 2: [[12, 1, 'goal', 1007]] });
+    assert.ok(upstream.mock.calls.some((c) => String(c.arguments[0]).endsWith('/matches/999/events')));
+  });
+
+  it('still relays the scores when the match centre fails', async () => {
+    mock.method(globalThis, 'fetch', async (url: string) =>
+      url.includes('pulselive') ? new Response('busy', { status: 503 }) : Response.json(playing),
+    );
+    const res = await call('/live/7');
+    assert.equal(res.status, 200);
+    const body = await res.json();
+    assert.deepEqual(body.moments, {});
+    assert.ok(body.matches[2][7]);
+  });
+
   it('only relays gameweeks 1 to 38', async () => {
     mock.method(globalThis, 'fetch', async () => Response.json(feed));
     for (const path of ['/live/0', '/live/39', '/live/7/x', '/api/entry/1', '/']) assert.equal((await call(path)).status, 404, path);

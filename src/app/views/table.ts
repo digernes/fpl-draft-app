@@ -3,6 +3,7 @@
 import { avatar, card, chip, crest, listRow } from '../components.ts';
 import { esc, ordinal, plural, signed } from '../format.ts';
 import { club, first } from '../lookups.ts';
+import { href } from '../router.ts';
 import { D, state } from '../state.ts';
 import { standingsTable, TABLE_VIEWS, tableModeToggle } from '../table.ts';
 
@@ -32,7 +33,7 @@ function twinsCard() {
     title: 'Parallel Premier League',
     sub: 'The club sitting on your points',
     body: `<div class="list twins">${rows.join('')}</div>`,
-    footer: { href: '#table', label: 'Merged table', attrs: ' data-action="table-view" data-value="parallel"' },
+    footer: { href: href.league('table'), label: 'Merged table', attrs: ' data-action="table-view" data-value="parallel"' },
   });
 }
 

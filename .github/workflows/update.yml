@@ -47,12 +47,16 @@ jobs:
         run: npm run check
 
       # data.json isn't kept in git: the build starts from the copy on the live site, for
-      # the pre-match odds it froze and to tell whether anything changed.
+      # the pre-match odds it froze and to tell whether anything changed, and from its stats
+      # files, for the moments of the matches already over.
       - name: Build data.json from the FPL Draft API
         id: data
         run: |
           site="https://${GITHUB_REPOSITORY_OWNER}.github.io/${GITHUB_REPOSITORY#*/}"
           curl -fsS "$site/data.json?v=$(date +%s)" -o public/data.json || echo "No data.json on the site yet"
+          # And each gameweek's stats file, for the moments of the matches already over.
+          mkdir -p public/stats
+          for gw in $(seq 1 38); do curl -fsS "$site/stats/$gw.json?v=$(date +%s)" -o "public/stats/$gw.json" 2>/dev/null || rm -f "public/stats/$gw.json"; done
           before=$(sha256sum public/data.json 2>/dev/null || true)
           npm run data
           after=$(sha256sum public/data.json)

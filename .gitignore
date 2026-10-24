@@ -15,4 +15,5 @@ public/sw.js.map
 .wrangler/
 # built by `npm run data` (and on the live site); not kept in git
 public/data.json
+public/stats/
 public/seasons/index.json

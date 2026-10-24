@@ -1,11 +1,12 @@
 /* --- Pitch ---------------------------------------------------------------------
-   fotmob.com's lineup: lines of players 96px apart, each with a 44px photo, the
-   rating (here the points) at its top right, and the name below. */
+   fotmob.com's lineup: lines of players, each with a 44px photo, the rating (here
+   the points) at its top right, and the name below. */
 
 .pitch {
   position: relative;
   padding: 8px 0;
   background: var(--pitch);
+  color: var(--pitch-text);
   overflow: hidden;
 }
 
@@ -31,12 +32,13 @@
 }
 
 /* Players share a line equally, but never take more than 40% of it, so a pair sits
-   at 30% and 70% as on fotmob.com. */
+   at 30% and 70% as on fotmob.com. Room over each photo for a substitution's minute,
+   clear of the names (and live notes) of the line before, as on the match pitch. */
 .pitch-row {
   display: flex;
   justify-content: center;
-  min-height: 96px;
-  padding-top: 12px;
+  min-height: 112px;
+  padding-top: 22px;
 }
 
 .pp {
@@ -99,10 +101,17 @@
   }
 }
 
-/* The lineup filters over a finished gameweek's pitch, as on fotmob.com. */
+/* The lineup filters over a finished gameweek's pitch, in its band, as on fotmob.com:
+   the chips in the grass's colour. */
 .filter-bar.lineup-filters {
+  --chip-bg: var(--pitch);
+  --chip-border: transparent;
+  --chip-text: var(--pitch-text);
+  --chip-active-bg: #fff;
+  --chip-active-text: #222;
   min-height: 56px;
   border-bottom: 0;
+  background: var(--pitch-band);
 }
 
 /* Expected points would vanish into the pitch in the usual grey. */
@@ -122,19 +131,6 @@
 .pp-badge .ptsp.ko {
   height: 16px;
   font-size: 11px;
-}
-
-.pp-chip {
-  display: inline-flex;
-  flex: none;
-  align-items: center;
-  height: 18px;
-  padding: 0 4px;
-  border: 1px solid var(--pitch-chip-border);
-  border-radius: 12px;
-  background: var(--pitch-chip);
-  font-size: 11px;
-  white-space: nowrap;
 }
 
 /* What the player did, around the photo where fotmob.com puts it: several of a kind
@@ -252,11 +248,27 @@
   margin-left: -4px;
 }
 
+/* An automatic substitute's mark, by his name: the arrow on a disc of its own, as the
+   event icons are, so it shows on the grass in either theme. */
 .pp-sub {
   display: inline-grid;
-  width: 10px;
-  height: 10px;
+  flex: none;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  padding: 2px;
+  border-radius: 50%;
+  background: var(--pitch-chip);
   color: var(--win);
+}
+
+/* A starter who didn't play, on the bench for the one who came on: the arrow down, in red. */
+.pp-sub.off {
+  color: var(--lose);
+}
+
+.pp-sub.off svg {
+  rotate: 180deg;
 }
 
 .pp-name {

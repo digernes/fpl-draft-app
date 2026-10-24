@@ -1,0 +1,191 @@
+/* --- Player stats -------------------------------------------------------------------
+   A Premier League match's, as fotmob.com's at the bottom of a match's Stats tab: chips
+   for the category, then a table whose player column stays put while the numbers scroll
+   under it, every column's heading a button that sorts by it. */
+
+.ps-cats {
+  min-height: 56px;
+  border-bottom: 0;
+}
+
+.ps-scroll {
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+}
+
+.ps-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+.ps-table th,
+.ps-table td {
+  border-right: 1px solid var(--divider);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.ps-table th:last-child,
+.ps-table td:last-child {
+  border-right: 0;
+}
+
+.ps-table th {
+  height: 56px;
+  padding: 0;
+  color: var(--text-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.ps-table td {
+  height: 48px;
+  padding: 0 8px;
+}
+
+.ps-sort {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  width: 100%;
+  min-width: 80px;
+  height: 56px;
+  padding: 0 10px;
+  color: inherit;
+  font: inherit;
+  line-height: 14px;
+  white-space: normal;
+}
+
+.ps-sort > span {
+  max-width: 96px;
+}
+
+.ps-sort.on {
+  color: var(--text);
+}
+
+.sort-mark {
+  width: 12px;
+  height: 12px;
+}
+
+/* The player column, with its own line under each row as on fotmob.com. */
+.ps-player {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  background: var(--card);
+}
+
+.ps-table th.ps-player {
+  padding: 0 16px;
+  text-align: left;
+}
+
+.ps-table td.ps-player {
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid var(--row-divider);
+  text-align: left;
+}
+
+.ps-player a {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 200px;
+}
+
+.ps-photo {
+  position: relative;
+  flex: none;
+}
+
+/* The club's crest at the photo's bottom right. */
+.ps-photo .crest {
+  position: absolute;
+  right: -5px;
+  bottom: -3px;
+}
+
+.ps-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* An unused substitute, faded at the bottom. */
+.ps-table tr.unused td > * {
+  opacity: 0.6;
+}
+
+.ps-table tr.unused td {
+  color: var(--text-2);
+}
+
+.ps-player .pp-name.owned {
+  margin-top: 0;
+  font-size: 13px;
+}
+
+@media (min-width: 769px) {
+  .ps-table th.ps-player,
+  .ps-table td.ps-player {
+    padding-left: 24px;
+  }
+}
+
+/* The Facts tab's leaders: a cell a stat, three across (two on a phone). */
+.ps-leads {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  padding: 0 16px 12px;
+}
+
+.ps-lead {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--bubble);
+}
+
+.ps-lead-label {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.ps-lead-who {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 13px;
+}
+
+.ps-lead-who .pp-name.owned {
+  margin-top: 0;
+  min-width: 0;
+}
+
+.ps-lead-value {
+  flex: none;
+  margin-left: auto;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 599px) {
+  .ps-leads {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

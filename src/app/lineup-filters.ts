@@ -1,24 +1,30 @@
-// The pitches' lineup filters, as on fotmob.com: chips over a finished gameweek's
-// lineup that swap each player's points for his underlying numbers. xP keeps the
-// icons for what he did, like fotmob.com's Fantasy filter; the stats show alone.
-// Before and during a gameweek, the chips choose what players still to play show.
+// The pitches' lineup filters, as on fotmob.com: chips over a lineup that swap each
+// player's points for his underlying numbers, once a gameweek is over and while it's
+// played (for those who have played). xP keeps the icons for what he did, like
+// fotmob.com's Fantasy filter; the stats show alone. Before and during a gameweek, the
+// chips choose what players still to play show.
 
 import { chip, pointsTier } from './components.ts';
-import { gwPoints, gwUnderlying } from './lookups.ts';
+import { esc } from './format.ts';
+import { gwPoints, isLive } from './lookups.ts';
+import { gwUnderlying, statsFor } from './pl-stats.ts';
 import { D, state } from './state.ts';
 
-const STATS: [value: string, label: string][] = [
-  ['xp', 'xP'],
-  ['xg', 'xG'],
-  ['xa', 'xA'],
-  ['xcs', 'xCS'],
+const STATS: [value: string, label: string, tip: string][] = [
+  ['xp', 'xP', 'Expected points, from his xG, xA and xGC'],
+  ['xg', 'xG', 'Expected goals'],
+  ['xa', 'xA', 'Expected assists'],
+  ['xcs', 'xCS', 'Expected clean sheets, from the xG conceded'],
 ];
 
-export const hasLineupFilters = (gw: number) => Boolean(D.underlying?.[gw]);
+export const hasLineupFilters = (gw: number) =>
+  Boolean(D.underlying?.[gw]) || (gw === D.meta.currentGw && isLive() && typeof statsFor(gw) === 'object');
 
 export function lineupFilters(gw: number) {
   if (!hasLineupFilters(gw)) return '';
-  return `<div class="filter-bar lineup-filters">${STATS.map(([value, label]) => chip(label, 'lineup-stat', value, state.lineupStat === value)).join('')}</div>`;
+  return `<div class="filter-bar lineup-filters">${STATS.map(([value, label, tip]) =>
+    chip(label, 'lineup-stat', value, state.lineupStat === value, `data-tip="${esc(tip)}"`),
+  ).join('')}</div>`;
 }
 
 export const showsEvents = (gw: number) =>
@@ -28,7 +34,8 @@ export const showsEvents = (gw: number) =>
 export function statBadge(pid: number, gw: number): string | undefined {
   if (!state.lineupStat || !hasLineupFilters(gw)) return undefined;
   const u = gwUnderlying(pid, gw);
-  if (!u) return '';
+  // While the gameweek is played, one still to play shows what he would anyway.
+  if (!u) return D.underlying?.[gw] ? '' : undefined;
   const [xg, xa, xp, xcs] = u;
   if (state.lineupStat === 'xp')
     return `<span class="ptsp ${pointsTier(xp)}" data-tip="${xp.toFixed(1)} points from his xG, xA and xGC, ${gwPoints(pid, gw)} scored">${xp.toFixed(1)}</span>`;

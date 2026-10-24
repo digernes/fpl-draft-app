@@ -128,3 +128,8 @@
     font-size: 14px;
   }
 }
+
+/* The team the visitor follows, picked out. */
+.lrow.mine {
+  background: var(--featured);
+}

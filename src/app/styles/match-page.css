@@ -1,0 +1,607 @@
+/* --- A match's page: its header, report and momentum ------------------------------ */
+
+/* fotmob.com's match header: the way back and the league, the date, both sides around
+   the score, and under each side its scorers. Crests sit over the names on phones and
+   beside them, towards the score, from 769px. */
+.match-header .poster {
+  display: block;
+  min-height: 0;
+  padding: 0;
+}
+
+.mh {
+  display: grid;
+  gap: 12px;
+  padding: 12px 16px 16px;
+}
+
+.mh-top {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 32px;
+}
+
+.mh-back {
+  position: absolute;
+  left: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.mh-back .chev {
+  width: 30px;
+  height: 30px;
+  padding: 7px;
+  border-radius: 50%;
+  background: var(--arrow-btn);
+}
+
+.mh-league {
+  max-width: calc(100% - 240px);
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mh-date {
+  color: var(--text-2);
+  font-size: 12px;
+  text-align: center;
+}
+
+.mh-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+}
+
+.mh-team {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  text-align: center;
+}
+
+.mh-team-text {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.mh-name {
+  font-size: 16px;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.mh-sub {
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mh-mid {
+  display: grid;
+  justify-items: center;
+  gap: 4px;
+  min-width: 88px;
+}
+
+.mh-score {
+  font-size: 28px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.mh-time {
+  font-size: 20px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.mh-status {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.mh-scorers {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 0 112px;
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.mh-scorers > div {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+/* A goal, a red card or a missed penalty, its icon before it. */
+.mh-incident {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mh-incident svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+}
+
+.mh-assist {
+  opacity: 0.75;
+}
+
+@media (max-width: 599px) {
+  .mh-league {
+    display: none;
+  }
+
+  .mh-scorers {
+    gap: 0 24px;
+  }
+}
+
+@media (min-width: 769px) {
+  .mh {
+    padding: 16px 24px 20px;
+  }
+
+  .mh-team {
+    flex-direction: row;
+    gap: 16px;
+    text-align: left;
+  }
+
+  .mh-team.home {
+    flex-direction: row-reverse;
+    text-align: right;
+  }
+
+  .mh-name {
+    font-size: 20px;
+  }
+
+  .mh-score {
+    font-size: 32px;
+  }
+
+  .mh-scorers > div.home {
+    align-items: flex-end;
+  }
+
+  .mh-scorers > div.away {
+    align-items: flex-start;
+  }
+}
+
+/* The report as fotmob.com's insights: a bubble a sentence, edged in the colour of the side
+   it's about, that side's avatar by the first of each run. */
+.insights {
+  display: grid;
+  gap: 8px;
+  padding: 4px 16px 16px;
+}
+
+.insight {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.insight-who {
+  flex: none;
+  width: 24px;
+}
+
+.insight p {
+  margin: 0;
+  padding: 10px 16px 10px 10px;
+  border-left: 3px solid var(--edge, var(--text-3));
+  border-radius: 4px;
+  background: var(--bubble);
+  font-size: 14px;
+  line-height: 18px;
+}
+
+/* Momentum: the lead as a smooth area, the home side's colour above the line and the
+   away side's below, over the gameweek's kick-off slots; each slot has a hit area with
+   its tip, and its kick-off under it. */
+.momentum {
+  padding: 16px 16px 8px;
+}
+
+.mo-plot {
+  position: relative;
+  height: 168px;
+}
+
+.mo-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.mo-zero {
+  stroke: var(--chip-border);
+  stroke-width: 1;
+}
+
+/* The area's edge, in each side's colour either side of the line, as fotmob.com's: while
+   it's level, a hairline of both. */
+.mo-edge {
+  fill: none;
+  stroke-width: 2;
+}
+
+.mo-hits,
+.mo-axis {
+  display: flex;
+}
+
+.mo-hits {
+  position: absolute;
+  inset: 0;
+}
+
+.mo-hit {
+  flex: 1;
+  min-width: 0;
+}
+
+.mo-hit:focus-visible {
+  outline: 2px solid var(--text);
+  outline-offset: -2px;
+  border-radius: 6px;
+}
+
+/* A dotted line between match days, behind the area, as fotmob.com's at half-time. */
+.mo-day {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  margin-left: -1.5px;
+  background: radial-gradient(circle, var(--axis-dots) 1.2px, transparent 1.6px) 0 0 / 3px 9.6px space;
+  pointer-events: none;
+}
+
+/* While a match is being played, the lead as it stands: a dot at the end of the area, a
+   ring pulsing out of it as on fotmob.com. */
+.mo-now {
+  position: absolute;
+  width: 8px;
+  height: 8px;
+  margin: -4px 0 0 -4px;
+  border-radius: 50%;
+  background: var(--live-dot);
+  pointer-events: none;
+}
+
+.mo-now::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0;
+  animation: mo-pulse 3.5s infinite;
+}
+
+@keyframes mo-pulse {
+  0% {
+    opacity: 0.5;
+    transform: scale(1);
+  }
+
+  57%,
+  100% {
+    opacity: 0;
+    transform: scale(3.5);
+  }
+}
+
+/* The x-axis in dots, as fotmob.com's: 3px, about 7px apart, from one end to the other. */
+.mo-axis {
+  position: relative;
+  padding-top: 19px;
+}
+
+.mo-axis::before {
+  content: '';
+  position: absolute;
+  top: 8px;
+  right: 0;
+  left: 0;
+  height: 3px;
+  background: radial-gradient(circle, var(--axis-dots) 1.2px, transparent 1.6px) 0 0 / 7px 3px space;
+}
+
+.mo-axis span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-2);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.momentum + .legend {
+  padding-top: 0;
+}
+
+/* The Stats tab's rows, as fotmob.com's. */
+.stat-rows {
+  gap: 4px;
+}
+
+/* fotmob.com's matches in the round: the league and round over a 48px logo, then a match
+   to a row, a team to a line with its score, and its status in a column of its own. */
+.rc-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 80px;
+  padding: 0 16px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.rc-head > span:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.rc-title {
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.rc-sub {
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.rc-logo {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  background: var(--hover);
+}
+
+.rc-logo svg {
+  width: 24px;
+  height: 24px;
+}
+
+.rc-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 64px;
+  min-height: 80px;
+  border-top: 1px solid var(--row-divider);
+}
+
+.rc-head + .rc-row {
+  border-top: 0;
+}
+
+.rc-row.this {
+  background: var(--featured);
+}
+
+.rc-teams {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 12px 12px 12px 16px;
+}
+
+.rc-line {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  font-size: 14px;
+}
+
+.rc-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rc-score {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.rc-status {
+  display: grid;
+  place-items: center;
+  border-left: 1px solid var(--row-divider);
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 16px;
+  text-align: center;
+}
+
+/* --- Head-to-head, as fotmob.com's -----------------------------------------------------
+   The wins and draws as pills in each side's colours between the two, then a row per
+   meeting: its date and league above both sides and the score. */
+
+.h2h-sum {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 32px 24px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.h2h-side {
+  flex: none;
+}
+
+.h2h-counts {
+  display: flex;
+  flex: 1;
+  justify-content: space-between;
+  max-width: 472px;
+}
+
+.h2h-count {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+.h2h-badge {
+  display: grid;
+  place-items: center;
+  width: 72px;
+  height: 45px;
+  border-radius: 24px;
+  background: var(--av-bg);
+  color: var(--av-ink, #fff);
+  font-size: 21px;
+  font-weight: 700;
+}
+
+.h2h-badge.draw {
+  background: var(--hover);
+  color: var(--text);
+}
+
+.h2h-label {
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.h2h-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 24px 10px;
+  border-bottom: 1px solid var(--divider);
+}
+
+.h2h-row:last-child {
+  border-bottom: 0;
+}
+
+.h2h-row.this {
+  background: var(--featured);
+}
+
+.h2h-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.h2h-where {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.h2h-where svg {
+  width: 12px;
+  height: 12px;
+}
+
+.h2h-line {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 56px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+}
+
+.h2h-team {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.h2h-team.home {
+  justify-content: flex-end;
+}
+
+.h2h-team > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.h2h-score {
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+@media (max-width: 599px) {
+  .h2h-sum {
+    padding: 24px 16px;
+  }
+
+  .h2h-badge {
+    width: 60px;
+    height: 40px;
+    font-size: 18px;
+  }
+
+  .h2h-row {
+    padding: 12px 16px 10px;
+  }
+}
+
+/* Facts on one column, as fotmob.com's on a phone: the odds first, the report under the
+   lineup, then the rest of the right column. */
+@media (max-width: 1024px) {
+  .cols-match.facts > .col {
+    display: contents;
+  }
+
+  .cols-match.facts > .col:last-child > * {
+    order: 2;
+  }
+
+  .cols-match.facts > .col > .odds-card {
+    order: -1;
+  }
+
+  .cols-match.facts > .col > .report-card {
+    order: 1;
+  }
+}
