@@ -5,10 +5,17 @@ export const swapSvg = `<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M4.
 export const infoSvg = `<svg viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.75" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 7v4.25" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/><circle cx="8" cy="4.9" r="1" fill="currentColor"/></svg>`;
 export const triangleSvg = `<svg class="tri" viewBox="0 0 8 8" aria-hidden="true"><path d="M4 1.5 7.5 6.5h-7Z" fill="currentColor"/></svg>`;
 export const arrowSvg = `<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M6 1.5 10.5 7H7.5v3.5h-3V7h-3L6 1.5Z" fill="currentColor"/></svg>`;
-export function chevronSvg(direction: 'left' | 'right' | 'down') {
-  const paths = { left: 'M10 3 5 8l5 5', right: 'M6 3l5 5-5 5', down: 'M3 6l5 5 5-5' };
-  return `<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="${paths[direction]}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>`;
+// fotmob.com's previous and next arrow: square ends, a sharp point and arms that thicken
+// towards it, sitting a little towards the way it points.
+export function chevronSvg(direction: 'left' | 'right') {
+  const paths = {
+    left: 'M8.85 2.2 3.9 8 8.85 13.8 10.35 12.5 7.4 8 10.35 3.5Z',
+    right: 'M7.15 2.2 12.1 8 7.15 13.8 5.65 12.5 8.6 8 5.65 3.5Z',
+  };
+  return `<svg class="chev" viewBox="0 0 16 16" aria-hidden="true"><path d="${paths[direction]}" fill="currentColor"/></svg>`;
 }
+// And its caret, on dropdowns and on rows that open: a small triangle with rounded corners.
+export const caretSvg = `<svg class="caret" viewBox="0 0 16 16" aria-hidden="true"><path d="M5.2 6.8h5.6L8 9.6Z" fill="currentColor" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>`;
 
 // What a player did, for the icons around his photo on the pitches (see event-icons.ts).
 // A real ball's panels (one pentagon facing us), white with a dark rim so it stands out

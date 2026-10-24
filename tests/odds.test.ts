@@ -10,17 +10,18 @@ import { matchResult, streaks } from '../src/build/tables.ts';
 
 describe('prices', () => {
   it('rounds down onto each ladder, with the overround', () => {
-    assert.deepEqual(price(0.5), { dec: 1.9, frac: '5/6' }); // fair 1.905 after the 5% margin
-    assert.deepEqual(price(0.25), { dec: 3.8, frac: '11/4' });
-    assert.deepEqual(price(0.022), { dec: 42, frac: '40/1' });
+    assert.deepEqual(price(0.5), { dec: 1.9, frac: '9/10' }); // fair 1.905 after the 5% margin
+    assert.deepEqual(price(0.25), { dec: 3.8, frac: '14/5' });
+    assert.deepEqual(price(0.53), { dec: 1.79, frac: '3/4' }); // filled in near evens: not 8/11 (1.73)
+    assert.deepEqual(price(0.022), { dec: 42, frac: '42/1' }); // every whole price at the long end
     assert.deepEqual(price(0.999), { dec: 1.01, frac: '1/100' }); // never below the shortest price
     assert.deepEqual(price(0), { dec: 100, frac: '100/1' }); // nor above the longest
   });
 
   it('tells close chances apart in decimal, where the fractional ladder cannot', () => {
-    const [a, b] = [price(0.482), price(0.497)];
+    const [a, b] = [price(0.489), price(0.498)];
     assert.equal(a.frac, b.frac);
-    assert.deepEqual([a.dec, b.dec], [1.97, 1.91]);
+    assert.deepEqual([a.dec, b.dec], [1.94, 1.91]);
   });
 
   it('gives home, draw and away probabilities that add up to one', () => {

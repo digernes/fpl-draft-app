@@ -44,7 +44,7 @@ export function simulate(season: Season, managerIds: number[], matches: Match[],
     // The numbers behind the model, for the formula shown on the page.
     model: {
       leagueAverage: round(model.leagueMean, 1),
-      projected: model.hasProjections ? model.priced.length : 0,
+      projected: model.hasProjections ? model.projectedGws.length : 0,
       levelSpread: SIM_SKILL_SPREAD,
       spread: round(model.sigma, 1),
       laterSpread: round(spreadFor(season.nextGw + 1), 1),

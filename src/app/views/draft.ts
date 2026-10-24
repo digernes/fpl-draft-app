@@ -4,7 +4,7 @@ import type { DraftPick } from '../../shared/data.ts';
 import { squadStrip } from '../cards.ts';
 import { avatar, card, crest, listRow, photo, tag } from '../components.ts';
 import { esc, pct } from '../format.ts';
-import { chevronSvg } from '../icons.ts';
+import { caretSvg } from '../icons.ts';
 import { club, first, mgr, player, slotOf } from '../lookups.ts';
 import { D, state } from '../state.ts';
 
@@ -42,7 +42,7 @@ function originalSquadCard() {
           ${squadStrip(r)}
           ${sparkline(values, [...labels, 'Now'], r.size, slotOf(r.id))}
           <span class="squad-share" data-tip="Share of points scored in the XI by original draft picks">${pct(r.originalShare)} <span class="muted">of points</span></span>
-          ${chevronSvg('down')}
+          ${caretSvg}
         </button>
         ${detail}
       </div>`;

@@ -33,6 +33,8 @@
   --odds-price: #00985f;
   --group-bg: #f8f8f8;
   --match-hover: #eaeaea;
+  --match-open-border: #e8e8e8;
+  --arrow-btn: #ededed;
   --win: #00985f;
   --draw: #8d9499;
   --lose: #dd3636;
@@ -117,6 +119,8 @@
   --odds-price: #e8e8e8;
   --group-bg: #333;
   --match-hover: #333;
+  --match-open-border: #333;
+  --arrow-btn: #4a4a4a;
   --diff-good: #33c771;
   --diff-bad: #ff3030;
   --kit-head: #6b6b6b;

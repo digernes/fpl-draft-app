@@ -236,7 +236,10 @@ function bindTooltips() {
       const grid = Object.assign(document.createElement('div'), { className: 'tip-rows' });
       for (const row of rows.split('\n'))
         for (const cell of row.split('\t')) grid.append(Object.assign(document.createElement('span'), { textContent: cell }));
-      tip.replaceChildren(Object.assign(document.createElement('div'), { className: 'tip-head', textContent: tip.textContent }), grid);
+      // The tip's first line heads it; any after it (who against) are plain.
+      const [head, ...below] = (tip.textContent ?? '').split('\n');
+      const line = (text: string, className = '') => Object.assign(document.createElement('div'), { className, textContent: text });
+      tip.replaceChildren(line(head, 'tip-head'), ...below.map((text) => line(text)), grid);
     }
     tip.hidden = false;
     const r = el.getBoundingClientRect();
@@ -267,6 +270,10 @@ function bindTooltips() {
     if (event.pointerType !== 'touch' || !el) return hide();
     show(el);
     hideTimer = setTimeout(hide, el.classList.contains('info-btn') ? 10000 : 2500);
+  });
+  // Nor the phone's menu for the image or text under it (Android's comes as a contextmenu).
+  document.addEventListener('contextmenu', (event) => {
+    if ((event as PointerEvent).pointerType === 'touch' && tipped(event.target)) event.preventDefault();
   });
   document.addEventListener('focusin', (event) => (event.target as Element).matches?.('[data-tip]') && show(event.target as Tipped));
   document.addEventListener('focusout', (event) => (event.target as Element).matches?.('[data-tip]') && hide());

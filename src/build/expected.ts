@@ -30,7 +30,7 @@ export function modelInput(season: Season, chance?: 'next' | 'this' | number): M
     players.set(el.id, { club: el.team, pos: POSITIONS[el.element_type], chance: odds ?? null, penalties: penalties.get(el.code) ?? null });
   }
   const feeds = Object.fromEntries(season.finishedGws.map((gw) => [gw, season.live[gw]]));
-  return { scoring: season.boot.settings.scoring, players, feeds };
+  return { scoring: season.boot.settings.scoring, players, feeds, last: season.last };
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -38,14 +38,20 @@ const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', '
 // FPL's chance of playing is for the next gameweek only. By a later one a doubt has
 // cleared, and a player injured or banned is back if FPL's news has him back before its
 // deadline ("Expected back 1 Nov", "Suspended until 08 Nov").
-export function laterChance(el: Pick<Element, 'status' | 'news' | 'chance_of_playing_next_round'>, deadline: number): number | null {
+export function laterChance(
+  el: Pick<Element, 'status' | 'news' | 'chance_of_playing_next_round'>,
+  deadline: number,
+  now = Date.now(),
+): number | null {
   if (el.status === 'a' || el.status === 'd') return null;
   const date = /(?:Expected back|Suspended until) (\d{1,2}) ([A-Z][a-z]{2})/.exec(el.news ?? '');
   const month = date ? MONTHS.indexOf(date[2]) : -1;
   if (date && month >= 0) {
-    const year = new Date(deadline).getUTCFullYear();
-    // A date months gone is next year's: news in December of a return in January.
-    const back = [year, year + 1].map((y) => Date.UTC(y, month, Number(date[1]))).find((t) => t > deadline - 180 * 864e5) ?? Infinity;
+    // The news is today's, so its date is the next one from a few months back: news in
+    // December of a return in January means next year, a ban until 31 October this year,
+    // whichever year the deadline is in.
+    const year = new Date(now).getUTCFullYear();
+    const back = [year, year + 1].map((y) => Date.UTC(y, month, Number(date[1]))).find((t) => t > now - 180 * 864e5) ?? Infinity;
     if (back <= deadline) return null;
   }
   return el.chance_of_playing_next_round ?? 0;
@@ -75,8 +81,8 @@ const partsOf =
 
 export function modelExpected(season: Season) {
   if (!season.finishedGws.length) return null;
-  const { currentGw, nextGw, live, boot } = season;
-  const next = forecast(modelInput(season, 'next'), nextGw, boot.fixtures?.[nextGw] ?? []);
+  const { currentGw, nextGw, live } = season;
+  const next = forecast(modelInput(season, 'next'), nextGw, season.fixturesIn(nextGw));
   const playing = currentGw && !season.finishedGws.includes(currentGw) && live[currentGw];
   const now = playing ? forecast(modelInput(season, 'this'), currentGw, live[currentGw].fixtures) : next;
   return {
@@ -85,9 +91,12 @@ export function modelExpected(season: Season) {
     /** Both taken apart. */
     parts: partsOf(next),
     partsNow: partsOf(now),
-    /** A later gameweek's, by the chances of playing it (laterChance), and taken apart. */
+    /**
+     * A later gameweek's, by the chances of playing it (laterChance), and taken apart: its
+     * fixtures, with what has been played weighed as for the next gameweek (as of now).
+     */
     at: (gw: number) => {
-      const f = forecast(modelInput(season, gw), gw, boot.fixtures?.[gw] ?? []);
+      const f = forecast(modelInput(season, gw), nextGw, season.fixturesIn(gw));
       return { points: points(f), parts: partsOf(f) };
     },
   };

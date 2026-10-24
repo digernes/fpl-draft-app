@@ -96,7 +96,7 @@
   cursor: pointer;
 }
 
-.season-select .chev {
+.season-select .caret {
   position: absolute;
   right: 12px;
   pointer-events: none;

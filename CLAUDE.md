@@ -13,6 +13,7 @@ npm run build                     # the minified bundles, as the deploy makes th
 node --test tests/odds.test.ts    # one test file
 node scripts/fake-live.ts         # fake a gameweek in progress (see Live mode); --restore undoes it
 node src/model/backtest.ts        # how the expected-points model would have done this season (reads .cache)
+node scripts/season-summary.ts 2025-26  # a season from before the site's first, summed up for the model (public match archive)
 ```
 
 Node 24 runs the TypeScript as it is (type stripping), so imports name the `.ts` file, type-only
@@ -26,7 +27,7 @@ froze. The deploy starts from the live site's copy; to match it, download that f
 ## Layout
 
 - `src/build/` builds data.json, one module per part; `config.ts` holds the numbers worth tuning. `scripts/build-data.ts` runs it.
-- `src/model/` is the expected-points model the build uses (`src/build/expected.ts`), with its own README and backtest; its tuning numbers are `DEFAULT_OPTIONS` in `forecast.ts`.
+- `src/model/` is the expected-points model the build uses (`src/build/expected.ts`), with its own README and backtest; its tuning numbers are `DEFAULT_OPTIONS` in `forecast.ts`. It starts each season from a summary of the last one in `public/seasons/model/` (`src/build/last-season.ts`), which the build writes when a season ends.
 - `src/shared/` is code used by more than one of the build, the page and the Worker: data.json's types (`data.ts`), Zod schemas for every FPL API response (`fpl-api.ts`), live scoring (`live.ts`), the odds maths, the best-XI picker.
 - `src/app/` is the page, `src/app/styles/` its CSS, `src/sw.ts` the service worker.
 - `worker/` is the Cloudflare Worker: the live relay (`index.ts`) and the timer that starts the data build (`timer.ts`).
@@ -75,7 +76,7 @@ While a gameweek is being played the page polls the relay (`LIVE_URL` in `state.
 
 - The repo and the site are public. Requests carry no custom or identifying User-Agent (GitHub's API insists on one, so the timer sends the generic `cloudflare-worker`), and managers appear by first name only.
 - No secrets in the repo. The timer's GitHub token is the Cloudflare secret `GITHUB_TOKEN`: never print it, list it or ask for it.
-- data.json isn't committed; only finished-season archives in `public/seasons/` are, by the workflow.
+- data.json isn't committed; only finished-season archives in `public/seasons/` are, by the workflow, with their summaries for the next season's model (`public/seasons/model/`).
 - Pushing `main` deploys, so work on a branch, and merge and push only when asked. Keep commits few: a chat's changes land on `main` as one commit, related or not (`git merge --squash`), with no merge commit.
 - Keep README.md's "What's on it" and "How the numbers are made" in step with what changes.
 

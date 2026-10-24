@@ -1,10 +1,12 @@
 // What each player brings and how much he is likely to play. His rates: the goals and
 // FPL assists he can expect per xG his club makes while he is on the pitch (from his
-// share of its xG and xA), his defensive actions, bonus and cards per 90, and a
-// goalkeeper's saves against the league's line, each pulled towards his position's
-// average by a prior worth a few matches. His minutes: what he played in his club's last
-// few matches, each one a scenario, recent ones weighing more and the ones he missed
-// less, so a regular starter, a rotation risk and someone out of the side all come through.
+// share of its xG and xA), his defensive actions and cards per 90, and a goalkeeper's
+// saves against the league's line, each pulled towards his position's average by a
+// prior worth a few matches, or his shares towards his own last season's at the same club
+// (last-season.ts); his bonus is in bonus.ts. His minutes: what he played in
+// his club's last few matches, each one a scenario, recent ones weighing more and the
+// ones he missed less, so a regular starter, a rotation risk and someone out of the side
+// all come through.
 
 import type { Position } from '../shared/data.ts';
 import type { Appearance, ClubMatch, History, ModelPlayer } from './history.ts';
@@ -44,6 +46,23 @@ export interface Conversion {
   penalties: Counts['penalties'];
 }
 
+/** His goals and FPL assists per xG his club makes while he is on the pitch. */
+export type Shares = Pick<Rates, 'goalShare' | 'assistShare'>;
+
+/** A player's whole season at one club, which the next one's shares start from (last-season.ts). */
+export interface SeasonTotals {
+  pos: Position;
+  minutes: number;
+  xg: number;
+  xa: number;
+  goals: number;
+  assists: number;
+  /** His club's xG while he was on the pitch. */
+  clubXg: number;
+  /** His place in his club's penalty order at the end of it (1 takes them). */
+  penalties: number | null;
+}
+
 interface Totals {
   minutes: number;
   xg: number;
@@ -52,7 +71,6 @@ interface Totals {
   assists: number;
   defcon: number;
   saves: number;
-  bonus: number;
   yellow: number;
   /** His club's xG and xG conceded while he was on the pitch. */
   clubXg: number;
@@ -67,7 +85,6 @@ const empty = (): Totals => ({
   assists: 0,
   defcon: 0,
   saves: 0,
-  bonus: 0,
   yellow: 0,
   clubXg: 0,
   clubXga: 0,
@@ -79,14 +96,13 @@ export function playerRates(
   o: PlayerOptions,
   atGw: number,
   c: Conversion,
-): Map<number, Rates> {
+  /** Shares to start from instead of the position's average: last season's (last-season.ts). */
+  from?: Map<number, Shares>,
+): Map<number, Omit<Rates, 'bonus90'>> {
   const match = new Map(h.matches.map((m) => [`${m.fixture}:${m.club}`, m]));
   const byPlayer = new Map<number, Totals>();
   const byPosition = new Map<Position, Totals>();
-  // A first-choice penalty taker's xG and goals include his club's penalties, which are a
-  // part of their own (points.ts), so his share leaves out the ones he could expect.
-  const penalty = (a: Appearance) =>
-    players.get(a.pid)?.penalties === 1 ? (c.penalties.perMatch * c.penalties.scored * a.minutes) / 90 : 0;
+  const penalty = (a: Appearance) => (players.get(a.pid)?.penalties === 1 ? penaltiesIn(c, a.minutes) : 0);
   const add = (t: Totals, a: Appearance, m: ClubMatch, w: number) => {
     t.minutes += w * a.minutes;
     t.xg += w * (a.xg - penalty(a));
@@ -95,7 +111,6 @@ export function playerRates(
     t.assists += w * a.assists;
     t.defcon += w * a.defcon;
     t.saves += w * a.saves;
-    t.bonus += w * a.bonus;
     t.yellow += w * a.yellow;
     t.clubXg += (w * m.xg * a.minutes) / 90;
     t.clubXga += (w * m.xga * a.minutes) / 90;
@@ -111,29 +126,77 @@ export function playerRates(
     add(byPosition.get(pos)!, a, m, w);
   }
 
-  const ratio = (top: number, bottom: number) => (bottom > 0 ? top / bottom : 0);
-  const rates = new Map<number, Rates>();
+  const shares = sharesOf(byPlayer, byPosition, players, o, c, from);
+  const rates = new Map<number, Omit<Rates, 'bonus90'>>();
   for (const [pid, { pos }] of players) {
     const t = byPlayer.get(pid) ?? empty();
     const avg = byPosition.get(pos) ?? empty();
-    // Goals and FPL assists he can expect per xG of his club's, from his xG and xA (and
-    // a little from the goals and assists themselves).
-    const goals = (x: Totals) => (1 - o.actual) * c.finishing[pos] * x.xg + o.actual * x.goals;
-    const assists = (x: Totals) => (1 - o.actual) * c.assists[pos] * x.xa + o.actual * x.assists;
-    const share = (mine: number, theirs: number) =>
-      (Math.max(0, mine) + o.sharePrior[pos] * ratio(theirs, avg.clubXg)) / (t.clubXg + o.sharePrior[pos]);
     const per90 = (mine: number, theirs: number) => (mine + o.ratePrior * ratio(theirs, avg.minutes / 90)) / (t.minutes / 90 + o.ratePrior);
     const line = (c.saves.base * t.minutes) / 90 + c.saves.perXga * t.clubXga;
     rates.set(pid, {
-      goalShare: share(goals(t), goals(avg)),
-      assistShare: share(assists(t), assists(avg)),
+      ...shares.get(pid)!,
       defcon90: per90(t.defcon, avg.defcon),
       savesFactor: (t.saves + o.savesPrior) / (line + o.savesPrior),
-      bonus90: per90(t.bonus, avg.bonus),
       yellow90: per90(t.yellow, avg.yellow),
     });
   }
   return rates;
+}
+
+/** Shares from whole seasons' totals: last season's, which this season's start from. */
+export function seasonShares(totals: Map<number, SeasonTotals>, o: PlayerOptions, c: Conversion): Map<number, Shares> {
+  const byPlayer = new Map<number, Totals>();
+  const byPosition = new Map<Position, Totals>();
+  for (const [pid, s] of totals) {
+    const penalties = s.penalties === 1 ? penaltiesIn(c, s.minutes) : 0;
+    const t = {
+      ...empty(),
+      minutes: s.minutes,
+      xg: s.xg - penalties,
+      xa: s.xa,
+      goals: s.goals - penalties,
+      assists: s.assists,
+      clubXg: s.clubXg,
+    };
+    byPlayer.set(pid, t);
+    const avg = byPosition.get(s.pos) ?? empty();
+    for (const key of ['minutes', 'xg', 'xa', 'goals', 'assists', 'clubXg'] as const) avg[key] += t[key];
+    byPosition.set(s.pos, avg);
+  }
+  return sharesOf(byPlayer, byPosition, totals, o, c);
+}
+
+const ratio = (top: number, bottom: number) => (bottom > 0 ? top / bottom : 0);
+
+// A first-choice penalty taker's xG and goals include his club's penalties, which are a
+// part of their own (points.ts), so his share leaves out the ones he could expect.
+const penaltiesIn = (c: Conversion, minutes: number) => (c.penalties.perMatch * c.penalties.scored * minutes) / 90;
+
+// Goals and FPL assists he can expect per xG of his club's, from his xG and xA (and a
+// little from the goals and assists themselves), pulled towards his position's average,
+// or towards a share he starts from (his last season's).
+function sharesOf(
+  byPlayer: Map<number, Totals>,
+  byPosition: Map<Position, Totals>,
+  players: Map<number, { pos: Position }>,
+  o: PlayerOptions,
+  c: Conversion,
+  from?: Map<number, Shares>,
+): Map<number, Shares> {
+  const shares = new Map<number, Shares>();
+  for (const [pid, { pos }] of players) {
+    const t = byPlayer.get(pid) ?? empty();
+    const avg = byPosition.get(pos) ?? empty();
+    const goals = (x: Totals) => (1 - o.actual) * c.finishing[pos] * x.xg + o.actual * x.goals;
+    const assists = (x: Totals) => (1 - o.actual) * c.assists[pos] * x.xa + o.actual * x.assists;
+    const share = (mine: number, centre: number) => (Math.max(0, mine) + o.sharePrior[pos] * centre) / (t.clubXg + o.sharePrior[pos]);
+    const start = from?.get(pid);
+    shares.set(pid, {
+      goalShare: share(goals(t), start?.goalShare ?? ratio(goals(avg), avg.clubXg)),
+      assistShare: share(assists(t), start?.assistShare ?? ratio(assists(avg), avg.clubXg)),
+    });
+  }
+  return shares;
 }
 
 export interface Scenario {

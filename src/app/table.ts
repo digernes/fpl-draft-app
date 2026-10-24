@@ -219,8 +219,13 @@ export function tableModeToggle(viewId: string, cls = '') {
 // The simulation's formula with this season's numbers, for the (i) by the legend.
 function simulationFormula() {
   const m = D.simulation.model;
+  // Every gameweek left has its own unless FPL's fixtures for the later ones were missing.
   const weeks =
-    m.projected === 1 ? 'the next gameweek’s, and the same after' : `each of the next ${m.projected} gameweeks’ own, then their average`;
+    m.projected > D.meta.lastGw - D.meta.nextGw
+      ? 'each gameweek’s own'
+      : m.projected === 1
+        ? 'the next gameweek’s, and the same after'
+        : `each of the next ${m.projected} gameweeks’ own, then their average`;
   return [
     'Each simulated week, a manager scores:',
     `league average (${m.leagueAverage})`,

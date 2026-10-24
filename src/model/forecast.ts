@@ -1,11 +1,14 @@
 // Expected points for a gameweek, from what has been played before it: how strong each
 // club is (teams.ts), what share of its attack each player has and how much he is likely
-// to play (players.ts), and FPL's scoring over the minutes he might get (points.ts).
+// to play (players.ts), both starting from last season's (last-season.ts), what earns
+// bonus (bonus.ts), and FPL's scoring over the minutes he might get (points.ts).
 // README.md in this folder explains the model and how it tests against FPL's own.
 
 import type { Position } from '../shared/data.ts';
 import type { LiveFeed } from '../shared/fpl-api.ts';
+import { fitBonus, type BonusOptions } from './bonus.ts';
 import { readHistory, type History, type ModelPlayer } from './history.ts';
+import { startingPoint, type LastSeason } from './last-season.ts';
 import { minutesScenarios, playerRates, standIns, type Plan, type PlayerOptions, type StandInOptions } from './players.ts';
 import { matchParts, PARTS, readScoring, type Counts, type Parts } from './points.ts';
 import { fitTeams, type TeamOptions } from './teams.ts';
@@ -19,12 +22,15 @@ export interface ModelOptions {
   finishing: Record<Position, number>;
   /** FPL assists per xA by position over whole seasons, which this season's start from with a prior worth `prior` xA. */
   assists: { perXa: Record<Position, number>; prior: number };
+  bonus: BonusOptions;
+  /** How much of last season's club ratings this season's start from (a club promoted since starts from the league average). */
+  lastSeason: { clubs: number };
 }
 
 export const DEFAULT_OPTIONS: ModelOptions = {
   teams: { halfLife: 10, prior: 6, home: 0.15, homePrior: 20, goals: 0.15 },
   players: {
-    sharePrior: { GKP: 700, DEF: 15, MID: 6, FWD: 60 },
+    sharePrior: { GKP: 700, DEF: 15, MID: 6, FWD: 15 },
     actual: 0.15,
     ratePrior: 10,
     savesPrior: 10,
@@ -39,6 +45,8 @@ export const DEFAULT_OPTIONS: ModelOptions = {
   counts: { goals: 10, defcon: 6, saves: { base: 1.41, perXga: 0.99 }, penalties: { perMatch: 0.12, scored: 0.79, saved: 0.15 } },
   finishing: { GKP: 1, DEF: 0.85, MID: 1, FWD: 1 },
   assists: { perXa: { GKP: 1.37, DEF: 1.29, MID: 1.33, FWD: 2.11 }, prior: 10 },
+  bonus: { prior: 10, ridge: 20 },
+  lastSeason: { clubs: 0.8 },
 };
 
 export interface ModelInput {
@@ -47,6 +55,8 @@ export interface ModelInput {
   players: Map<number, ModelPlayer>;
   /** Live feeds of finished gameweeks; only those before the one forecast are used. */
   feeds: Record<number, LiveFeed>;
+  /** Last season, which shares and club ratings start from; without it, they start from the averages. */
+  last?: LastSeason;
 }
 
 export interface Forecast {
@@ -59,15 +69,19 @@ export interface Forecast {
 export function forecast(input: ModelInput, gw: number, fixtures: { team_h: number; team_a: number }[], o = DEFAULT_OPTIONS): Forecast {
   const feeds = Object.fromEntries(Object.entries(input.feeds).filter(([g]) => Number(g) < gw));
   const history = readHistory(feeds, input.players);
-  const teams = fitTeams(history.matches, { atGw: gw, ...o.teams });
+  const conversion = { finishing: o.finishing, saves: o.counts.saves, penalties: o.counts.penalties };
+  const start =
+    input.last && startingPoint(input.last, o.players, { ...conversion, assists: o.assists.perXa }, o.teams, o.lastSeason.clubs);
+  const teams = fitTeams(history.matches, { atGw: gw, ...o.teams, centre: start });
   const scoring = readScoring(input.scoring);
   const assists = assistFactors(history, input.players, o.assists);
-  const rates = playerRates(history, input.players, o.players, gw, {
-    finishing: o.finishing,
-    assists,
-    saves: o.counts.saves,
-    penalties: o.counts.penalties,
-  });
+  const bonus = fitBonus(history, input.players, gw, o.players.halfLife, scoring.defconLimit, o.bonus);
+  const rates = new Map(
+    [...playerRates(history, input.players, o.players, gw, { ...conversion, assists }, start?.shares)].map(([pid, r]) => [
+      pid,
+      { ...r, bonus90: bonus.own.get(pid) ?? 0 },
+    ]),
+  );
   const scenarios = minutesScenarios(history, o.players);
 
   // FPL's chance of playing scales him, and the minutes it takes away go to his stand-ins
@@ -112,31 +126,45 @@ export function forecast(input: ModelInput, gw: number, fixtures: { team_h: numb
   const points = new Map<number, number>();
   const parts = new Map<number, Parts>();
   const minutes = new Map<number, number>();
+  // Each match's bonus, player by player, for sharing out below.
+  const bonusIn = fixtures.map(() => new Map<number, number>());
   for (const [pid] of plans) {
     const p = input.players.get(pid)!;
     const r = rates.get(pid)!;
     const { options, chance } = minutesFor.get(pid)!;
     const mine = Object.fromEntries(PARTS.map((part) => [part, 0])) as Parts;
     let mins = 0;
-    for (const f of fixtures.filter((x) => x.team_h === p.club || x.team_a === p.club)) {
+    for (const [i, f] of fixtures.entries()) {
+      if (f.team_h !== p.club && f.team_a !== p.club) continue;
       const home = f.team_h === p.club;
       const opp = home ? f.team_a : f.team_h;
       const xg = teams.rate(p.club, opp, home);
       const xga = teams.rate(opp, p.club, !home);
       const match = { xg, xga, penalties: { for: penaltiesAt(xg), against: penaltiesAt(xga), first: first.get(pid) ?? 0 } };
       for (const s of options) {
-        const got = matchParts(p.pos, scoring, r, s.minutes, match, o.counts);
+        const got = matchParts(p.pos, scoring, r, s.minutes, match, o.counts, bonus.rates[p.pos]);
         for (const part of PARTS) mine[part] += chance * s.weight * got[part];
+        bonusIn[i].set(pid, (bonusIn[i].get(pid) ?? 0) + chance * s.weight * got.bonus);
         mins += chance * s.weight * s.minutes;
       }
     }
     parts.set(pid, mine);
+    minutes.set(pid, mins);
+  }
+  // A match hands out the same bonus whoever plays in it (3, 2 and 1, and more for ties),
+  // so its players share the season's average per match, each in proportion to his.
+  const given = Object.values(feeds).reduce((t, feed) => t + Object.values(feed.elements).reduce((s, e) => s + (e.stats.bonus ?? 0), 0), 0);
+  const played = Object.values(feeds).reduce((t, feed) => t + feed.fixtures.filter((f) => f.finished || f.finished_provisional).length, 0);
+  for (const expected of bonusIn) {
+    const total = [...expected.values()].reduce((t, b) => t + b, 0);
+    const scale = total > 0 ? given / Math.max(1, played) / total : 0;
+    for (const [pid, b] of expected) parts.get(pid)!.bonus += (scale - 1) * b;
+  }
+  for (const [pid, mine] of parts)
     points.set(
       pid,
       PARTS.reduce((t, part) => t + mine[part], 0),
     );
-    minutes.set(pid, mins);
-  }
   return { points, parts, minutes };
 }
 

@@ -67,15 +67,16 @@ const XP_PARTS = ['Playing', 'Goals', 'Penalties', 'Assists', 'Clean sheet', 'Co
 const tenths = (x: number) => (x < 0 ? `−${(-x).toFixed(1)}` : x.toFixed(1));
 
 // Expected points, with a tip that takes them apart when the site's model gave the parts
-// (FPL's form has none): his expected minutes, then every part worth a tenth or more, as
-// rows the tooltip lines up (chrome.ts).
-export function xpPill(xp: number, parts?: XpParts, note = '') {
+// (FPL's form has none): his expected minutes, who against on the line below, then every
+// part worth a tenth or more, as rows the tooltip lines up (chrome.ts).
+export function xpPill(xp: number, parts?: XpParts, against = '', note = '') {
   if (!parts) return `<span class="ptsp xp" data-tip="${esc(`${tenths(xp)} expected points${note}`)}">${xp.toFixed(1)}</span>`;
   const rows = parts
     .slice(1)
     .flatMap((x, i) => (Math.abs(x) >= 0.05 ? [`${XP_PARTS[i]}\t${tenths(x)}`] : []))
     .join('\n');
-  return `<span class="ptsp xp" data-tip="${tenths(xp)} xP · ${Math.round(parts[0])} avg mins" data-tip-rows="${esc(rows)}">${xp.toFixed(1)}</span>`;
+  const head = `${tenths(xp)} xP · ${Math.round(parts[0])} avg mins${against ? `\n${against}` : ''}`;
+  return `<span class="ptsp xp" data-tip="${esc(head)}" data-tip-rows="${esc(rows)}">${xp.toFixed(1)}</span>`;
 }
 
 export function tag(text: string, tip = '', cls = '') {

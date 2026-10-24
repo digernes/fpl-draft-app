@@ -1,12 +1,14 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
-import type { LiveFeed } from '../src/shared/fpl-api.ts';
+import type { Element, LiveFeed } from '../src/shared/fpl-api.ts';
 import { deadlineFlags, laterChance } from '../src/build/expected.ts';
+import { lastSeasonIn, summarise } from '../src/build/last-season.ts';
 import type { Season } from '../src/build/season.ts';
 import { DEFAULT_OPTIONS, forecast } from '../src/model/forecast.ts';
 import type { Data } from '../src/shared/data.ts';
-import type { ClubMatch, ModelPlayer } from '../src/model/history.ts';
+import type { Appearance, ClubMatch, ModelPlayer } from '../src/model/history.ts';
+import type { LastSeason } from '../src/model/last-season.ts';
 import { atLeast, chances, floorMean, readScoring } from '../src/model/points.ts';
 import { fitTeams } from '../src/model/teams.ts';
 
@@ -189,21 +191,131 @@ describe('forecast', () => {
     const late = forecast({ ...input, feeds: { ...input.feeds, 3: feed(3) } }, 2, [{ team_h: 2, team_a: 1 }]).minutes;
     assert.deepEqual([...early], [...late]);
   });
+
+  it('gives bonus for what earns it, shared out to what a match hands out', () => {
+    // The striker scores and gets the bonus every week; the other club's forward doesn't.
+    const scored = (gw: number): LiveFeed => {
+      const f = feed(gw);
+      const striker = { ...f.elements[1], stats: stats(90, 0.9, { goals_scored: 1, bonus: 3 }) };
+      const other = { ...f.elements[4], stats: stats(90, 0.4, { bonus: 2 }) };
+      return { ...f, elements: { ...f.elements, 1: striker, 4: other } };
+    };
+    const { parts } = forecast({ ...input, feeds: { 1: scored(1), 2: scored(2) } }, 3, [{ team_h: 2, team_a: 1 }]);
+    assert.ok(parts.get(1)!.bonus > parts.get(4)!.bonus);
+    const total = [1, 2, 3, 4, 5].reduce((t, pid) => t + parts.get(pid)!.bonus, 0);
+    close(total, 5); // 3 and 2 a match so far
+  });
+
+  it('starts a player’s share and his club’s ratings from last season’s', () => {
+    // Last season the sub (3) took a third of his club's chances, and club 2 outplayed club 1 every time.
+    const last: LastSeason = {
+      players: new Map([[3, { pos: 'MID', minutes: 3000, xg: 20, xa: 5, goals: 20, assists: 5, clubXg: 60, penalties: null }]]),
+      matches: [0, 1, 2, 3].flatMap((fixture): ClubMatch[] => [
+        { gw: 0, fixture, club: 1, opp: 2, home: true, xg: 0.5, xga: 2.5, goals: 0 },
+        { gw: 0, fixture, club: 2, opp: 1, home: false, xg: 2.5, xga: 0.5, goals: 3 },
+      ]),
+    };
+    const fixtures = [{ team_h: 2, team_a: 1 }];
+    const before = forecast(input, 3, fixtures).parts;
+    const after = forecast({ ...input, last }, 3, fixtures).parts;
+    assert.ok(after.get(3)!.goals > before.get(3)!.goals);
+    assert.ok(after.get(4)!.goals > before.get(4)!.goals); // club 2's forward, against the club that conceded the most
+    assert.ok(after.get(1)!.goals < before.get(1)!.goals); // and club 1's, against the club that kept it out
+  });
+});
+
+describe('last season', () => {
+  // Club 10 against club 20, twice: player 1 at club 10 both times, player 2 moving from club 20 to club 10.
+  const appearance = (gw: number, pid: number, club: number, xg: number): Appearance => ({
+    ...{ gw, fixture: gw, pid, club, minutes: 90, xg, xa: 0.1, goals: 1, assists: 0 },
+    ...{ defcon: 0, saves: 0, bonus: 0, yellow: 0, cleanSheet: 0 },
+  });
+  const match = (gw: number, club: number, opp: number, home: boolean, xg: number, xga: number): ClubMatch => ({
+    ...{ gw, fixture: gw, club, opp, home, xg, xga, goals: home ? 2 : 1 },
+  });
+  const history = {
+    matches: [
+      match(1, 10, 20, true, 1.5, 0.5),
+      match(1, 20, 10, false, 0.5, 1.5),
+      match(2, 10, 20, true, 2, 1),
+      match(2, 20, 10, false, 1, 2),
+    ],
+    appearances: [appearance(1, 1, 10, 0.5), appearance(2, 1, 10, 1), appearance(1, 2, 20, 0.25), appearance(2, 2, 10, 0.75)],
+  };
+  const codes = { player: (pid: number) => 100 + pid, club: (club: number) => club * 7, pos: () => 'FWD' as const, penalties: () => null };
+
+  it('sums each player up at the club he ended at, by codes, and every match once', () => {
+    const summary = summarise('2025/26', history, codes);
+    assert.deepEqual(summary.players[101], {
+      club: 70,
+      pos: 'FWD',
+      minutes: 180,
+      xg: 1.5,
+      xa: 0.2,
+      goals: 2,
+      assists: 0,
+      clubXg: 3.5,
+      penalties: null,
+    });
+    assert.deepEqual(summary.players[102], {
+      club: 70,
+      pos: 'FWD',
+      minutes: 90,
+      xg: 0.75,
+      xa: 0.1,
+      goals: 1,
+      assists: 0,
+      clubXg: 2,
+      penalties: null,
+    });
+    assert.deepEqual(summary.matches, [
+      [70, 140, 1.5, 0.5, 2, 1],
+      [70, 140, 2, 1, 2, 1],
+    ]);
+  });
+
+  it('reads it back in this season’s ids: players still at the club, and a club gone down with an id of its own', () => {
+    const summary = summarise('2025/26', history, codes);
+    // This season club 70 is id 3; club 140 went down. Player 101 stayed, 102 moved on.
+    const elements = new Map([
+      [5, { id: 5, code: 101, team: 3 }],
+      [6, { id: 6, code: 102, team: 4 }],
+    ]) as unknown as Map<number, Element>;
+    const last = lastSeasonIn(summary, elements, [
+      { id: 3, code: 70 },
+      { id: 4, code: 21 },
+    ]);
+    assert.deepEqual([...last.players.keys()], [5]);
+    assert.deepEqual(
+      last.matches.map((m) => [m.club, m.opp, m.xg]),
+      [
+        [3, -140, 1.5],
+        [-140, 3, 0.5],
+        [3, -140, 2],
+        [-140, 3, 1],
+      ],
+    );
+  });
 });
 
 describe('later gameweeks', () => {
+  const now = Date.UTC(2026, 9, 30); // 30 October
   const deadline = Date.UTC(2026, 10, 7, 11); // 7 November
   const player = (status: string, news: string, chance: number | null = 0) => ({ status, news, chance_of_playing_next_round: chance });
   it('clear a doubt, and bring a player back when the news says so in time', () => {
-    assert.equal(laterChance(player('d', 'Knock - 75% chance of playing', 75), deadline), null);
-    assert.equal(laterChance(player('i', 'Hamstring injury - Expected back 1 Nov'), deadline), null);
-    assert.equal(laterChance(player('s', 'Suspended until 08 Nov'), deadline), 0);
-    assert.equal(laterChance(player('i', 'Knee injury - Unknown return date'), deadline), 0);
-    assert.equal(laterChance(player('u', 'Has joined Al Hilal permanently'), deadline), 0);
+    assert.equal(laterChance(player('d', 'Knock - 75% chance of playing', 75), deadline, now), null);
+    assert.equal(laterChance(player('i', 'Hamstring injury - Expected back 1 Nov'), deadline, now), null);
+    assert.equal(laterChance(player('s', 'Suspended until 08 Nov'), deadline, now), 0);
+    assert.equal(laterChance(player('i', 'Knee injury - Unknown return date'), deadline, now), 0);
+    assert.equal(laterChance(player('u', 'Has joined Al Hilal permanently'), deadline, now), 0);
   });
   it('read a January return in December as next year’s', () => {
-    assert.equal(laterChance(player('i', 'Ankle injury - Expected back 3 Jan'), Date.UTC(2026, 11, 28)), 0);
-    assert.equal(laterChance(player('i', 'Ankle injury - Expected back 3 Jan'), Date.UTC(2027, 0, 9)), null);
+    const december = Date.UTC(2026, 11, 20);
+    assert.equal(laterChance(player('i', 'Ankle injury - Expected back 3 Jan'), Date.UTC(2026, 11, 28), december), 0);
+    assert.equal(laterChance(player('i', 'Ankle injury - Expected back 3 Jan'), Date.UTC(2027, 0, 9), december), null);
+  });
+  it('keep this year’s date for a deadline next year', () => {
+    assert.equal(laterChance(player('s', 'Suspended until 31 Oct'), Date.UTC(2027, 1, 6), now), null);
   });
 });
 

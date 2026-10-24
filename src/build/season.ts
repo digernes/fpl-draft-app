@@ -1,16 +1,18 @@
 // The fetched league turned into the lookups every other build module works from:
-// which gameweeks are played and finished, who the players are, and their points.
+// which gameweeks are played and finished, who the players are, and their points, and
+// last season in this season's ids, for the model to start from.
 
 import type { Formation, Position, XiLimits } from '../shared/data.ts';
 import type { Element } from '../shared/fpl-api.ts';
 import type { Fetched } from './api.ts';
 import { POSITIONS } from './config.ts';
+import { lastSeasonIn, type SeasonSummary } from './last-season.ts';
 import { countBy, range } from './util.ts';
 
 export type Season = ReturnType<typeof readSeason>;
 
-export function readSeason(fetched: Fetched) {
-  const { details, boot, game, live } = fetched;
+export function readSeason(fetched: Fetched, lastSummary: SeasonSummary | null = null) {
+  const { details, boot, game, live, fplFixtures } = fetched;
   const { league } = details;
   const events = boot.events.data;
   const currentGw = Math.min(game.current_event ?? 0, league.stop_event);
@@ -24,6 +26,9 @@ export function readSeason(fetched: Fetched) {
   const clubOf = (id: number) => elements.get(id)?.team;
   const positionOf = (id: number): Position | undefined => POSITIONS[elements.get(id)?.element_type ?? 0];
   const pointsIn = (id: number, gw: number) => live[gw]?.elements[id]?.stats.total_points ?? 0;
+  // A gameweek's fixtures still to come: the Draft bootstrap's for the few it lists, the
+  // main game's after those.
+  const fixturesIn = (gw: number) => boot.fixtures?.[gw] ?? (fplFixtures ?? []).filter((f) => f.event === gw);
 
   const doubleClubs: Record<number, number[]> = {};
   for (const gw of gws) doubleClubs[gw] = clubsPlayingTwice(live[gw].fixtures);
@@ -49,11 +54,13 @@ export function readSeason(fetched: Fetched) {
     clubOf,
     positionOf,
     pointsIn,
+    fixturesIn,
     doubleClubs,
     formation,
     xiLimits,
     /** Head-to-head points for a win, draw and loss. */
     scoring: boot.settings.league,
+    last: lastSummary ? lastSeasonIn(lastSummary, elements, boot.teams) : undefined,
   };
 }
 

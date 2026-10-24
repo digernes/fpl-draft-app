@@ -74,16 +74,20 @@ export function buildClubs(season: Season): ById<Club> {
   );
 }
 
+/** The season of these gameweeks, as "2026/27", from its first deadline; or the one `back` seasons before it. */
+export function seasonName(events: { deadline_time: string }[], back = 0): string {
+  const start = new Date(events[0]?.deadline_time ?? new Date().toISOString()).getUTCFullYear() - back;
+  return `${start}/${String(start + 1).slice(-2)}`;
+}
+
 export function buildMeta(season: Season, leagueId: number, hasProjections: boolean): Meta {
   const { league, events, currentGw, game, lastFinishedGw, nextGw, nextEvent, scoring, formation, xiLimits } = season;
-  const firstDeadline = events[0]?.deadline_time ?? new Date().toISOString();
-  const seasonStart = new Date(firstDeadline).getUTCFullYear();
   return {
     schema: SCHEMA,
     generatedAt: new Date().toISOString(),
     leagueId,
     name: league.name,
-    season: `${seasonStart}/${String(seasonStart + 1).slice(-2)}`,
+    season: seasonName(events),
     tz: league.draft_tz_show || 'Europe/London',
     firstGw: league.start_event,
     lastGw: league.stop_event,

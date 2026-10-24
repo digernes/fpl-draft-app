@@ -27,6 +27,18 @@ export const slotOf = (id: number) => {
   return slot < COLOR_SLOTS ? slot + 1 : 0;
 };
 export const isLive = () => D.matches.some((m) => m.started && !m.finished);
+// A club's Premier League matches in a gameweek, [home, away, kick-off]: from the relay's
+// feed while the gameweek is being played, as data.json only lists those still to come.
+export const clubFixtures = (team: number, gw: number): [number, number, string | null][] =>
+  live?.gw === gw
+    ? live.feed.fixtures.filter((f) => f.h === team || f.a === team).map((f) => [f.h, f.a, f.ko ?? null])
+    : (gwInfo(gw)?.fixtures ?? []).filter(([h, a]) => h === team || a === team);
+export const versus = (opp: number, home: boolean) => `${club(opp)?.name ?? '?'} (${home ? 'H' : 'A'})`;
+// Who a club plays in a gameweek: "Arsenal (H)", or "Arsenal (H), Chelsea (A)" in a double.
+export const opponents = (team: number, gw: number) =>
+  clubFixtures(team, gw)
+    .map(([h, a]) => (h === team ? versus(a, true) : versus(h, false)))
+    .join(', ');
 
 export const matchKey = (m: Match) => `${m.gw}:${m.home}:${m.away}`;
 

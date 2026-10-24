@@ -39,6 +39,8 @@ export interface Appearance {
   saves: number;
   bonus: number;
   yellow: number;
+  /** FPL's clean sheet: 60 minutes or more without his club conceding while he was on. */
+  cleanSheet: number;
 }
 
 export interface History {
@@ -77,6 +79,7 @@ export function readHistory(feeds: Record<number, LiveFeed>, players: Map<number
           saves: share * (s.saves ?? 0),
           bonus: share * (s.bonus ?? 0),
           yellow: share * (s.yellow_cards ?? 0),
+          cleanSheet: share * s.clean_sheets,
         };
         appearances.push(a);
         clubXg.set(`${fixture}:${club}`, (clubXg.get(`${fixture}:${club}`) ?? 0) + a.xg);

@@ -6,10 +6,24 @@
 import { bestXi } from '../../shared/best-xi.ts';
 import type { Position } from '../../shared/data.ts';
 import { playerState } from '../../shared/live.ts';
-import { avatar, card, chip, crest, empty, formPills, listRow, photo, pointsTier, seg, tag, tile, xpPill } from '../components.ts';
+import { avatar, card, chip, crest, empty, formPills, listRow, photo, seg, tag, tile, xpPill } from '../components.ts';
 import { totalSlots } from '../event-icons.ts';
 import { esc, ordinal, pct, plural, signed, sum } from '../format.ts';
-import { club, first, gwEvents, gwPoints, isArchive, lineupFor, mgr, nextParts, nextXp, player, seasonStat, slotOf } from '../lookups.ts';
+import {
+  club,
+  first,
+  gwEvents,
+  gwPoints,
+  isArchive,
+  lineupFor,
+  mgr,
+  nextParts,
+  nextXp,
+  opponents,
+  player,
+  seasonStat,
+  slotOf,
+} from '../lookups.ts';
 import { closeCalls, gameIn, nemesis, pointsByPosition, rivalries, type Rivalry } from '../manager-stats.ts';
 import { pitchPill, roundPill, stateLabel } from '../matches.ts';
 import { dueFilters, lineupFilters, showsEvents, statBadge } from '../lineup-filters.ts';
@@ -144,18 +158,20 @@ function bestLineup(id: number) {
   const scored = (pid: number) => record.get(pid)?.pts ?? 0;
   const xi = bestXi(everOwned(id, squad), scored, (pid) => player(pid).pos, D.meta.xiLimits);
   if (!xi.ids.length) return { sub: '', body: empty('No points yet') };
-  // Badges are coloured like a gameweek's points, by points per gameweek of the season.
+  // Badges are coloured by points per gameweek of the season, on a scale of their own: a
+  // gameweek's 6 for green is more than even the best average, so here green beats the
+  // league's average XI player (about 4 a week) and blue is half as much again.
   const gameweeks = Math.max(1, D.meta.currentGw - D.meta.firstGw + 1);
+  const tier = (perWeek: number) => (perWeek >= 6 ? 'p4' : perWeek >= 4 ? 'p3' : perWeek >= 2 ? 'p2' : perWeek >= 1 ? 'p1' : 'p0');
   const onPitch = (pid: number): PitchPlayer => {
     const { pts, goals, assists, starts } = record.get(pid)!;
     const owner = player(pid).owner;
     const now = owned.has(pid) ? '' : owner ? ` · now with ${mgr(owner)?.first}` : ' · a free agent now';
-    const perWeek = (pts / gameweeks).toFixed(1);
     return {
       pid,
-      badge: `<span class="ptsp ${pointsTier(pts / gameweeks)}">${pts}</span>`,
+      badge: `<span class="ptsp ${tier(pts / gameweeks)}">${pts}</span>`,
       icons: totalSlots(goals, assists, starts),
-      tip: `${player(pid).name}: ${plural(pts, 'pt')} in ${plural(starts, 'start')}, ${perWeek} a gameweek${now}`,
+      tip: `${player(pid).name}: ${plural(pts, 'pt')} in ${plural(starts, 'start')}${now}`,
       faded: !owned.has(pid),
     };
   };
@@ -206,7 +222,7 @@ function squadCard(id: number) {
       label: 'xP',
       tip: `Expected points for GW ${nextGw}${state.xp === 'fpl' ? ' (FPL’s form)' : ''}`,
       value: (pid: number) => (owned.has(pid) ? nextXp(pid) : -1),
-      cell: (pid: number) => (owned.has(pid) ? xpPill(nextXp(pid), nextParts(pid)) : dash),
+      cell: (pid: number) => (owned.has(pid) ? xpPill(nextXp(pid), nextParts(pid), opponents(player(pid).club, nextGw)) : dash),
     },
     {
       key: 'total',

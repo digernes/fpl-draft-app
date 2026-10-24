@@ -60,3 +60,13 @@
 .tooltip[hidden] {
   display: none;
 }
+
+/* On a touch screen a press shows the tip (chrome.ts), so holding it shouldn't also start
+   the phone's text selection or its callout. */
+@media (hover: none) {
+  [data-tip] {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+}

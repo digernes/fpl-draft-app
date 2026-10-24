@@ -23,6 +23,8 @@ export interface Fetched {
   ownerNow: Map<number, number>;
   /** The main FPL game's bootstrap, for next-gameweek projections; null if it failed. */
   fplBoot: api.FplBootstrap | null;
+  /** The main FPL game's fixtures still to come, for projections past the few gameweeks the Draft bootstrap lists; null if it failed. */
+  fplFixtures: api.FplFixtures | null;
   /** Live feed by gameweek, for every gameweek so far. */
   live: Record<number, api.LiveFeed>;
   /** Picks by entry, then gameweek. */
@@ -34,7 +36,7 @@ export async function fetchLeague(leagueId: number, cacheDir: string | null): Pr
   const get = <S extends z.ZodType>(url: string, schema: S) => getJSON(url, schema, cacheDir);
   const getOptional = <S extends z.ZodType>(url: string, schema: S) => getJSON(url, schema, cacheDir, { optional: true });
 
-  const [details, boot, game, txRes, tradeRes, choiceRes, statusRes, fplBoot] = await Promise.all([
+  const [details, boot, game, txRes, tradeRes, choiceRes, statusRes, fplBoot, fplFixtures] = await Promise.all([
     get(`${DRAFT_API}/league/${leagueId}/details`, api.LeagueDetails),
     get(`${DRAFT_API}/bootstrap-static`, api.Bootstrap),
     get(`${DRAFT_API}/game`, api.Game),
@@ -43,6 +45,7 @@ export async function fetchLeague(leagueId: number, cacheDir: string | null): Pr
     get(`${DRAFT_API}/draft/${leagueId}/choices`, api.DraftChoices),
     get(`${DRAFT_API}/league/${leagueId}/element-status`, api.ElementStatus),
     getOptional(`${FPL_API}/bootstrap-static/`, api.FplBootstrap),
+    getOptional(`${FPL_API}/fixtures/?future=1`, api.FplFixtures),
   ]);
 
   const { league } = details;
@@ -73,6 +76,7 @@ export async function fetchLeague(leagueId: number, cacheDir: string | null): Pr
     choices: choiceRes.choices,
     ownerNow: new Map(statusRes.element_status.flatMap((s) => (s.owner ? [[s.element, s.owner] as const] : []))),
     fplBoot,
+    fplFixtures,
     live,
     picks,
   };

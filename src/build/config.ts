@@ -11,7 +11,8 @@ export const TOP_GAMEWEEKS = 10;
 export const FORM_LENGTH = 5;
 // Odds: bookmaker overround, how many gameweeks ahead get prices, and the least spread
 // of a score around its expected value. A manager's expected score is the league average
-// plus how far their best projected XI that gameweek sits from the league's average one.
+// plus how far their best projected XI that gameweek sits from the league's average one
+// (the season simulation's too, for every gameweek left).
 export const ODDS_OVERROUND = 1.05;
 export const ODDS_GAMEWEEKS = 3;
 // Of those, how many show their projected XIs and xP on the page (the rest use them only in the odds).

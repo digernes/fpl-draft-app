@@ -10,6 +10,8 @@ import { parseArgs } from 'node:util';
 import { fetchLeague } from '../build/api.ts';
 import { POSITIONS } from '../build/config.ts';
 import { modelInput } from '../build/expected.ts';
+import { readSummary } from '../build/last-season.ts';
+import { seasonName } from '../build/output.ts';
 import { readSeason, type Season } from '../build/season.ts';
 import { DEFAULT_OPTIONS, forecast, type ModelOptions } from './forecast.ts';
 import { PARTS, readScoring, type Parts } from './points.ts';
@@ -132,7 +134,8 @@ function actualParts(season: Season, s: ReturnType<typeof readScoring>, pid: num
 
 if (import.meta.main) {
   const { values } = parseArgs({ options: { cache: { type: 'string', default: '.cache' }, league: { type: 'string', default: '23793' } } });
-  const season = readSeason(await fetchLeague(Number(values.league), values.cache));
+  const fetched = await fetchLeague(Number(values.league), values.cache);
+  const season = readSeason(fetched, await readSummary('public/seasons', seasonName(fetched.boot.events.data, 1)));
   const { rows, parts } = backtest(season);
   const cell = (s: Score) => `${s.mae.toFixed(2)} / ${s.rmse.toFixed(2)} / ${s.bias >= 0 ? '+' : ''}${s.bias.toFixed(2)}`;
   const titles: Record<Population, string> = {

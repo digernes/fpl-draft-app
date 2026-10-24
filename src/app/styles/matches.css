@@ -12,6 +12,29 @@
   border-top: 0;
 }
 
+/* An open match sits in a box with everything it shows, so it's clear where it ends. */
+.matches > .match-block.open {
+  margin: 8px;
+  border: 1px solid var(--match-open-border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.match-block.open + .match-block {
+  border-top-color: transparent;
+}
+
+.match-block.open > .match {
+  width: 100%;
+  margin: 0;
+  border-radius: 0;
+}
+
+/* A pitch at the bottom runs into the box's corners. */
+.match-detail:has(> .mp:last-child) {
+  padding-bottom: 0;
+}
+
 .match {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 72px minmax(0, 1fr);
@@ -251,16 +274,37 @@
   cursor: pointer;
 }
 
-.gw-select .chev {
+.gw-select .caret {
   position: absolute;
   right: 8px;
   pointer-events: none;
 }
 
-.chev {
+.caret {
   width: 16px;
   height: 16px;
   flex: none;
+}
+
+/* fotmob.com's previous and next buttons: the arrow on a grey disc, which inverts on hover. */
+.gw-step {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--arrow-btn);
+  color: var(--text);
+}
+
+.gw-step:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.gw-step .chev {
+  width: 16px;
+  height: 16px;
 }
 
 @media (min-width: 769px) {

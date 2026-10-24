@@ -3,7 +3,7 @@
 import { gameweekReviewCard } from '../cards.ts';
 import { avatar, card, listRow } from '../components.ts';
 import { esc, fmtDay } from '../format.ts';
-import { chevronSvg } from '../icons.ts';
+import { caretSvg, chevronSvg } from '../icons.ts';
 import { club, first, gwInfo } from '../lookups.ts';
 import { deadlineNote, featuredGw, matchList, oddsToggle } from '../matches.ts';
 import { D, state } from '../state.ts';
@@ -19,9 +19,9 @@ export function viewFixtures() {
     .map((g) => `<option value="${g.id}"${g.id === gw ? ' selected' : ''}>Gameweek ${g.id}</option>`)
     .join('');
   const nav = `<div class="gw-nav">
-    <button type="button" class="icon-btn" data-action="gw" data-value="${gw - 1}" ${gw <= meta.firstGw ? 'disabled' : ''} aria-label="Previous gameweek">${chevronSvg('left')}</button>
-    <label class="gw-select"><select data-action="gw-select" aria-label="Gameweek">${options}</select>${chevronSvg('down')}</label>
-    <button type="button" class="icon-btn" data-action="gw" data-value="${gw + 1}" ${gw >= meta.lastGw ? 'disabled' : ''} aria-label="Next gameweek">${chevronSvg('right')}</button>
+    <button type="button" class="gw-step" data-action="gw" data-value="${gw - 1}" ${gw <= meta.firstGw ? 'disabled' : ''} aria-label="Previous gameweek">${chevronSvg('left')}</button>
+    <label class="gw-select"><select data-action="gw-select" aria-label="Gameweek">${options}</select>${caretSvg}</label>
+    <button type="button" class="gw-step" data-action="gw" data-value="${gw + 1}" ${gw >= meta.lastGw ? 'disabled' : ''} aria-label="Next gameweek">${chevronSvg('right')}</button>
   </div>`;
   const day = info?.deadline ? fmtDay.format(new Date(info.deadline)) : '';
   const groupHead = `<div class="date-head"><span>${day}</span><span class="muted">${deadlineNote(gw)}</span></div>`;

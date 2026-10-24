@@ -11,7 +11,8 @@
 //   node scripts/build-data.ts --cache .cache          reuse raw API responses (local dev)
 //   node scripts/build-data.ts --archive               freeze the season into seasons/ now
 //
-// A finished season is frozen into public/seasons/<2026-27>.json automatically, and
+// A finished season is frozen into public/seasons/<2026-27>.json automatically, with a
+// summary for the next season's model to start from in public/seasons/model/, and
 // public/seasons/index.json lists every season the page can show.
 
 import { mkdir } from 'node:fs/promises';
@@ -33,7 +34,17 @@ import {
 } from '../src/build/lineups.ts';
 import { deadlineFlags } from '../src/build/expected.ts';
 import { oddsModel, priceMatches } from '../src/build/odds.ts';
-import { buildClubs, buildMeta, buildPlayers, readPrevious, seasonSlug, writeIfChanged, writeSeasonIndex } from '../src/build/output.ts';
+import { readSummary, summariseSeason, writeSummary } from '../src/build/last-season.ts';
+import {
+  buildClubs,
+  buildMeta,
+  buildPlayers,
+  readPrevious,
+  seasonName,
+  seasonSlug,
+  writeIfChanged,
+  writeSeasonIndex,
+} from '../src/build/output.ts';
 import { readSeason } from '../src/build/season.ts';
 import { simulate } from '../src/build/simulation.ts';
 import {
@@ -58,7 +69,9 @@ const SEASONS_DIR = path.join(path.dirname(OUT_FILE), 'seasons');
 // gameweek being played FPL's expected points as they were at the deadline, while it
 // is FPL's that are in use.
 const previous = await readPrevious(OUT_FILE);
-const season = readSeason(await fetchLeague(LEAGUE_ID, CACHE_DIR));
+const fetched = await fetchLeague(LEAGUE_ID, CACHE_DIR);
+// Last season's summary, which the model's shares and club ratings start from.
+const season = readSeason(fetched, await readSummary(SEASONS_DIR, seasonName(fetched.boot.events.data, 1)));
 
 const { managers, managerIds, entryByLeagueEntry } = buildManagers(season);
 const matches = buildMatches(season, entryByLeagueEntry);
@@ -142,5 +155,7 @@ const seasonOver = season.events.length > 0 && season.events.every((e) => e.fini
 if (seasonOver || args.archive) {
   const archive = path.join(SEASONS_DIR, `${seasonSlug(data.meta.season)}.json`);
   if (await writeIfChanged(archive, data)) console.log(`Archived ${data.meta.season} to ${archive}.`);
+  if (await writeSummary(SEASONS_DIR, summariseSeason(season, data.meta.season)))
+    console.log(`Summed up ${data.meta.season} for next season's model.`);
 }
 await writeSeasonIndex(SEASONS_DIR, OUT_FILE, data.meta);

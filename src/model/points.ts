@@ -2,11 +2,12 @@
 // minutes against a given opponent. Goals and assists come from his share of his club's
 // expected goals; clean sheets, goals conceded and saves from the goals his club can
 // expect to concede; the defensive contribution from the chance his tackles, clearances,
-// blocks and interceptions (and recoveries, outside defence) reach FPL's threshold. Goals
-// and defensive actions vary more from match to match than a Poisson allows, so they are
-// negative binomials.
+// blocks and interceptions (and recoveries, outside defence) reach FPL's threshold; bonus
+// from what all of those earn in it. Goals and defensive actions vary more from match to
+// match than a Poisson allows, so they are negative binomials.
 
 import type { Position } from '../shared/data.ts';
+import type { BonusRates } from './bonus.ts';
 
 export interface Scoring {
   goal: Record<Position, number>;
@@ -61,6 +62,7 @@ export interface Rates {
   defcon90: number;
   /** A goalkeeper's saves against the league's line (`Counts.saves`): 1 is average. */
   savesFactor: number;
+  /** His bonus per 90 beyond what his goals, assists and the rest earn at his position (bonus.ts). */
   bonus90: number;
   yellow90: number;
 }
@@ -103,29 +105,43 @@ export interface Counts {
   penalties: { perMatch: number; scored: number; saved: number };
 }
 
-export function matchParts(pos: Position, s: Scoring, r: Rates, minutes: number, m: Match, counts: Counts): Parts {
+export function matchParts(pos: Position, s: Scoring, r: Rates, minutes: number, m: Match, counts: Counts, b: BonusRates): Parts {
   const share = minutes / 90;
   const against = m.xga * share;
   const long = minutes >= s.longPlayLimit;
   if (minutes <= 0) return Object.fromEntries(PARTS.map((part) => [part, 0])) as Parts;
+  // What he can expect to do: his goals and assists, the penalties he takes, the chances of
+  // a clean sheet and a defensive contribution, and a goalkeeper's saves.
+  const goals = r.goalShare * m.xg * share;
+  const assists = r.assistShare * m.xg * share;
+  const taken = share * (m.penalties?.first ?? 0) * (m.penalties?.for ?? 0);
+  const cleanSheet = long ? chances(against, counts.goals)[0] : 0;
+  const defcon = s.defconLimit[pos] ? atLeast(r.defcon90 * share, counts.defcon, s.defconLimit[pos]) : 0;
+  const saves = pos === 'GKP' ? r.savesFactor * (counts.saves.base * share + counts.saves.perXga * against) : 0;
   return {
     appearance: long ? s.longPlay : s.shortPlay,
-    goals: s.goal[pos] * r.goalShare * m.xg * share,
+    goals: s.goal[pos] * goals,
     // A penalty he takes: the goal when it goes in, the deduction when it doesn't; for a
     // goalkeeper, the penalties he saves.
     penalties:
-      share *
-      ((m.penalties?.first ?? 0) *
-        (m.penalties?.for ?? 0) *
-        (counts.penalties.scored * s.goal[pos] + (1 - counts.penalties.scored) * s.penaltyMissed) +
-        (pos === 'GKP' ? (m.penalties?.against ?? 0) * counts.penalties.saved * s.penaltySaved : 0)),
-    assists: s.assist * r.assistShare * m.xg * share,
-    cleanSheet: long ? s.cleanSheet[pos] * chances(against, counts.goals)[0] : 0,
+      taken * (counts.penalties.scored * s.goal[pos] + (1 - counts.penalties.scored) * s.penaltyMissed) +
+      (pos === 'GKP' ? share * (m.penalties?.against ?? 0) * counts.penalties.saved * s.penaltySaved : 0),
+    assists: s.assist * assists,
+    cleanSheet: s.cleanSheet[pos] * cleanSheet,
     conceded: s.conceded[pos] * floorMean(against, s.concedeLimit, counts.goals),
-    defcon: s.defconLimit[pos] ? s.defcon[pos] * atLeast(r.defcon90 * share, counts.defcon, s.defconLimit[pos]) : 0,
-    saves:
-      pos === 'GKP' ? s.saves * floorMean(r.savesFactor * (counts.saves.base * share + counts.saves.perXga * against), s.savesLimit) : 0,
-    bonus: r.bonus90 * share,
+    defcon: s.defcon[pos] * defcon,
+    saves: pos === 'GKP' ? s.saves * floorMean(saves, s.savesLimit) : 0,
+    // What those earn in bonus at his position, and his own beyond them (bonus.ts).
+    bonus: Math.max(
+      0,
+      b.per90 * share +
+        b.goal * (goals + taken * counts.penalties.scored) +
+        b.assist * assists +
+        b.cleanSheet * cleanSheet +
+        b.defcon * defcon +
+        (b.saves * saves) / 3 +
+        r.bonus90 * share,
+    ),
     cards: s.yellow * r.yellow90 * share,
   };
 }

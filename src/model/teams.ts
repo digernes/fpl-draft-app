@@ -1,7 +1,8 @@
 // Each club's attack and defence, from the xG in its matches. A Poisson model: a club's
 // expected goals against an opponent are exp(base + home + its attack − the opponent's
 // defence). Recent matches count for more, and every rating is pulled towards the
-// league average by a prior worth `prior` xG, which matters most early in a season.
+// league average by a prior worth `prior` xG, which matters most early in a season (or
+// towards last season's, for a club that was in the league then).
 
 import type { ClubMatch } from './history.ts';
 
@@ -16,6 +17,8 @@ export interface TeamOptions {
   homePrior: number;
   /** How much the goals scored count next to the xG (0: xG only). */
   goals: number;
+  /** Where each club's ratings start instead of the league average: last season's (last-season.ts). */
+  centre?: { attack: Map<number, number>; defence: Map<number, number> };
 }
 
 export interface Teams {
@@ -53,8 +56,8 @@ export function fitTeams(matches: ClubMatch[], o: TeamOptions): Teams {
   for (let round = 0; round < 60; round++) {
     base = step(rows, 1, base, 0);
     home = step(atHome, 1, home, o.homePrior, o.home);
-    for (const c of clubs) attack.set(c, step(attacking.get(c)!, 1, attack.get(c) ?? 0, o.prior));
-    for (const c of clubs) defence.set(c, step(defending.get(c)!, -1, defence.get(c) ?? 0, o.prior));
+    for (const c of clubs) attack.set(c, step(attacking.get(c)!, 1, attack.get(c) ?? 0, o.prior, o.centre?.attack.get(c)));
+    for (const c of clubs) defence.set(c, step(defending.get(c)!, -1, defence.get(c) ?? 0, o.prior, o.centre?.defence.get(c)));
   }
   return { rate, attack, defence, home };
 }

@@ -8,6 +8,7 @@
 .chip,
 .pill,
 .icon-btn,
+.gw-step,
 .info-btn,
 .gw-select select,
 .match,
@@ -46,6 +47,11 @@
 
   .icon-btn:hover:not(:disabled) {
     background: var(--hover);
+  }
+
+  .gw-step:hover:not(:disabled) {
+    background: var(--chip-active-bg);
+    color: var(--chip-active-text);
   }
 
   .info-btn:hover {

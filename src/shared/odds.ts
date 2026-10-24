@@ -3,17 +3,21 @@
 
 import type { Price } from './data.ts';
 
-// The usual UK fractional ladder. It is coarse near evens (10/11 covers every chance from
-// 47.6% to 49.9%), so decimal prices step on their own, finer ladder (DECIMAL_STEPS).
+// The usual UK fractional ladder, filled in where it jumps: from 1/2 to 4/1, where most
+// matches' prices are, with the in-between fractions some books use (3/4, 20/21, 7/5,
+// 85/40, 13/5…), so no step there is much over 5%, and every whole price from 10/1 to
+// 100/1 (from 40/1 to 50/1, say). Decimal prices step on their own, finer ladder
+// (DECIMAL_STEPS).
 // prettier-ignore
 const FRACTIONS: [number, number][] = [
   [1, 100], [1, 50], [1, 33], [1, 25], [1, 20], [1, 16], [1, 14], [1, 12], [1, 10], [1, 9], [1, 8],
   [2, 15], [1, 7], [1, 6], [2, 11], [1, 5], [2, 9], [1, 4], [2, 7], [3, 10], [1, 3], [4, 11], [2, 5],
-  [4, 9], [1, 2], [8, 15], [4, 7], [8, 13], [4, 6], [8, 11], [4, 5], [5, 6], [10, 11], [1, 1],
-  [21, 20], [11, 10], [6, 5], [5, 4], [11, 8], [6, 4], [13, 8], [7, 4], [15, 8], [2, 1], [9, 4],
-  [5, 2], [11, 4], [3, 1], [10, 3], [7, 2], [4, 1], [9, 2], [5, 1], [11, 2], [6, 1], [13, 2], [7, 1],
-  [15, 2], [8, 1], [17, 2], [9, 1], [10, 1], [11, 1], [12, 1], [14, 1], [16, 1], [18, 1], [20, 1],
-  [22, 1], [25, 1], [28, 1], [33, 1], [40, 1], [50, 1], [66, 1], [80, 1], [100, 1],
+  [4, 9], [1, 2], [8, 15], [4, 7], [3, 5], [8, 13], [13, 20], [4, 6], [7, 10], [8, 11], [3, 4], [4, 5],
+  [5, 6], [17, 20], [9, 10], [10, 11], [20, 21], [1, 1], [21, 20], [11, 10], [23, 20], [6, 5], [5, 4],
+  [13, 10], [11, 8], [7, 5], [6, 4], [8, 5], [13, 8], [7, 4], [9, 5], [15, 8], [2, 1], [85, 40], [11, 5],
+  [9, 4], [12, 5], [5, 2], [13, 5], [11, 4], [14, 5], [3, 1], [16, 5], [10, 3], [7, 2], [15, 4], [4, 1],
+  [9, 2], [5, 1], [11, 2], [6, 1], [13, 2], [7, 1], [15, 2], [8, 1], [17, 2], [9, 1],
+  ...Array.from({ length: 91 }, (_, i): [number, number] => [10 + i, 1]),
 ];
 
 // Decimal prices step as on a betting exchange: by 0.01 up to 2, then by more as they lengthen.

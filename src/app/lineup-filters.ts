@@ -31,7 +31,7 @@ export function statBadge(pid: number, gw: number): string | undefined {
   if (!u) return '';
   const [xg, xa, xp, xcs] = u;
   if (state.lineupStat === 'xp')
-    return `<span class="ptsp ${pointsTier(xp)}" data-tip="${xp.toFixed(1)} expected points, ${gwPoints(pid, gw)} scored">${xp.toFixed(1)}</span>`;
+    return `<span class="ptsp ${pointsTier(xp)}" data-tip="${xp.toFixed(1)} points from his xG, xA and xGC, ${gwPoints(pid, gw)} scored">${xp.toFixed(1)}</span>`;
   const [value, what] =
     state.lineupStat === 'xg'
       ? [xg, 'expected goals']
@@ -42,10 +42,12 @@ export function statBadge(pid: number, gw: number): string | undefined {
   return `<span class="ptsp xp" data-tip="${value.toFixed(2)} ${what}">${value.toFixed(2)}</span>`;
 }
 
-// Players still to play show their expected points or when they kick off: by default
-// the xP before a gameweek, and the kick-offs once it is on.
+// Players still to play show their projected points (the xP everywhere else on the site)
+// or when they kick off: by default the projections before a gameweek, and the kick-offs
+// once it is on. Not "xP" here, since a finished gameweek's xP filter means what his
+// chances were worth.
 const DUE: [value: string, label: string][] = [
-  ['xp', 'xP'],
+  ['xp', 'Projected'],
   ['ko', 'Kick-off'],
 ];
 

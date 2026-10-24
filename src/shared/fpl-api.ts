@@ -232,6 +232,11 @@ export const FplBootstrap = z.object({
   elements: z.array(z.object({ code: id, ep_next: numeric.nullable(), ep_this: numeric.nullish(), penalties_order: z.number().nullish() })),
 });
 
+// --- Main FPL game: fixtures/?future=1 (projections only) ----------------------
+
+/** Every fixture still to come, with its gameweek (none while it is unscheduled). Clubs have the Draft game's ids. */
+export const FplFixtures = z.array(Fixture.extend({ event: z.number().nullable() }));
+
 export type LeagueDetails = z.infer<typeof LeagueDetails>;
 export type Bootstrap = z.infer<typeof Bootstrap>;
 export type Element = Bootstrap['elements'][number];
@@ -243,3 +248,4 @@ export type DraftChoice = z.infer<typeof DraftChoices>['choices'][number];
 export type LiveFeed = z.infer<typeof LiveFeed>;
 export type EntryPicks = z.infer<typeof EntryPicks>;
 export type FplBootstrap = z.infer<typeof FplBootstrap>;
+export type FplFixtures = z.infer<typeof FplFixtures>;

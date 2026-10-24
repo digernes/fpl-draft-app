@@ -2,7 +2,7 @@
 
 import { markLoadingPhotos } from './components.ts';
 import { esc, countdown, fmtShortDay, fmtStamp, fmtTime, plural } from './format.ts';
-import { chevronSvg, trophySvg } from './icons.ts';
+import { caretSvg, trophySvg } from './icons.ts';
 import { isArchive, isLive, seasonLabel, seasonSlug } from './lookups.ts';
 import { D, seasons, state, TABS } from './state.ts';
 import { viewDraft } from './views/draft.ts';
@@ -59,7 +59,7 @@ export function seasonChip() {
         `<option value="${esc(seasonSlug(s.season))}"${s.season === D.meta.season ? ' selected' : ''}>${seasonLabel(s.season)}</option>`,
     )
     .join('');
-  return `<label class="season-chip season-select"><select data-action="season" aria-label="Season">${options}</select>${chevronSvg('down')}</label>`;
+  return `<label class="season-chip season-select"><select data-action="season" aria-label="Season">${options}</select>${caretSvg}</label>`;
 }
 
 export function renderAll() {

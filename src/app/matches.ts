@@ -7,7 +7,7 @@ import { liveOdds } from '../shared/odds.ts';
 import { avatar, empty, ptsPill, seg, xpPill } from './components.ts';
 import { esc, fmtShortDay, fmtTime, fmtWeekday, pct, plural, priceText, sum } from './format.ts';
 import {
-  club,
+  clubFixtures,
   first,
   gwBonus,
   gwEvents,
@@ -19,9 +19,11 @@ import {
   liveXp,
   matchKey,
   mgr,
+  opponents,
   partsAt,
   player,
   slotOf,
+  versus,
   xpAt,
 } from './lookups.ts';
 import { dueFilters, dueShows, lineupFilters, showsEvents, statBadge } from './lineup-filters.ts';
@@ -200,7 +202,7 @@ export function pitchPill(pid: number, gw: number, match: PlayerState | null) {
 export function roundPill(pid: number, gw: number, match: PlayerState | null) {
   const pts = gwPoints(pid, gw);
   if (match?.state !== 'due' || pts !== 0) return ptsPill(pts, gwBonus(pid, gw));
-  return xpPill(liveXp(pid), liveParts(pid), ' (not played yet)');
+  return xpPill(liveXp(pid), liveParts(pid), opponents(player(pid).club, gw), ' (not played yet)');
 }
 
 function upcomingDetail(m: Match) {
@@ -230,7 +232,7 @@ function upcomingDetail(m: Match) {
         const p = player(pid);
         return {
           pid,
-          badge: showXp ? xpPill(xpAt(pid, m.gw), partsAt(pid, m.gw)) : kickoffBadge(pid, m.gw),
+          badge: showXp ? xpPill(xpAt(pid, m.gw), partsAt(pid, m.gw), opponents(p.club, m.gw)) : kickoffBadge(pid, m.gw),
           mark: p.status !== 'a' ? `<span class="pp-flag" data-tip="${esc(p.news || 'Flagged')}">!</span>` : '',
         };
       }),
@@ -255,9 +257,8 @@ const when = (ko: string | null | undefined) => {
   return `${at.toDateString() === new Date().toDateString() ? 'Today' : fmtWeekday.format(at)} ${fmtTime.format(at)}`;
 };
 
-// When a match kicks off and who against, for a tip: "Sat 18:30, v Arsenal".
-const fixtureTip = (ko: string | null | undefined, opp: number, home: boolean) =>
-  `${when(ko)}, ${home ? 'v' : 'at'} ${club(opp)?.name ?? '?'}`;
+// When a match kicks off and who against, for a tip: "Sat 18:30, Arsenal (H)".
+const fixtureTip = (ko: string | null | undefined, opp: number, home: boolean) => `${when(ko)}, ${versus(opp, home)}`;
 
 // When a player kicks off.
 function kickoffPill(ko: string | null | undefined, tip: string) {
@@ -267,7 +268,7 @@ function kickoffPill(ko: string | null | undefined, tip: string) {
 // When a player's club plays in a gameweek still to come, with the opponent in the tip.
 function kickoffBadge(pid: number, gw: number) {
   const team = player(pid).club;
-  const games = (gwInfo(gw)?.fixtures ?? []).filter(([h, a]) => h === team || a === team);
+  const games = clubFixtures(team, gw);
   if (!games.length) return `<span class="ptsp ko" data-tip="No match this gameweek">–</span>`;
   const tip = games.map(([h, a, ko]) => fixtureTip(ko, h === team ? a : h, h === team)).join(' · ');
   return kickoffPill(games[0][2], tip);

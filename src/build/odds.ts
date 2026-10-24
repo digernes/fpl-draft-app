@@ -1,7 +1,7 @@
 // Odds for upcoming matches, and the model behind them: each manager's expected score
 // from their best projected XI that gameweek (by expected points) against the league's
 // average one, a normal spread around it, and prices rounded down onto the UK
-// fractional ladder.
+// fractional ladder. The season simulation plays every gameweek left the same way.
 
 import type { Data, Match, Odds, Price } from '../shared/data.ts';
 import { bestXi } from '../shared/best-xi.ts';
@@ -34,11 +34,13 @@ export function oddsModel(season: Season, managerIds: number[], scoresByGw: Reco
   };
   const squadOf = (id: number) => [...ownerNow].filter(([, owner]) => owner === id).map(([pid]) => pid);
 
-  // Every priced gameweek's projected XIs, from today's squads.
-  const priced = range(nextGw, Math.min(nextGw + ODDS_GAMEWEEKS - 1, league.stop_event));
-  const forecasts = new Map(priced.slice(1).map((gw) => [gw, model?.at(gw)]));
+  // Today's squads' projected XIs for every gameweek left whose fixtures are out, of which
+  // the first few get prices.
+  const projectedGws = range(nextGw, league.stop_event).filter((gw) => season.fixturesIn(gw).length);
+  const priced = projectedGws.filter((gw) => gw < nextGw + ODDS_GAMEWEEKS);
+  const forecasts = new Map(projectedGws.slice(1).map((gw) => [gw, model?.at(gw)]));
   const projections: Record<number, Record<number, { ids: number[]; pts: number }>> = Object.fromEntries(
-    priced.map((gw) => {
+    projectedGws.map((gw) => {
       const xp = gw === nextGw ? expected : (forecasts.get(gw)?.points ?? fplExpected);
       return [gw, Object.fromEntries(managerIds.map((id) => [id, xiOf(squadOf(id), xp)]))];
     }),
@@ -57,10 +59,10 @@ export function oddsModel(season: Season, managerIds: number[], scoresByGw: Reco
   const hasProjections = (model !== null || epByCode.size > 0) && managerIds.some((id) => (projections[nextGw]?.[id]?.pts ?? 0) > 0);
 
   const byGw: Record<number, (id: number) => number> = Object.fromEntries(
-    priced.map((gw) => [gw, fromProjections(Object.fromEntries(managerIds.map((id) => [id, projections[gw][id].pts])), leagueMean)]),
+    projectedGws.map((gw) => [gw, fromProjections(Object.fromEntries(managerIds.map((id) => [id, projections[gw][id].pts])), leagueMean)]),
   );
-  // The weeks after the priced ones, and one being played, get each side's average over those.
-  const later = (id: number) => (priced.length ? sum(priced.map((gw) => byGw[gw](id))) / priced.length : leagueMean);
+  // A gameweek being played, or one without its fixtures yet, gets each side's average over those.
+  const later = (id: number) => (projectedGws.length ? sum(projectedGws.map((gw) => byGw[gw](id))) / projectedGws.length : leagueMean);
   const expectedScore = (id: number, gw: number) => (hasProjections ? (byGw[gw] ?? later)(id) : leagueMean);
   const spreadFor = (gw: number) => sigma * (gw === nextGw ? 1 : 1.1);
 
@@ -92,6 +94,7 @@ export function oddsModel(season: Season, managerIds: number[], scoresByGw: Reco
     /** The site's for the gameweeks after the next that the page shows (PROJECTED_GAMEWEEKS). */
     ahead: model ? priced.slice(1, PROJECTED_GAMEWEEKS).flatMap((gw) => forecasts.get(gw) ?? []) : [],
     priced,
+    projectedGws,
     projections,
     leagueMean,
     sigma,
