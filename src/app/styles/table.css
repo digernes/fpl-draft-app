@@ -130,6 +130,27 @@
   background: var(--lose);
 }
 
+/* The front page's: only a dot in the colour of how it stands. */
+.live-res {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  vertical-align: middle;
+}
+
+.live-res.W {
+  background: var(--win);
+}
+
+.live-res.D {
+  background: var(--draw);
+}
+
+.live-res.L {
+  background: var(--lose);
+}
+
 .pill.W {
   background: var(--win);
 }

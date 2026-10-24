@@ -1,7 +1,11 @@
 /* --- Page layout ---------------------------------------------------------------- */
 
-/* At least a screen tall (minus the top bar), so the footer stays below the fold
-   instead of jumping as tabs and filters change the page height. */
+/* The page may draw under a phone's notch and gesture bar (viewport-fit=cover in
+   index.html, so that the bottom bar's colour runs under the gesture bar): its sides keep
+   clear of a notch, as the top bar's do and the bottom bar its foot.
+   At least a screen tall (minus the top bar), so the footer stays below the fold
+   instead of jumping as tabs and filters change the page height. As fotmob.com's, 1280px
+   at most, and 16px in from the sides until it has the room for all of that. */
 .page {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
@@ -10,12 +14,19 @@
   max-width: 1280px;
   min-height: calc(100vh - 64px);
   margin: 0 auto;
-  padding: 16px;
+  padding: 16px max(16px, env(safe-area-inset-right)) 16px max(16px, env(safe-area-inset-left));
 }
 
 @media (min-width: 992px) {
   .page {
     min-height: calc(100vh - 80px);
+  }
+}
+
+@media (min-width: 1280px) {
+  .page,
+  .footer {
+    padding-inline: 0;
   }
 }
 
@@ -110,7 +121,7 @@
   gap: 8px 24px;
   max-width: 1280px;
   margin: 0 auto;
-  padding: 16px 16px 48px;
+  padding: 16px max(16px, env(safe-area-inset-right)) 48px max(16px, env(safe-area-inset-left));
   color: var(--text-2);
   font-size: 12px;
 }

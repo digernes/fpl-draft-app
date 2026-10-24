@@ -1,7 +1,7 @@
 // Lookups into the loaded data, aware of live scores and the season being viewed.
 
 import type { Lineup, Match } from '../shared/data.ts';
-import type { PlayerEvents } from '../shared/live.ts';
+import { namedFrom, type Named, type PlayerEvents } from '../shared/live.ts';
 import { esc } from './format.ts';
 import { COLOR_SLOTS, D, live, managers, seasons, state } from './state.ts';
 
@@ -38,6 +38,13 @@ export const opponents = (team: number, gw: number) =>
   clubFixtures(team, gw)
     .map(([h, a]) => (h === team ? versus(a, true) : versus(h, false)))
     .join(', ');
+
+// Who each club has named for its fixtures in a gameweek, once the Premier League has the
+// lineups (from about an hour before kick-off).
+export function namedIn(gw: number): Named {
+  const teams = new Map((D.plMatches ?? []).flatMap((x) => (x.gw === gw && x.formations ? [[x.id, x.formations] as const] : [])));
+  return namedFrom((fixture) => teams.get(fixture));
+}
 
 export const seasonSlug = (season: string) => season.replace('/', '-');
 export const seasonLabel = (season: string) => `${Number(season.slice(0, 4))}/${Number(season.slice(0, 4)) + 1}`;

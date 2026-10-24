@@ -2,9 +2,9 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { buildMonths } from '../src/build/output.ts';
-import { buildPlStats, fetchFormations, fromFeed } from '../src/build/premier-league.ts';
+import { buildPlSeasonStats, buildPlStats, fetchFormations, fromFeed } from '../src/build/premier-league.ts';
 import type { Season } from '../src/build/season.ts';
-import { PL_STATS, type PlMatch } from '../src/shared/data.ts';
+import { PL_STATS, type PlMatch, type XpParts } from '../src/shared/data.ts';
 import type { LiveFeed } from '../src/shared/fpl-api.ts';
 
 type Element = LiveFeed['elements'][string];
@@ -206,5 +206,55 @@ describe('buildPlStats', () => {
   it('gives one who played twice only what the match lists, and nothing for the rest', () => {
     assert.deepEqual([stat(2, 'goals_scored'), stat(2, 'bps'), stat(2, 'saves')], [1, 12, 0]);
     assert.deepEqual([stat(2, 'expected_goals'), stat(2, 'tackles')], [null, null]);
+  });
+});
+
+describe('buildPlSeasonStats', () => {
+  const elements = new Map([
+    [7, { id: 7, minutes: 450, goals_scored: 3, assists: 1, expected_goals: '2.456', bps: 120 }],
+    [8, { id: 8, minutes: 0 }],
+  ]);
+  // A forward's gameweek: 90 minutes and a goal from 0.5 xG.
+  const stats = { minutes: 90, total_points: 6, expected_goals: 0.5, expected_assists: 0, expected_goals_conceded: 1 };
+  const explain = [
+    [
+      { stat: 'minutes', value: 90, points: 2 },
+      { stat: 'goals_scored', value: 1, points: 4 },
+    ],
+    1,
+  ];
+  const season = {
+    elements,
+    gws: [1],
+    live: { 1: { elements: { 7: { stats, explain: [explain] } } } },
+    doubleClubs: { 1: [] },
+    clubOf: () => 3,
+    positionOf: () => 'FWD',
+    boot: { settings: { scoring: { long_play_limit: 60, concede_limit: 2, assists: 3, goals_scored_FWD: 4, clean_sheets_FWD: 0 } } },
+  } as unknown as Season;
+
+  it('gives everyone who has played his minutes and season stats, in PL_STATS order', () => {
+    const { players } = buildPlSeasonStats(season);
+    assert.deepEqual(Object.keys(players), ['7']);
+    const row = players[7];
+    assert.equal(row[0], 450);
+    assert.equal(row[1 + PL_STATS.indexOf('goals_scored')], 3);
+    assert.equal(row[1 + PL_STATS.indexOf('expected_goals')], 2.46);
+    assert.equal(row[1 + PL_STATS.indexOf('saves')], 0);
+  });
+
+  it('and then his xP and xCS, gameweek by gameweek: none for a forward’s clean sheets', () => {
+    const row = buildPlSeasonStats(season).players[7];
+    assert.deepEqual(row.slice(1 + PL_STATS.length), [4, null]); // 2 for playing, 2 for his xG
+  });
+
+  it('projects the gameweeks to come: each one’s points, then over them all his minutes, goals, assists and the rest', () => {
+    // Each gameweek: 80 minutes, a goal's worth of points from his goals, 0.9 from assists,
+    // 0.4 from defensive contributions and 0.5 bonus.
+    const parts: XpParts = [80, 2, 4, 0, 0.9, 0, 0, 0.4, 0, 0.5, -0.1];
+    const upcoming = [9, 10].map((gw) => ({ gw, points: () => 7.71, parts: () => parts }));
+    const { projected } = buildPlSeasonStats(season, upcoming);
+    assert.deepEqual(projected?.gws, [9, 10]);
+    assert.deepEqual(projected?.players[7], [7.7, 7.7, 160, 2, 0.6, 0, 0.8, 1]);
   });
 });

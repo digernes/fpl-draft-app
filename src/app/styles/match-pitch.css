@@ -228,10 +228,11 @@
 }
 
 @container (min-width: 560px) {
-  /* Tall enough for five in a line, each with a substitution's minute over his photo. */
+  /* Tall enough for five in a line, each with a substitution's minute over his photo, and
+     room between them. */
   .mpitch {
     display: flex;
-    min-height: 480px;
+    min-height: 560px;
   }
 
   .mhalf {

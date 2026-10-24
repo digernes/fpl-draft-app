@@ -135,6 +135,15 @@ function livePill(live: LiveMatch | undefined) {
   return `<a class="livep ${res}" href="${href.match(live.match)}">${live.pf}-${live.pa}</a>`;
 }
 
+// Or just a dot in its colour, as fotmob.com's live table has it, the score and who
+// against in its tip.
+function liveDot(id: number, live: LiveMatch | undefined) {
+  if (!live) return '';
+  const [res, how] = live.pf > live.pa ? ['W', 'Winning'] : live.pf < live.pa ? ['L', 'Losing'] : ['D', 'Level'];
+  const opp = live.match.home === id ? live.match.away : live.match.home;
+  return `<a class="live-res ${res}" href="${href.match(live.match)}" data-tip="${how} ${live.pf}–${live.pa} vs ${esc(first(opp))}"></a>`;
+}
+
 // The next opponent, a link to that match.
 function nextLink(r: StandingRow) {
   if (!r.next) return '';
@@ -190,14 +199,12 @@ export function tableFrom(matches: Match[]): TableFromRow[] {
   return [...rows.values()].sort((a, b) => b.pts - a.pts || b.pf - a.pf).map((r, i) => ({ ...r, rank: i + 1 }));
 }
 
-const standingsCols = (): Column<StandingRow>[] => {
+const standingsCols = ({ live = 'score' }: TableExtras = {}): Column<StandingRow>[] => {
   const formMode = state.tableMode === 'form';
-  const liveCol: Column<StandingRow> = {
-    label: 'Live',
-    w: '52px',
-    tip: 'This gameweek’s score so far',
-    cell: (r) => livePill(r.liveMatch),
-  };
+  const liveCol: Column<StandingRow> =
+    live === 'dot'
+      ? { label: '', w: '16px', cell: (r) => liveDot(r.id, r.liveMatch) }
+      : { label: 'Live', w: '52px', tip: 'This gameweek’s score so far', cell: (r) => livePill(r.liveMatch) };
   return [
     posCol,
     managerCol,
@@ -293,7 +300,7 @@ function simulationCols(): Column<SimRow>[] {
 interface TableView<R> {
   label: string;
   rows: () => R[];
-  cols: () => Column<R>[];
+  cols: (extras: TableExtras) => Column<R>[];
   qual?: (row: R, rows: R[]) => string | null;
   rowClass?: (row: R) => string;
   legend?: [string, string][];
@@ -307,6 +314,8 @@ interface TableExtras {
   highlight?: number[];
   /** The legend and notes under the table; a sidebar leaves them out. */
   legend?: boolean;
+  /** While a gameweek is played, each team's score so far in a column of its own, or (the front page) just a dot for how it stands. */
+  live?: 'score' | 'dot';
 }
 
 interface RenderedView {
@@ -487,7 +496,12 @@ export function premierLeagueTable() {
   };
   const cols: Column<ClubTableRow>[] = [
     posCol,
-    { label: '', w: 'minmax(0,1fr)', cls: 'c-team', cell: (r) => clubCell(r.club) },
+    {
+      label: '',
+      w: 'minmax(0,1fr)',
+      cls: 'c-team',
+      cell: (r) => `<a class="club-link" href="${href.pl('players', r.club)}">${clubCell(r.club)}</a>`,
+    },
     numCol('PL', (r) => r.played),
     numCol('W', (r) => r.won, 'sm'),
     numCol('D', (r) => r.drawn, 'sm'),
@@ -520,9 +534,10 @@ export function standingsTable(viewId: string, extras: TableExtras = {}) {
   return TABLE_VIEWS[viewId].render(extras);
 }
 
-function renderTable<R extends Keyed>(view: TableView<R>, { highlight = [], legend: withLegend = true }: TableExtras) {
+function renderTable<R extends Keyed>(view: TableView<R>, extras: TableExtras) {
+  const { highlight = [], legend: withLegend = true } = extras;
   const rows = view.rows();
-  const table = dataTable(view.cols(), rows, {
+  const table = dataTable(view.cols(extras), rows, {
     rowClass: (r) => `${view.rowClass?.(r) ?? ''}${r.type !== 'club' && highlight.includes(r.id!) ? ' featured' : ''}`,
     qual: (r) => view.qual?.(r, rows),
     full: state.tableMode === 'full',

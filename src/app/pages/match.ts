@@ -1,8 +1,9 @@
 // A head-to-head match's page, as fotmob.com's match pages: the header with both sides,
-// the score (or the deadline) and each side's top scorers, then the tabs, each with the
-// same right column: the odds, the round's other matches, the top players and the benches.
-// Facts: the match report, its momentum and both lineups on one pitch (the projected ones
-// before the deadline). Stats: what both XIs did, side by side, as fotmob.com's.
+// the score (or the deadline) and each side's top scorers, then the tabs, and beside the
+// header and every tab the same right column (on one column, under the Facts tab alone):
+// the odds, the round's other matches, the match report (or preview), the top players and
+// the benches. Facts: the momentum, both lineups on one pitch (the projected ones before
+// the deadline) and each side's form. Stats: what both XIs did, side by side, as fotmob.com's.
 // Head-to-head: every meeting this season, played or to come. And the table.
 
 import type { Lineup, Match, PlMatch } from '../../shared/data.ts';
@@ -48,8 +49,10 @@ export function pageMatch(route: Route): PageView {
   const m = D.matches.find((x) => x.gw === route.gw && x.home === route.home && x.away === route.away);
   if (!m) return { title: 'Match', header: leagueHeader(), body: card({ body: empty('No such match in this league') }) };
   const chances = m.started && !m.finished ? inPlayOdds(m) : null;
+  const l = lineups(m);
+  const steps = l ? momentum(D, m, l, live?.gw === m.gw ? live : undefined) : [];
   const tabs: Record<string, () => string> = {
-    facts: () => facts(m, chances),
+    facts: () => facts(m, steps),
     commentary: () => commentaryCard(m),
     lineup: () => lineupCard(m),
     stats: () => statsTab(m),
@@ -64,8 +67,9 @@ export function pageMatch(route: Route): PageView {
       tab: route.tab,
       cls: 'match-header',
     },
+    body: tabs[route.tab](),
     // As on fotmob.com, the right column stays the same whichever tab is open.
-    body: `<div class="cols cols-match${route.tab === 'facts' ? ' facts' : ''}"><div class="col">${tabs[route.tab]()}</div><div class="col">${sideColumn(m, chances)}</div></div>`,
+    aside: { html: sideColumn(m, chances, steps), cls: `cols-match${route.tab === 'facts' ? ' facts' : ''}` },
   };
 }
 
@@ -93,7 +97,7 @@ function poster(m: Match) {
           .map((pid) => `<a href="${href.player(pid)}">${esc(player(pid).name)} ${gwPoints(pid, m.gw)}</a>`)
           .join('')
       : '';
-  return `<div class="mh">
+  return `<div class="mh${m.started ? '' : ' pre'}">
     <div class="mh-top"><a class="mh-back" href="${href.home(m.gw)}">${chevronSvg('left')}<span>Gameweek ${m.gw}</span></a><a class="mh-league" href="${href.league()}">${esc(D.meta.name)}</a></div>
     <div class="mh-date">${m.started ? `Gameweek ${m.gw}` : `Gameweek ${m.gw} · deadline ${when}`}</div>
     <div class="mh-main">${side(m.home, 'home')}<div class="mh-mid">${mid}<span class="mh-status">${status}</span></div>${side(m.away, 'away')}</div>
@@ -103,9 +107,32 @@ function poster(m: Match) {
 
 type Chances = ReturnType<typeof inPlayOdds>;
 
-function facts(m: Match, chances: Chances) {
+function facts(m: Match, steps: Step[]) {
+  return `${m.started && lineups(m) ? momentumCard(m, steps) : ''}${lineupCard(m)}${teamFormCard(m)}`;
+}
+
+// Each side's last five head-to-heads before this one, side by side, as fotmob.com's Team
+// form: the score between the two, coloured by how it went for the side, the latest first.
+function teamFormCard(m: Match) {
+  const column = (id: number) =>
+    D.matches
+      .filter((x) => x.finished && x.gw < m.gw && (x.home === id || x.away === id))
+      .slice(-5)
+      .reverse()
+      .map((x, i) => {
+        const [pf, pa] = x.home === id ? [x.homePts ?? 0, x.awayPts ?? 0] : [x.awayPts ?? 0, x.homePts ?? 0];
+        const res = pf > pa ? 'W' : pf < pa ? 'L' : 'D';
+        const side = (s: number) => `<span class="tf-side">${avatar(s, 22)}<span class="tf-name">${first(s)}</span></span>`;
+        return `<a class="tf-row${i ? '' : ' latest'}" href="${href.match(x)}" data-tip="GW ${x.gw}">${side(x.home)}<span class="tf-score ${res}">${x.homePts ?? 0} - ${x.awayPts ?? 0}</span>${side(x.away)}</a>`;
+      })
+      .join('');
+  const [home, away] = [column(m.home), column(m.away)];
+  return home || away ? card({ title: 'Team form', body: `<div class="tf-cols"><div>${home}</div><div>${away}</div></div>` }) : '';
+}
+
+// The match report, or before the deadline its preview, under the round's matches.
+function reportCard(m: Match, chances: Chances, steps: Step[]) {
   const l = lineups(m);
-  const steps = l ? momentum(D, m, l, live?.gw === m.gw ? live : undefined) : [];
   const toPlay = (lineup: Lineup) =>
     live?.gw === m.gw
       ? lineup.xi.filter((pid) => ['due', 'live'].includes(playerState(live!.feed, pid, player(pid).club).state)).length
@@ -116,17 +143,7 @@ function facts(m: Match, chances: Chances) {
     momentum: steps,
     ...(chances && l ? { chances: chances.p, toPlay: [toPlay(l[0]), toPlay(l[1])] as [number, number] } : {}),
   });
-  return [
-    report.length
-      ? card({
-          title: m.started ? 'Match report' : 'Preview',
-          body: insights(report),
-          cls: 'report-card',
-        })
-      : '',
-    m.started && l ? momentumCard(m, steps) : '',
-    lineupCard(m),
-  ].join('');
+  return report.length ? card({ title: m.started ? 'Match report' : 'Preview', body: insights(report), cls: 'report-card' }) : '';
 }
 
 // The report as fotmob.com's insights: a bubble a sentence, edged in the colour of the side
@@ -142,18 +159,20 @@ function insights(lines: ReportLine[]) {
 
 // The right column, the same on every tab: the odds, the round's other matches, the top
 // stats once it's over, the top players (or before kick-off each side's form) and the benches.
-function sideColumn(m: Match, chances: Chances) {
+function sideColumn(m: Match, chances: Chances, steps: Step[]) {
   const l = lineups(m);
-  // Untitled, as fotmob.com's: they're plainly the odds.
+  // Before kick-off fotmob.com's Who will win?; then untitled, as its odds: they're plainly the odds.
   const odds = card({
-    cls: 'odds-card',
+    title: m.started ? '' : 'Who will win?',
+    cls: `odds-card${m.started ? '' : ' poll-card'}`,
     body: !m.started
-      ? `<div class="match-detail">${winChances(m)}${m.odds ? oddsRow(m.odds, m) : ''}</div>`
+      ? `<div class="match-detail">${winChances(m)}</div>`
       : `<div class="match-detail">${chances ? `<div><div class="detail-label">Live odds</div>${oddsRow(chances, m, null, true)}</div>` : ''}${preMatchOdds(m)}</div>`,
   });
   return [
     odds,
     roundMatches(m),
+    reportCard(m, chances, steps),
     m.finished && m.xg
       ? card({
           title: 'Top stats',
@@ -161,17 +180,17 @@ function sideColumn(m: Match, chances: Chances) {
           footer: { href: href.match(m, 'stats'), label: 'All stats' },
         })
       : '',
-    m.started && l ? topPlayersCard(m, l) : formCard(m),
+    m.started && l ? topPlayersCard(m, l) : '',
     m.started && l ? benchCard(m, l) : '',
   ].join('');
 }
 
-// Both XIs on one pitch, or before the deadline the projected ones behind the odds.
+// Both XIs on one pitch, or before the deadline the projected ones behind the odds, as
+// fotmob.com's predicted lineup.
 function lineupCard(m: Match) {
   if (!m.started)
     return card({
-      title: 'Projected lineups',
-      sub: 'The XIs behind the odds',
+      title: 'Predicted lineup',
       body: projectedLineups(m) || empty('They come with the odds, three gameweeks out'),
       cls: 'lineup-card',
     });
@@ -185,9 +204,12 @@ function lineupCard(m: Match) {
 // each kick-off slot (the matches starting together) takes 90 minutes, over which its
 // matches' points come in evenly, with a dotted line between match days as fotmob.com's
 // at half-time, and the automatic substitutions half a slot of their own after the last.
-// Each slot's tip says who scored what in it, and while a match is being played a dot
-// pulses at the lead as it stands.
+// Under the pointer, every few minutes, a line down the plot and a dot on the lead, as
+// fotmob.com marks the minute under it, with the tip of the slot it's in: the score after
+// it, its matches and who scored what in them. While a match is being played a dot pulses
+// at the lead as it stands.
 const SUBS = 45;
+const STEP = 5; // minutes between the marks
 
 function momentumCard(m: Match, steps: Step[]) {
   if (!steps.length) return '';
@@ -228,7 +250,7 @@ function momentumCard(m: Match, steps: Step[]) {
   const height = 100;
   const most = Math.max(4, ...points.map(([, v]) => Math.abs(v)));
   const y = (v: number) => height / 2 - (v / most) * (height / 2 - 4);
-  const curve = smoothPath(points.map(([x, v]) => [x, y(v)]));
+  const { path: curve, at: curveAt } = smoothCurve(points.map(([x, v]) => [x, y(v)]));
   const area = `${curve} L${points.at(-1)![0]},${height / 2} L0,${height / 2} Z`;
   const svg = `<svg class="mo-svg" viewBox="0 0 ${width} ${height}" preserveAspectRatio="none" aria-hidden="true">
     <defs><clipPath id="mo-up"><rect x="0" y="0" width="${width}" height="${height / 2}"/></clipPath><clipPath id="mo-down"><rect x="0" y="${height / 2}" width="${width}" height="${height / 2}"/></clipPath></defs>
@@ -254,7 +276,27 @@ function momentumCard(m: Match, steps: Step[]) {
     })
     .join('');
   const narrow = `style="flex:${SUBS / 90}"`;
-  const hits = tips.map((tip, i) => `<span class="mo-hit" tabindex="0" ${i === slots.length ? `${narrow} ` : ''}${tip}></span>`).join('');
+  // Each slot (and the substitutions) with its tip, over the marks in it: one every STEP
+  // minutes, each the middle of its own stretch, and with a dot once the area has got there.
+  const share = (x: number, of: number) => `${((x / of) * 100).toFixed(2)}%`;
+  const reach = points.at(-1)![0];
+  const stretch = (x: number) => [Math.max(0, x - STEP / 2), Math.min(width, x + STEP / 2)];
+  const regions = [...slots.map((_, i) => [i * 90, i * 90 + 90]), ...(subs ? [[slots.length * 90, width]] : [])];
+  const hits = regions
+    .map(([start, end], r) => {
+      const marks: number[] = [];
+      for (let x = r ? start + STEP : 0; x <= end; x += STEP) marks.push(x);
+      const [from, to] = [stretch(marks[0])[0], stretch(marks.at(-1)!)[1]];
+      const cells = marks.map((x) => {
+        const [left, right] = stretch(x);
+        const on = x <= reach ? curveAt(x) : undefined;
+        const ahead = on === undefined || Math.abs(on - height / 2) < 0.5 ? undefined : on < height / 2 ? m.home : m.away;
+        const dot = on === undefined ? '' : `;--y:${share(on, height)}${ahead ? `;--dot:var(--m${slotOf(ahead)})` : ''}`;
+        return `<span class="mo-cell" style="left:${share(left - from, to - from)};width:${share(right - left, to - from)}"><i class="mo-mark tip-at${on === undefined ? '' : ' lead'}" style="left:${share(x - left, right - left)}${dot}"></i></span>`;
+      });
+      return `<span class="mo-slot" tabindex="0" style="left:${at(from)};width:${at(to - from)}" ${tips[r]}>${cells.join('')}</span>`;
+    })
+    .join('');
   const legend = `<div class="legend"><span class="legend-item"><i class="m${slotOf(m.home)}" style="background:var(--av-bg)"></i>${first(m.home)} ahead</span><span class="legend-item"><i class="m${slotOf(m.away)}" style="background:var(--av-bg)"></i>${first(m.away)} ahead</span></div>`;
   const [nowX, nowLead] = points.at(-1)!;
   const now = slots.some((slot) => slot.matches.some((pm) => plState(pm).state === 'live'))
@@ -262,7 +304,7 @@ function momentumCard(m: Match, steps: Step[]) {
     : '';
   return card({
     title: 'Momentum',
-    sub: `The lead through the gameweek${m.finished ? '' : ' so far'}`,
+    sub: `The lead through the gameweek${m.finished ? '' : ' so far'} · auto-subs come in at the end`,
     body: `<div class="momentum"><div class="mo-plot">${days}${svg}${now}<div class="mo-hits">${hits}</div></div><div class="mo-axis">${labels}${subs ? `<span ${narrow}>Subs</span>` : ''}</div></div>${legend}`,
   });
 }
@@ -306,9 +348,9 @@ function subsTip(m: Match, s: Step) {
 }
 
 // A smooth line through the points that never overshoots them: a monotone cubic, as
-// fotmob.com's chart (and d3's curveMonotoneX) draws it.
-function smoothPath(points: [number, number][]) {
-  if (points.length < 2) return `M${points[0][0]},${points[0][1]}`;
+// fotmob.com's chart (and d3's curveMonotoneX) draws it, and its height at any x along it.
+function smoothCurve(points: [number, number][]) {
+  if (points.length < 2) return { path: `M${points[0][0]},${points[0][1]}`, at: () => points[0][1] };
   const n = points.length;
   const dx = points.slice(1).map(([x], i) => x - points[i][0]);
   const slope = points.slice(1).map(([, y], i) => (y - points[i][1]) / (dx[i] || 1));
@@ -325,7 +367,16 @@ function smoothPath(points: [number, number][]) {
     const h = dx[i] / 3;
     d += ` C${(x0 + h).toFixed(2)},${(y0 + h * tangent[i]).toFixed(2)} ${(x1 - h).toFixed(2)},${(y1 - h * tangent[i + 1]).toFixed(2)} ${x1},${y1.toFixed(2)}`;
   }
-  return d;
+  // Each piece's control points are a third of the way apart in x, so x runs evenly with t.
+  const at = (x: number) => {
+    let i = 0;
+    while (i < n - 2 && x > points[i + 1][0]) i++;
+    const [[x0, y0], [, y1]] = [points[i], points[i + 1]];
+    const t = dx[i] ? (x - x0) / dx[i] : 0;
+    const [c0, c1] = [y0 + (dx[i] / 3) * tangent[i], y1 - (dx[i] / 3) * tangent[i + 1]];
+    return (1 - t) ** 3 * y0 + 3 * (1 - t) ** 2 * t * c0 + 3 * (1 - t) * t ** 2 * c1 + t ** 3 * y1;
+  };
+  return { path: d, at };
 }
 
 // --- Cards beside the pitch -------------------------------------------------------------
@@ -355,26 +406,6 @@ function benchCard(m: Match, [home, away]: [Lineup, Lineup]) {
     return tile(`${first(id)}’s bench`, l.benchPts, subs ? `On automatically: ${subs}` : 'No automatic substitutions');
   });
   return card({ title: 'On the bench', body: `<div class="tiles">${tiles.join('')}</div>` });
-}
-
-// Before kick-off: each side's last five results.
-function formCard(m: Match) {
-  const row = (id: number) => {
-    const form = D.tables.overall.find((r) => r.id === id)?.form ?? [];
-    const pills = form
-      .map(
-        (f) =>
-          `<span class="pill ${f.res}" data-tip="${esc(`GW ${f.gw}: ${f.pf}-${f.pa} vs ${mgr(f.opp)?.first ?? '?'}`)}">${f.res}</span>`,
-      )
-      .join('');
-    return listRow({
-      lead: avatar(id, 32),
-      title: `<a href="${href.team(id)}">${first(id)}</a>`,
-      meta: esc(mgr(id)!.team),
-      value: `<span class="form">${pills}</span>`,
-    });
-  };
-  return card({ title: 'Form', sub: 'Last five matches', body: `<div class="list">${row(m.home)}${row(m.away)}</div>` });
 }
 
 // --- Stats ---------------------------------------------------------------------------------
@@ -525,7 +556,7 @@ function momentIcon(e: Entry, what = '') {
   if (what === 'Assist') return bootSvg();
   if (e.kind === 'yellow' || e.kind === 'red') return cardSvg(e.kind === 'red' || what === 'Second yellow');
   if (what === 'On' || what === 'Came in') return subSvg(true);
-  if (what === 'Off' || what === 'Didn’t play') return subSvg(false);
+  if (what === 'Off' || what === 'Didn’t play' || what === 'Not in the squad') return subSvg(false);
   return '';
 }
 
@@ -579,7 +610,6 @@ function commentaryCard(m: Match) {
   };
   return card({
     title,
-    sub: `${first(m.home)} v ${first(m.away)}, the latest first`,
     action: toggle,
     body: `<div class="cm-list">${entries.length ? entries.map(box).join('') : empty('Nothing yet')}</div>`,
   });

@@ -11,7 +11,9 @@ export const maxOf = <T>(items: T[], score: (item: T) => number) =>
   items.reduce<T | undefined>((best, item) => (best === undefined || score(item) > score(best) ? item : best), undefined);
 export const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 export const pct = (p: number) => `${Math.round(p * 100)}%`;
-export const plural = (n: number, word: string, many = `${word}s`) => `${n} ${n === 1 ? word : many}`;
+/** A number with a real minus sign when it's below nought. */
+export const figure = (n: number) => (n < 0 ? `−${-n}` : `${n}`);
+export const plural = (n: number, word: string, many = `${word}s`) => `${figure(n)} ${Math.abs(n) === 1 ? word : many}`;
 export function ordinal(n: number) {
   const v = n % 100;
   const suffix = ['th', 'st', 'nd', 'rd'][(v - 20) % 10] || ['th', 'st', 'nd', 'rd'][v] || 'th';

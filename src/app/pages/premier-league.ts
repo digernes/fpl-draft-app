@@ -1,17 +1,23 @@
-// The Premier League's page: the real football and nothing else. Its table and a round's
-// matches, as fotmob.com's league page has them, each match opening its own page with
-// the lineups.
+// The Premier League's page: the real football and nothing else. Its table, a round's
+// matches and everyone's player stats over the season, as fotmob.com's league page has
+// them, each match opening its own page with the lineups.
 
 import { card, gwNav } from '../components.ts';
 import { premierLeagueSvg } from '../icons.ts';
 import { seasonLabel } from '../lookups.ts';
 import { plMatches, plRoundList, plState } from '../pl.ts';
+import { seasonStatsCard } from '../pl-stats.ts';
 import type { PageView } from '../render.ts';
 import { href, PL_TABS, type Route } from '../router.ts';
 import { D } from '../state.ts';
 import { premierLeagueTable } from '../table.ts';
 
-const LABELS: Record<(typeof PL_TABS)[number], string> = { overview: 'Overview', fixtures: 'Fixtures', table: 'Table' };
+const LABELS: Record<(typeof PL_TABS)[number], string> = {
+  overview: 'Overview',
+  fixtures: 'Fixtures',
+  table: 'Table',
+  players: 'Player stats',
+};
 
 // The round being played, or else the next one to start, or the last.
 export function plRoundNow() {
@@ -39,6 +45,7 @@ export function pagePremierLeague(route: Route): PageView {
     fixtures: () =>
       `<div class="cols"><div class="col">${round((g) => href.pl('fixtures', g))}</div><div class="col">${table(false)}</div></div>`,
     table: () => table(true),
+    players: () => seasonStatsCard(route.id),
   };
   return {
     title: route.tab === 'overview' ? 'Premier League' : `${LABELS[route.tab as keyof typeof LABELS]} · Premier League`,

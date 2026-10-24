@@ -15,6 +15,15 @@
   padding: 12px 16px 16px;
 }
 
+/* Before kick-off, with no scorers under the sides, air round them instead. */
+.mh.pre {
+  padding-bottom: 32px;
+}
+
+.mh.pre .mh-main {
+  margin-top: 8px;
+}
+
 .mh-top {
   position: relative;
   display: flex;
@@ -122,8 +131,8 @@
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 0 112px;
   color: var(--text-2);
-  font-size: 12px;
-  line-height: 18px;
+  font-size: 13px;
+  line-height: 19px;
 }
 
 .mh-scorers > div {
@@ -164,6 +173,10 @@
     padding: 16px 24px 20px;
   }
 
+  .mh.pre {
+    padding-bottom: 40px;
+  }
+
   .mh-team {
     flex-direction: row;
     gap: 16px;
@@ -181,6 +194,22 @@
 
   .mh-score {
     font-size: 32px;
+  }
+
+  /* As fotmob.com's: 24px either side of a score at least 140px wide, and the scorers
+     under the avatars, at 14px. */
+  .mh-main {
+    gap: 24px;
+  }
+
+  .mh-mid {
+    min-width: 140px;
+  }
+
+  .mh-scorers {
+    gap: 0 188px;
+    font-size: 14px;
+    line-height: 20px;
   }
 
   .mh-scorers > div.home {
@@ -222,8 +251,8 @@
 }
 
 /* Momentum: the lead as a smooth area, the home side's colour above the line and the
-   away side's below, over the gameweek's kick-off slots; each slot has a hit area with
-   its tip, and its kick-off under it. */
+   away side's below, over the gameweek's kick-off slots; each slot has its tip, whose hit
+   area is the stretch nearest its point, and its kick-off under it. */
 .momentum {
   padding: 16px 16px 8px;
 }
@@ -252,7 +281,6 @@
   stroke-width: 2;
 }
 
-.mo-hits,
 .mo-axis {
   display: flex;
 }
@@ -262,12 +290,45 @@
   inset: 0;
 }
 
-.mo-hit {
-  flex: 1;
-  min-width: 0;
+.mo-slot,
+.mo-cell {
+  position: absolute;
+  top: 0;
+  bottom: 0;
 }
 
-.mo-hit:focus-visible {
+/* Where a slot has got to, which its tip points at: as fotmob.com marks the minute under the
+   pointer, a line down the plot and, once the slot has a lead, a dot on it in the leading
+   side's colour, on hover (hover.css) or focus. */
+.mo-mark {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1.5px;
+  margin-left: -0.75px;
+  background: var(--text-2);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.mo-mark.lead::after {
+  content: '';
+  position: absolute;
+  top: var(--y);
+  left: 50%;
+  width: 8px;
+  height: 8px;
+  margin: -5px 0 0 -5px;
+  border: 1px solid #fff;
+  border-radius: 50%;
+  background: var(--dot, var(--text-2));
+}
+
+.mo-slot:focus-visible .mo-cell:last-child .mo-mark {
+  opacity: 1;
+}
+
+.mo-slot:focus-visible {
   outline: 2px solid var(--text);
   outline-offset: -2px;
   border-radius: 6px;
@@ -347,6 +408,100 @@
 
 .momentum + .legend {
   padding-top: 0;
+}
+
+/* fotmob.com's Team form: each side's last five, side by side, a row each with the score
+   between the two (the home side's first), coloured by how it went for the column's side,
+   the latest underlined. On a phone the avatars stand in for the names, as its crests do. */
+.tf-cols {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 32px;
+  padding: 0 16px 10px;
+}
+
+.tf-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(56px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 16px;
+  height: 60px;
+  font-size: 14px;
+}
+
+.tf-side {
+  display: flex;
+  min-width: 0;
+}
+
+.tf-side:first-child {
+  justify-content: flex-end;
+}
+
+.tf-side .av {
+  display: none;
+}
+
+.tf-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tf-score {
+  position: relative;
+  display: grid;
+  place-items: center;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.tf-score.W {
+  background: var(--win);
+}
+
+.tf-score.D {
+  background: var(--draw);
+}
+
+.tf-score.L {
+  background: var(--lose);
+}
+
+.tf-row.latest .tf-score::after {
+  content: '';
+  position: absolute;
+  top: calc(100% + 3px);
+  left: 50%;
+  width: 24px;
+  height: 2px;
+  margin-left: -12px;
+  border-radius: 2px;
+  background: inherit;
+}
+
+@media (max-width: 599px) {
+  .tf-cols {
+    column-gap: 16px;
+  }
+
+  .tf-row {
+    gap: 8px;
+  }
+
+  .tf-side .av {
+    display: grid;
+  }
+
+  .tf-name {
+    display: none;
+  }
 }
 
 /* The Stats tab's rows, as fotmob.com's. */
@@ -586,11 +741,19 @@
   }
 }
 
-/* Facts on one column, as fotmob.com's on a phone: the odds first, the report under the
-   lineup, then the rest of the right column. */
+/* Facts on one column, as fotmob.com's on a phone: under the header the odds, then the
+   lineup, then the rest of the right column; the other tabs go without it. */
 @media (max-width: 1024px) {
+  .cols-match:not(.facts) > .col:last-child {
+    display: none;
+  }
+
   .cols-match.facts > .col {
     display: contents;
+  }
+
+  .cols-match.facts > .col > .page-header {
+    order: -2;
   }
 
   .cols-match.facts > .col:last-child > * {
@@ -599,9 +762,5 @@
 
   .cols-match.facts > .col > .odds-card {
     order: -1;
-  }
-
-  .cols-match.facts > .col > .report-card {
-    order: 1;
   }
 }

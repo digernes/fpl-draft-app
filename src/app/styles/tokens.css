@@ -9,6 +9,7 @@
   --card-border: #f0f0f0;
   --popover: #fff;
   --hover: #f5f5f5;
+  --table-hover: #fafafa; /* fotmob.com's player stats' rows */
   --divider: #f5f5f5;
   --row-divider: #f5f5f5;
   --featured: #f0f0f0;
@@ -45,6 +46,13 @@
   --win: #00985f;
   --draw: #8d9499;
   --lose: #dd3636;
+  /* Points badges, as fotmob.com's ratings: none, up to 5, from 6, and a match's best. The
+     green is brighter than a win's, which the pitch's grass would swallow. */
+  --pts-low: #dd3636;
+  --pts-mid: #f08022;
+  --pts-high: #33c771;
+  --pts-top: #14a0ff;
+  --pts-text: #fff;
   --qual-top: #2ad572;
   --qual-europe: #0046a7;
   --qual-bottom: #ff4646;
@@ -110,6 +118,7 @@
   --card-border: transparent;
   --popover: #2b2b2b;
   --hover: #333;
+  --table-hover: #262626;
   --divider: #333;
   --row-divider: #262626;
   --featured: #0a0a0a;
@@ -119,6 +128,9 @@
   --text-3: #9f9f9f;
   --brand: #61df6e;
   --green-text: #33c771;
+  --pts-low: #ff3939;
+  --pts-mid: #ff963f;
+  --pts-text: #000; /* black reads better on the brighter colours, as on fotmob.com */
   --header-bg: #1a1a1a;
   --header-border: #000;
   --tab-indicator: #61df6e;

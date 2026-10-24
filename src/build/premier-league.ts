@@ -8,13 +8,27 @@
 import { readdir, readFile } from 'node:fs/promises';
 import path from 'node:path';
 
-import { type ById, type Data, type PlFormation, type PlLine, type PlMatch, type PlMoment, type PlStats } from '../shared/data.ts';
+import {
+  PL_STATS,
+  type ById,
+  type Data,
+  type PlFormation,
+  type PlLine,
+  type PlMatch,
+  type PlMoment,
+  type PlSeasonStats,
+  type PlStats,
+  type XpParts,
+} from '../shared/data.ts';
 import { PlEvents, PlLineups, type Fixture, type LiveFeed } from '../shared/fpl-api.ts';
 import type { PlayerEvents } from '../shared/live.ts';
 import { matchRows, momentsOf } from '../shared/match-stats.ts';
+import { DEFAULT_OPTIONS } from '../model/forecast.ts';
+import { readScoring } from '../model/points.ts';
 import { fetchOptional } from './api.ts';
+import { underlyingIn } from './lineups.ts';
 import type { Season } from './season.ts';
-import { mapPool, sum } from './util.ts';
+import { mapPool, round, sum } from './util.ts';
 
 type FeedFixture = LiveFeed['fixtures'][number];
 type FeedElement = LiveFeed['elements'][string];
@@ -183,6 +197,58 @@ function startedIn(el: FeedElement, fixture: number) {
     .filter((m) => m.minutes > 0)
     .sort((a, b) => b.minutes - a.minutes);
   return matches.slice(0, el.stats.starts ?? 0).some((m) => m.id === fixture);
+}
+
+/** Everyone's FPL stats over the season so far, as the bootstrap totals them (see PlSeasonStats). */
+/** `upcoming`: the site's projections for the gameweeks to come (oddsModel's), for the Projected category. */
+export function buildPlSeasonStats(season: Season, upcoming: Upcoming[] = []): PlSeasonStats {
+  const players: PlSeasonStats['players'] = {};
+  for (const el of [...season.elements.values()].sort((a, b) => a.id - b.id))
+    if (el.minutes)
+      players[el.id] = [
+        el.minutes,
+        ...PL_STATS.map((stat) => Math.round(Number(el[stat] ?? 0) * 100) / 100),
+        ...expectedSoFar(season, el.id),
+      ];
+  if (!upcoming.length) return { players };
+  const ahead = Object.fromEntries(Object.keys(players).map((id) => [id, projectedFor(season, upcoming, Number(id))]));
+  return { players, projected: { gws: upcoming.map((u) => u.gw), players: ahead } };
+}
+
+type Upcoming = { gw: number; points: (pid: number) => number; parts?: (pid: number) => XpParts | undefined };
+
+// His expected points in each of the gameweeks to come, then over them all his minutes,
+// goals (his penalties' too) and assists, as many as the points the model expects of them
+// stand for, and his points from clean sheets, defensive contributions and bonus.
+function projectedFor(season: Season, upcoming: Upcoming[], pid: number): number[] {
+  const scoring = readScoring(season.boot.settings.scoring);
+  const pos = season.positionOf(pid) ?? 'MID';
+  const parts = upcoming.map((u) => u.parts?.(pid)).filter((p): p is XpParts => p !== undefined);
+  const total = (i: number) => sum(parts.map((p) => p[i]));
+  const { scored } = DEFAULT_OPTIONS.counts.penalties;
+  // A penalty he takes is worth the goal when it goes in and the deduction when it doesn't.
+  const perPenalty = scored * scoring.goal[pos] + (1 - scored) * scoring.penaltyMissed;
+  const penaltyGoals = pos === 'GKP' || !perPenalty ? 0 : (scored * total(3)) / perPenalty;
+  return [
+    ...upcoming.map((u) => round(u.points(pid), 1)),
+    Math.round(total(0)),
+    round(total(2) / scoring.goal[pos] + penaltyGoals, 2),
+    round(total(4) / scoring.assist, 2),
+    round(total(5), 1),
+    round(total(7), 1),
+    round(total(9), 1),
+  ];
+}
+
+// His xP and xCS so far, gameweek by gameweek as the lineups' (shared/underlying.ts): no
+// xCS where a clean sheet scores nothing for him.
+function expectedSoFar(season: Season, pid: number): [xp: number, xcs: number | null] {
+  const weeks = season.gws.flatMap((gw) => {
+    const u = underlyingIn(season, pid, gw);
+    return u?.minutes ? [u] : [];
+  });
+  const xcs = weeks.flatMap((u) => (u.xcs === undefined ? [] : [u.xcs]));
+  return [round(sum(weeks.map((u) => u.xp)), 1), xcs.length ? round(sum(xcs), 2) : null];
 }
 
 /** Everyone's FPL stats in each match that has kicked off, and its moments, a gameweek at a time (see PlStats). */

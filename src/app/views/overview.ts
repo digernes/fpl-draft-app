@@ -37,25 +37,27 @@ export function roundCard(gw = featuredGw()) {
 }
 
 /** The table; the home page's sidebar has it without the switch and the legend. */
+// `compact` on the front page: there, while a gameweek is played, the live table with a dot
+// for how each team's match stands rather than its score.
 export function tableCard({ compact = false } = {}) {
   return card({
-    title: 'Table',
+    title: compact && isLive() ? 'Live table' : 'Table',
     action: compact ? '' : tableModeToggle('overall'),
-    body: standingsTable('overall', { legend: !compact }),
+    body: standingsTable('overall', { legend: !compact, live: compact ? 'dot' : 'score' }),
     footer: { href: href.league('table'), label: 'Full table' },
   });
 }
 
 // Manager of the Month: the month, its manager and the table points they took from it, as
-// the prize card has its holder, then the months before.
-export function awardsCard() {
+// the prize card has its holder, then the months before. `compact` on the front page.
+export function awardsCard({ compact = false } = {}) {
   const months = monthlyAwards(D);
   if (!months.length) return '';
   const [now, ...before] = months;
   const span = (a: (typeof months)[number]) => (a.month.from === a.month.to ? `GW ${a.month.from}` : `GW ${a.month.from}–${a.month.to}`);
   const top = now.managers[0];
   const hero = `<div class="prize">
-    ${avatar(top.id, 48)}
+    ${avatar(top.id, compact ? 32 : 48)}
     <div class="prize-main">
       <div class="prize-label">${esc(now.month.name)}${now.over ? '' : ' so far'}</div>
       <div class="prize-name">${teamName(top.id)}</div>
@@ -74,6 +76,7 @@ export function awardsCard() {
   return card({
     title: 'Manager of the Month',
     sub: span(now),
+    cls: compact ? 'prize-compact' : '',
     action: infoButton('The most table points from the month’s matches, then the most points scored', 'How it is decided'),
     body: `${hero}${
       earlier.length
@@ -90,7 +93,8 @@ function toMatch(g: TopGameweek, html: string, cls = '') {
   return m ? `<a${attr} href="${href.match(m)}">${html}</a>` : cls ? `<div${attr}>${html}</div>` : html;
 }
 
-export function gwPrizeCard() {
+/** `compact` on the front page, where the holder shouldn't draw the eye from the matches. */
+export function gwPrizeCard({ compact = false } = {}) {
   const title = 'Highest scoring GW';
   const action = infoButton(`Highest gameweek score. Ties go to the earlier week. ${dgwRule()}`, 'Rules');
   const holders = D.topGameweeks.filter((g) => g.rank === 1);
@@ -103,7 +107,7 @@ export function gwPrizeCard() {
         ? `<span class="prize-adj" data-tip="${g.dgw} double-gameweek ${g.dgw === 1 ? 'player' : 'players'} × −${D.meta.dgwPenalty}">${g.pts} − ${g.dgw * D.meta.dgwPenalty}</span>`
         : '';
       return `<div class="prize${g.id === state.myTeam ? ' mine' : ''}">
-        ${avatar(g.id, 48)}
+        ${avatar(g.id, compact ? 32 : 48)}
         <div class="prize-main">
           <div class="prize-label">${label}</div>
           <div class="prize-name"><a href="${href.team(g.id)}">${first(g.id)}</a> <span class="muted">GW ${g.gw}</span></div>
@@ -138,6 +142,7 @@ export function gwPrizeCard() {
   return card({
     title,
     action,
+    cls: compact ? 'prize-compact' : '',
     body: `${hero}${live}${chasers.length ? `<div class="date-head"><span>Closest</span></div><div class="list">${chasers.join('')}</div>` : ''}`,
     footer: { href: href.league('stats'), label: 'All top gameweeks' },
   });

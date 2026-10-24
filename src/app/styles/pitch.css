@@ -82,10 +82,12 @@
   left: 27px;
 }
 
+/* fotmob.com's rating badge: at least 28px, so a single figure isn't a sliver, with room
+   either side of one with bonus (8+3). */
 .pp-badge .ptsp {
-  min-width: 0;
+  min-width: 28px;
   height: 18px;
-  padding: 0 5px;
+  padding: 0 7px;
   border-radius: 12px;
   font-size: 12px;
 }
@@ -97,7 +99,7 @@
   }
 
   .pp-badge .ptsp {
-    padding: 0 4px;
+    padding: 0 5px;
   }
 }
 
@@ -112,6 +114,16 @@
   min-height: 56px;
   border-bottom: 0;
   background: var(--pitch-band);
+}
+
+/* Between what those still to play show and the numbers of those who have played. */
+.lf-gap {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  margin: 0 4px;
+  background: var(--pitch-text-2);
+  opacity: 0.4;
 }
 
 /* Expected points would vanish into the pitch in the usual grey. */

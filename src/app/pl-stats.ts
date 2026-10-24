@@ -1,18 +1,19 @@
 // A Premier League match's player stats, as fotmob.com's at the bottom of a match's Stats
 // tab: everyone who played, with FPL's numbers for him in that match, a category at a
-// time, sorted by any column. They come from stats/<gw>.json (see PlStats), asked for the
+// time, sorted by any column; and the same for the whole season on the Premier League's
+// page. They come from stats/<gw>.json (see PlStats) and stats/season.json, asked for the
 // first time they're wanted and again after each new data.json, with the live relay's
-// matches over it while the gameweek is played; and each player's underlying numbers in a
+// matches over a gameweek's while it's played; and each player's underlying numbers in a
 // gameweek, worked out from them while it's on.
 
-import { PL_STATS, type PlMoment, type PlStat, type PlStats, type Underlying } from '../shared/data.ts';
+import { PL_STATS, type PlMoment, type PlSeasonStats, type PlStat, type PlStats, type Underlying } from '../shared/data.ts';
 import type { SlimLive } from '../shared/live.ts';
-import { packUnderlying, underlyingOf } from '../shared/underlying.ts';
+import { packAsScored, packUnderlying, scoredIn, underlyingOf, UNDERLYING_TIPS } from '../shared/underlying.ts';
 import { onAction } from './actions.ts';
-import { card, chip, crest, empty, photo } from './components.ts';
-import { esc, fmtTime } from './format.ts';
-import { sortSvg } from './icons.ts';
-import { isArchive, player, seasonEntry } from './lookups.ts';
+import { card, chip, crest, empty, photo, seg, sheet } from './components.ts';
+import { esc, plural, sum } from './format.ts';
+import { slidersSvg, sortSvg } from './icons.ts';
+import { isArchive, opponents, player, seasonEntry } from './lookups.ts';
 import { ownerPill } from './pitch.ts';
 import { renderView } from './render.ts';
 import { href } from './router.ts';
@@ -26,8 +27,15 @@ export interface StatsRow {
   pts: number;
   owner: number | null;
   benched?: boolean;
+  /** The match's gameweek, for the owner's pill to lead to his head-to-head in it. */
+  gw?: number;
   /** A substitute who hasn't come on: nothing but noughts, at the bottom whatever the sort. */
   unused?: boolean;
+  /** His xP and xCS (shared/underlying.ts), where they're known: no xCS where a clean sheet scores nothing for him. */
+  xp?: number | null;
+  xcs?: number | null;
+  /** The site's projections for the gameweeks to come (PlSeasonStats' `projected`): each one's points, then over them all the rest. */
+  ahead?: { points: number[]; minutes: number; goals: number; assists: number; cleanSheet: number; defcon: number; bonus: number };
 }
 
 type Cells = (number | null)[] | undefined;
@@ -43,6 +51,8 @@ interface Column {
   text?: (r: StatsRow, cells: Cells) => string | null;
   /** A goalkeeper's stat: on a tie (the noughts, mostly) the keepers come first. */
   keepers?: boolean;
+  /** Why it has none for him, when it's for a reason of its own rather than the table's. */
+  why?: (r: StatsRow) => string | undefined;
 }
 
 const at = (name: PlStat) => (_: StatsRow, cells: Cells) => (cells ? cells[PL_STATS.indexOf(name)] : null);
@@ -69,6 +79,47 @@ const COLUMNS: Record<string, Column> = {
   assists: { label: 'Assists', value: at('assists') },
   xg: { label: 'xG', tip: 'Expected goals', digits: 2, value: at('expected_goals') },
   xa: { label: 'xA', tip: 'Expected assists', digits: 2, value: at('expected_assists') },
+  xp: { label: 'xP', tip: UNDERLYING_TIPS.xp, digits: 1, value: (r) => r.xp ?? null },
+  xcs: {
+    label: 'xCS',
+    tip: UNDERLYING_TIPS.xcs,
+    digits: 2,
+    value: (r) => r.xcs ?? null,
+    why: (r) => (r.xp == null ? undefined : 'A clean sheet scores nothing for him'),
+  },
+  // The Projected category's, over the gameweeks to come (each one's points after the total: gwColumn).
+  aheadTotal: {
+    label: 'Total',
+    tip: 'Projected points over the gameweeks shown',
+    digits: 1,
+    value: (r) => (r.ahead ? sum(r.ahead.points) : null),
+  },
+  aheadMinutes: { label: 'Minutes', tip: 'Projected minutes over the gameweeks shown', value: (r) => r.ahead?.minutes ?? null },
+  aheadGoals: {
+    label: 'Goals',
+    tip: 'Projected goals over the gameweeks shown, his penalties too',
+    digits: 2,
+    value: (r) => r.ahead?.goals ?? null,
+  },
+  aheadAssists: {
+    label: 'Assists',
+    tip: 'Projected assists over the gameweeks shown, as FPL counts them',
+    digits: 2,
+    value: (r) => r.ahead?.assists ?? null,
+  },
+  aheadCleanSheet: {
+    label: 'Clean sheet points',
+    tip: 'Projected points from clean sheets over the gameweeks shown',
+    digits: 1,
+    value: (r) => r.ahead?.cleanSheet ?? null,
+  },
+  aheadDefcon: {
+    label: 'Defcon points',
+    tip: 'Projected points from defensive contributions over the gameweeks shown',
+    digits: 1,
+    value: (r) => r.ahead?.defcon ?? null,
+  },
+  aheadBonus: { label: 'Bonus', tip: 'Projected bonus points over the gameweeks shown', digits: 1, value: (r) => r.ahead?.bonus ?? null },
   goalsAssists: pair('Goals + assists', 'goals_scored', 'assists'),
   xgXa: pair('xG + xA', 'expected_goals', 'expected_assists', 2, 'Expected goals and expected assists'),
   defcon: {
@@ -96,8 +147,43 @@ const COLUMNS: Record<string, Column> = {
   threat: { label: 'Threat', digits: 1, value: at('threat') },
 };
 
-const CATEGORIES: { id: string; label: string; columns: string[]; who?: (pid: number) => boolean }[] = [
-  { id: 'top', label: 'Top stats', columns: ['points', 'minutes', 'goalsAssists', 'xgXa', 'defcon', 'bps', 'saves'] },
+// One of the Projected category's gameweeks: his expected points in it, the site's model's,
+// and who against in the tip.
+const gwColumn = (gw: number, i: number): Column => ({
+  label: `GW ${gw}`,
+  tip: `Projected points in gameweek ${gw}`,
+  digits: 1,
+  value: (r) => r.ahead?.points[i] ?? null,
+  text: (r) => {
+    const v = r.ahead?.points[i] ?? 0;
+    return `<span data-tip="${esc(opponents(r.club, gw) || 'No match')}">${v ? v.toFixed(1) : '0'}</span>`;
+  },
+});
+
+// `season`: the season's columns, where they differ from a match's: one match's goals and
+// assists fit in one column, and a season's want one each. `upcoming`: the gameweeks to
+// come, so the season's alone, while it has projections for them (a column each first).
+const CATEGORIES: {
+  id: string;
+  label: string;
+  columns: string[];
+  season?: string[];
+  upcoming?: true;
+  who?: (pid: number) => boolean;
+}[] = [
+  {
+    id: 'top',
+    label: 'Top stats',
+    columns: ['points', 'minutes', 'goalsAssists', 'xgXa', 'defcon', 'bps', 'saves'],
+    season: ['points', 'minutes', 'goals', 'assists', 'xg', 'xa', 'defcon', 'bps', 'saves'],
+  },
+  { id: 'expected', label: 'Expected', columns: ['xp', 'points', 'xg', 'xa', 'xcs', 'xgc'] },
+  {
+    id: 'projected',
+    label: 'Projected',
+    columns: ['aheadTotal', 'aheadMinutes', 'aheadGoals', 'aheadAssists', 'aheadCleanSheet', 'aheadDefcon', 'aheadBonus'],
+    upcoming: true,
+  },
   { id: 'attack', label: 'Attack', columns: ['goals', 'assists', 'xg', 'xa', 'threat', 'creativity', 'pensMissed'] },
   { id: 'defence', label: 'Defence', columns: ['defcon', 'cbi', 'tackles', 'recoveries', 'cleanSheet', 'conceded', 'xgc', 'ownGoals'] },
   {
@@ -109,8 +195,9 @@ const CATEGORIES: { id: string; label: string; columns: string[]; who?: (pid: nu
   { id: 'fpl', label: 'FPL', columns: ['points', 'minutes', 'bonus', 'bps', 'ict', 'influence', 'creativity', 'threat', 'yellow', 'red'] },
 ];
 
+// Each category opens on its first column, its headline.
 onAction('stats-category', (value) => {
-  state.statsCategory = value;
+  [state.statsCategory, state.statsSort, state.statsAsc] = [value, '', false];
   renderView();
 });
 // The sorted column again turns it round; another sorts by that one, highest first.
@@ -119,13 +206,25 @@ onAction('stats-sort', (value) => {
   else [state.statsSort, state.statsAsc] = [value, false];
   renderView();
 });
+onAction('players-pos', (value) => {
+  state.playersPos = value;
+  renderView();
+});
+onAction('players-free', (value) => {
+  state.playersFree = value === 'on';
+  renderView();
+});
+onAction('players-all', () => {
+  state.playersAll = true;
+  renderView();
+});
 
-const files = new Map<string, { version: string; stats?: PlStats; failed?: boolean }>();
+const files = new Map<string, { version: string; stats?: unknown; failed?: boolean }>();
 
 // Beside data.json, or a finished season's beside its archive.
-function statsFile(gw: number) {
+function statsFile(name: string) {
   const archive = isArchive() ? seasonEntry()?.file.replace(/\.json$/, '') : null;
-  return archive ? `${archive}/stats/${gw}.json` : `stats/${gw}.json`;
+  return archive ? `${archive}/stats/${name}.json` : `stats/${name}.json`;
 }
 
 /**
@@ -140,6 +239,16 @@ export function statsFor(gw: number): PlStats | 'loading' | 'missing' {
   const stats = file === 'missing' ? undefined : file;
   if (merged?.feed !== feed || merged.file !== stats) merged = { feed, file: stats, stats: withLive(gw, stats, feed, idsByCode()) };
   return merged.stats;
+}
+
+/** A player's BPS in a gameweek (or one of its matches), once its stats file is in: FPL's measure of his game, to tell apart those level on points. */
+export function bpsIn(pid: number, gw: number, match?: number): number | undefined {
+  const file = statsFor(gw);
+  if (typeof file !== 'object') return undefined;
+  const values = Object.entries(file.matches).flatMap(([id, rows]) =>
+    match === undefined || Number(id) === match ? [rows[pid]?.[PL_STATS.indexOf('bps')]] : [],
+  );
+  return values.some((v) => v != null) ? values.reduce<number>((t, v) => t + (v ?? 0), 0) : undefined;
 }
 
 // The merge stays the same until the feed or the file changes.
@@ -171,39 +280,54 @@ export function withLive(gw: number, file: PlStats | undefined, feed: SlimLive, 
  * played worked out the same way from his match's stats so far (shared/underlying.ts),
  * for one who has played in only one match that week.
  */
-export function gwUnderlying(pid: number, gw: number): Underlying | undefined {
-  if (D.underlying?.[gw] || gw !== D.meta.currentGw || isArchive()) return D.underlying?.[gw]?.[pid];
+export const gwUnderlying = (pid: number, gw: number): Underlying | undefined =>
+  settled(gw) ? D.underlying?.[gw]?.[pid] : packUnderlying(liveUnderlying(pid, gw));
+
+/** The points in his xP that stay as scored, for its tooltip, likewise. */
+export const gwAsScored = (pid: number, gw: number): number[] | undefined =>
+  settled(gw) ? D.asScored?.[gw]?.[pid] : packAsScored(liveUnderlying(pid, gw));
+
+const settled = (gw: number) => Boolean(D.underlying?.[gw]) || gw !== D.meta.currentGw || isArchive();
+
+function liveUnderlying(pid: number, gw: number) {
   const stats = statsFor(gw);
   if (typeof stats !== 'object') return undefined;
   const rows = Object.values(stats.matches).flatMap((byPid) => (byPid[pid] ? [byPid[pid]] : []));
-  const at = (stat: PlStat) => (rows.length === 1 ? rows[0][PL_STATS.indexOf(stat)] : null);
-  if (at('expected_goals') == null) return undefined;
-  const n = (stat: PlStat) => Number(at(stat) ?? 0);
   const feed = live?.gw === gw ? live.feed : D.live?.gw === gw ? D.live : null;
   const [points, minutes] = feed?.elements[pid] ?? [0, 0];
+  return rows.length === 1 ? matchUnderlying(pid, rows[0], minutes, points) : undefined;
+}
+
+// His underlying numbers in one match: from his stats in it, and his minutes and points.
+function matchUnderlying(pid: number, cells: Cells, minutes: number, points: number) {
+  const at = (stat: PlStat) => cells?.[PL_STATS.indexOf(stat)];
+  if (at('expected_goals') == null) return undefined;
+  const n = (stat: PlStat) => Number(at(stat) ?? 0);
   const s = {
     minutes,
     total_points: points,
-    goals_scored: n('goals_scored'),
-    assists: n('assists'),
-    clean_sheets: n('clean_sheets'),
-    goals_conceded: n('goals_conceded'),
     expected_goals: n('expected_goals'),
     expected_assists: n('expected_assists'),
     expected_goals_conceded: n('expected_goals_conceded'),
   };
-  return packUnderlying(underlyingOf(s, D.meta.rules ?? {}, player(pid)?.pos, 1));
+  const [rules, pos] = [D.meta.rules ?? {}, player(pid)?.pos];
+  return underlyingOf(s, rules, pos, 1, scoredIn(n, minutes, rules, pos));
 }
 
-// The file alone.
-function fileFor(gw: number): PlStats | 'loading' | 'missing' {
-  const file = statsFile(gw);
+// A gameweek's file alone.
+const fileFor = (gw: number) => load<PlStats>(String(gw));
+
+/** stats/season.json: everyone's season so far, for the Premier League's Player stats tab. */
+const seasonFile = () => load<PlSeasonStats>('season');
+
+function load<T>(name: string): T | 'loading' | 'missing' {
+  const file = statsFile(name);
   const version = D.meta.generatedAt ?? '';
   const had = files.get(file);
   if (had?.version !== version) {
     files.set(file, { version, stats: had?.stats });
     fetch(`${file}?v=${encodeURIComponent(version)}`)
-      .then((res) => (res.ok ? (res.json() as Promise<PlStats>) : Promise.reject(new Error(`HTTP ${res.status}`))))
+      .then((res) => (res.ok ? (res.json() as Promise<T>) : Promise.reject(new Error(`HTTP ${res.status}`))))
       .then(
         (stats) => files.set(file, { version, stats }),
         () => files.set(file, { version, stats: had?.stats, failed: true }),
@@ -211,70 +335,185 @@ function fileFor(gw: number): PlStats | 'loading' | 'missing' {
       .finally(() => renderView());
   }
   const now = files.get(file)!;
-  return now.stats ?? (now.failed ? 'missing' : 'loading');
+  return (now.stats as T | undefined) ?? (now.failed ? 'missing' : 'loading');
 }
 
 const noughts = PL_STATS.map(() => 0);
-const shown = (key: string, r: StatsRow, cells: Cells, v: number) => {
-  const { digits, text } = COLUMNS[key];
-  return text ? (text(r, cells) ?? '') : v && digits ? v.toFixed(digits) : String(v);
-};
+const shown = ({ digits, text }: Column, r: StatsRow, cells: Cells, v: number) =>
+  text ? (text(r, cells) ?? '') : v && digits ? v.toFixed(digits) : String(v);
 const nameOf = (r: StatsRow) => {
   const name = player(r.pid)?.name ?? '?';
-  return r.owner ? ownerPill(r.owner, r.benched, name) : `<span class="ps-name">${esc(name)}</span>`;
+  return r.owner ? ownerPill(r.owner, r.benched, name, { gw: r.gw }) : `<span class="ps-name">${esc(name)}</span>`;
 };
 const photoOf = (r: StatsRow, size: number) => `<span class="ps-photo">${photo(r.pid, size)}${crest(r.club, 14)}</span>`;
 
-/** The card, for a match that has kicked off (`rows` empty before then); `live` while it's on, when only the points and minutes are up to the minute. */
-export function playerStatsCard(gw: number, match: number, rows: StatsRow[], live = false) {
+/** The card, for a match that has kicked off (`rows` empty before then). */
+export function playerStatsCard(gw: number, match: number, rows: StatsRow[]) {
   const title = 'Player stats';
   if (!rows.length) return card({ title, body: empty('They come in once the match kicks off') });
   const file = statsFor(gw);
   if (file === 'loading') return card({ title, body: empty('Loading…') });
   if (file === 'missing') return card({ title, body: empty('Not in yet: they come with the next update') });
   const cells = file.matches[match] ?? {};
-  const category = CATEGORIES.find((c) => c.id === state.statsCategory) ?? CATEGORIES[0];
-  const sortKey = category.columns.includes(state.statsSort) ? state.statsSort : category.columns[0];
-  const asc = sortKey === state.statsSort && state.statsAsc;
+  const why = (r: StatsRow) =>
+    cells[r.pid] ? 'FPL gives it only for the whole gameweek, and he played twice in it' : 'Not in yet: it comes with the next update';
   const cellsOf = (r: StatsRow) => cells[r.pid] ?? (r.unused ? noughts : undefined);
-  const value = (r: StatsRow, key: string) => COLUMNS[key].value(r, cellsOf(r));
+  const withExpected = rows.map((r) => {
+    const u = matchUnderlying(r.pid, cellsOf(r), r.min, r.pts);
+    return { ...r, xp: u?.xp ?? null, xcs: u?.xcs ?? null };
+  });
+  return card({ title, body: statsTable(withExpected, cellsOf, why).html, cls: 'ps-card' });
+}
+
+/** The Premier League's Player stats tab: everyone who has played this season, as the match's, of one club (the address has it), by position, and the free agents alone if wanted. */
+export function seasonStatsCard(clubId?: number) {
+  const title = 'Player stats';
+  const file = seasonFile();
+  if (file === 'loading') return card({ title, body: empty('Loading…') });
+  if (file === 'missing') return card({ title, body: empty('Not in yet: they come with the next update') });
+  const rows = Object.entries(file.players).flatMap(([id, row]): StatsRow[] => {
+    const p = player(Number(id));
+    const out = (clubId !== undefined && p?.club !== clubId) || (state.playersPos !== 'all' && p?.pos !== state.playersPos);
+    if (!p || out || (state.playersFree && p.owner !== null)) return [];
+    const [xp = null, xcs = null] = row.slice(1 + PL_STATS.length);
+    return [{ pid: Number(id), club: p.club, min: row[0] ?? 0, pts: p.total, owner: p.owner, xp, xcs, ahead: aheadOf(file, id) }];
+  });
+  const { html, count } = statsTable(
+    rows,
+    (r) => file.players[r.pid]?.slice(1),
+    () => '',
+    {
+      season: true,
+      limit: state.playersAll ? Infinity : SHOWN,
+      gws: file.projected?.gws,
+    },
+  );
+  const positions = seg(
+    'players-pos',
+    [
+      ['all', 'All'],
+      ['GKP', 'GK'],
+      ['DEF', 'DEF'],
+      ['MID', 'MID'],
+      ['FWD', 'FWD'],
+    ],
+    state.playersPos,
+  );
+  const clubs = Object.entries(D.clubs).sort(([, a], [, b]) => a.name.localeCompare(b.name));
+  const picker = (cls = '') =>
+    `<span class="tc-select${cls}"><select data-action="go" aria-label="Club">${[
+      `<option value="${href.pl('players')}">All clubs</option>`,
+      ...clubs.map(
+        ([id, c]) => `<option value="${href.pl('players', Number(id))}"${Number(id) === clubId ? ' selected' : ''}>${esc(c.name)}</option>`,
+      ),
+    ].join('')}</select></span>`;
+  // On one column, as the Transfer center's: the filters in a sheet behind a pill at the
+  // card's top right, saying how many are on, and the categories left on the card.
+  const on = Number(clubId !== undefined) + Number(state.playersPos !== 'all') + Number(state.playersFree);
+  const pill = `<button type="button" class="tc-edit" data-action="sheet-open" data-value="ps-sheet">Filter${on ? ` · ${on}` : ''}${slidersSvg}</button>`;
+  const who = seg(
+    'players-free',
+    [
+      ['off', 'All'],
+      ['on', 'Free agents'],
+    ],
+    state.playersFree ? 'on' : 'off',
+  );
+  const form = `<div class="tc-filter">
+      <label class="tc-label">Club${picker()}</label>
+      <div class="tc-label">Position</div>${positions}
+      <div class="tc-label">Players</div>${who}
+    </div>`;
+  return card({
+    title,
+    sub: `${count} ${count === 1 ? 'player' : 'players'} this season`,
+    action: pill,
+    body: `<div class="filter-bar ps-filters">${picker(' ps-club')}${positions}${chip('Free agents', 'players-free', state.playersFree ? 'off' : 'on', state.playersFree)}</div>${html}${sheet('ps-sheet', 'Filter', form, `Show ${plural(count, 'player')}`)}`,
+    footer:
+      count > SHOWN && !state.playersAll
+        ? { href: href.pl('players', clubId), label: `Show all ${count}`, attrs: 'data-action="players-all"' }
+        : null,
+    cls: 'ps-card',
+  });
+}
+
+const SHOWN = 50; // the season's table, until all are asked for
+
+// His projections from the season's file: each gameweek's points, then the rest.
+function aheadOf(file: PlSeasonStats, id: string): StatsRow['ahead'] {
+  const [n, row] = [file.projected?.gws.length ?? 0, file.projected?.players[id]];
+  if (!row) return undefined;
+  const [minutes, goals, assists, cleanSheet, defcon, bonus] = row.slice(n);
+  return { points: row.slice(0, n), minutes, goals, assists, cleanSheet, defcon, bonus };
+}
+
+// A category's columns (the season's, for the `season`), sorted by the chosen one, the
+// unknown last either way: each player with his photo and name, in his owner's colours if
+// he has one. `why` says why a number is missing; `limit` keeps to the first so many; `gws`
+// are the gameweeks the season's file projects.
+function statsTable(
+  rows: StatsRow[],
+  cellsOf: (r: StatsRow) => Cells,
+  why: (r: StatsRow) => string,
+  { season = false, limit = Infinity, gws = [] as number[] } = {},
+) {
+  const offered = CATEGORIES.filter((c) => !c.upcoming || (season && gws.length > 0));
+  const category = offered.find((c) => c.id === state.statsCategory) ?? offered[0];
+  const ahead = category.upcoming ? gws : [];
+  const cols: Record<string, Column> = {
+    ...COLUMNS,
+    aheadTotal: { ...COLUMNS.aheadTotal, label: `Next ${ahead.length}`, tip: `Projected points over the next ${ahead.length} gameweeks` },
+    ...Object.fromEntries(ahead.map((gw, i) => [`gw${gw}`, gwColumn(gw, i)])),
+  };
+  const base = (season && category.season) || category.columns;
+  // The gameweeks to come, a column each, after their total.
+  const columns = ahead.length ? [base[0], ...ahead.map((gw) => `gw${gw}`), ...base.slice(1)] : base;
+  const sortKey = columns.includes(state.statsSort) ? state.statsSort : columns[0];
+  const asc = sortKey === state.statsSort && state.statsAsc;
+  const value = (r: StatsRow, key: string) => cols[key].value(r, cellsOf(r));
   const sorted = rows
     .filter((r) => !category.who || category.who(r.pid))
     .sort((a, b) => {
       if (a.unused || b.unused) return Number(Boolean(a.unused)) - Number(Boolean(b.unused));
       const [x, y] = [value(a, sortKey), value(b, sortKey)];
-      if (x === null || y === null) return Number(x === null) - Number(y === null); // the unknown last, either way
+      if (x === null || y === null) return Number(x === null) - Number(y === null);
       const keeper = (r: StatsRow) => Number(player(r.pid)?.pos === 'GKP');
-      return (asc ? x - y : y - x) || (COLUMNS[sortKey].keepers ? keeper(b) - keeper(a) : 0) || b.min - a.min || b.pts - a.pts;
+      return (asc ? x - y : y - x) || (cols[sortKey].keepers ? keeper(b) - keeper(a) : 0) || b.min - a.min || b.pts - a.pts;
     });
-  const head = category.columns
+  const head = columns
     .map((key) => {
-      const c = COLUMNS[key];
+      const c = cols[key];
       const on = key === sortKey;
       return `<th${on ? ` aria-sort="${asc ? 'ascending' : 'descending'}"` : ''}><button type="button" class="ps-sort${on ? ' on' : ''}" data-action="stats-sort" data-value="${key}"${c.tip ? ` data-tip="${esc(c.tip)}"` : ''}><span>${c.label}</span>${on ? sortSvg(asc) : ''}</button></th>`;
     })
     .join('');
+  // The headings stay under the top bar in a table of their own, which a header inside a
+  // box that scrolls sideways can't (alignHeads in components.ts keeps it level with the
+  // rows); the rows' table keeps them too, unseen, for a screen reader.
+  const table = (inner: string) =>
+    `<table class="ps-table" style="--cols:${columns.length}"><colgroup><col class="ps-col-player">${columns.map(() => '<col>').join('')}</colgroup>${inner}</table>`;
+  const labels = columns.map((key) => `<th>${cols[key].label}</th>`).join('');
   const cell = (r: StatsRow, key: string) => {
     const v = value(r, key);
-    if (v !== null) return `<td>${shown(key, r, cellsOf(r), v)}</td>`;
-    const why = cells[r.pid]
-      ? 'FPL gives it only for the whole gameweek, and he played twice in it'
-      : 'Not in yet: it comes with the next update';
-    return `<td><span class="muted" data-tip="${why}">–</span></td>`;
+    return v !== null
+      ? `<td>${shown(cols[key], r, cellsOf(r), v)}</td>`
+      : `<td><span class="muted" data-tip="${cols[key].why?.(r) ?? why(r)}">–</span></td>`;
   };
   const body = sorted
+    .slice(0, limit)
     .map(
       (r) =>
-        `<tr${r.unused ? ' class="unused" data-tip="An unused substitute"' : ''}><td class="ps-player"><a href="${href.player(r.pid)}">${photoOf(r, 24)}${nameOf(r)}</a></td>${category.columns.map((key) => cell(r, key)).join('')}</tr>`,
+        `<tr${r.unused ? ' class="unused" data-tip="An unused substitute"' : ''}><td class="ps-player"><a href="${href.player(r.pid)}">${photoOf(r, 24)}${nameOf(r)}</a></td>${columns.map((key) => cell(r, key)).join('')}</tr>`,
     )
     .join('');
-  const asOf = D.meta.generatedAt ? fmtTime.format(new Date(D.meta.generatedAt)) : '';
-  return card({
-    title,
-    sub: live && asOf ? `Points and minutes as they stand, the rest as of ${asOf}` : '',
-    body: `<div class="filter-bar ps-cats">${CATEGORIES.map((c) => chip(c.label, 'stats-category', c.id, c === category)).join('')}</div>
-      <div class="ps-scroll"><table class="ps-table"><thead><tr><th class="ps-player">Player</th>${head}</tr></thead><tbody>${body}</tbody></table></div>`,
-  });
+  return {
+    count: sorted.length,
+    html: `<div class="filter-bar ps-cats">${offered.map((c) => chip(c.label, 'stats-category', c.id, c === category)).join('')}</div>
+      <div class="ps-split">
+        <div class="ps-head split-head">${table(`<thead><tr><th class="ps-player">Player</th>${head}</tr></thead>`)}</div>
+        <div class="ps-scroll split-rows">${table(`<thead class="ps-sr"><tr><th>Player</th>${labels}</tr></thead><tbody>${body}</tbody>`)}</div>
+      </div>`,
+  };
 }
 
 // The Facts tab's taste of them, above the lineups: who led the way on each of a few, as
@@ -306,7 +545,7 @@ export function playerLeadsCard(gw: number, match: number, rows: StatsRow[], all
     if (!best) return [];
     const { r, v } = best;
     return [
-      `<a class="ps-lead" href="${href.player(r.pid)}"><span class="ps-lead-label">${label}</span><span class="ps-lead-who">${photoOf(r, 24)}${nameOf(r)}<span class="ps-lead-value">${shown(key, r, cells[r.pid], v)}</span></span></a>`,
+      `<a class="ps-lead" href="${href.player(r.pid)}"><span class="ps-lead-label">${label}</span><span class="ps-lead-who">${photoOf(r, 24)}${nameOf(r)}<span class="ps-lead-value">${shown(COLUMNS[key], r, cells[r.pid], v)}</span></span></a>`,
     ];
   });
   return items.length ? card({ title, body: `<div class="ps-leads">${items.join('')}</div>`, footer }) : '';

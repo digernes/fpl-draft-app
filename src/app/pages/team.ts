@@ -9,7 +9,7 @@ import type { Match, Position } from '../../shared/data.ts';
 import { playerState } from '../../shared/live.ts';
 import { onAction } from '../actions.ts';
 import { MOVE_TYPES } from '../cards.ts';
-import { avatar, card, crest, empty, listRow, photo, seg, tag, tile, xpPill } from '../components.ts';
+import { avatar, bestOf, card, crest, empty, listRow, photo, seg, tag, tile, xpPill } from '../components.ts';
 import { totalSlots } from '../event-icons.ts';
 import { ago, esc, fmtShortDay, ordinal, pct, plural, priceText, signed, sum } from '../format.ts';
 import { starSvg } from '../icons.ts';
@@ -30,8 +30,8 @@ import {
   slotOf,
 } from '../lookups.ts';
 import { closeCalls, gameIn, nemesis, pointsByPosition, rivalries, type Rivalry } from '../manager-stats.ts';
-import { matchStatusText, pitchPill, roundPill, stateLabel } from '../matches.ts';
-import { dueFilters, lineupFilters, showsEvents, statBadge } from '../lineup-filters.ts';
+import { matchStatus, matchStatusText, pitchPill, roundPill, stateLabel } from '../matches.ts';
+import { bestOfMatch, lineupFilters, showsEvents, statBadge } from '../lineup-filters.ts';
 import { autoSubOf, formationOf, pitch, type PitchPlayer } from '../pitch.ts';
 import { renderView, type PageView } from '../render.ts';
 import { href, TEAM_TABS, type Route } from '../router.ts';
@@ -227,20 +227,23 @@ function lastLineup(id: number) {
   const l = gw >= D.meta.firstGw ? lineupFor(id, gw) : undefined;
   if (!l) return { sub: '', body: empty('No lineup yet') };
   const feed = live?.gw === gw ? live.feed : null;
+  // The head-to-head's best is blue once it's over, should he be in this XI.
+  const h2h = D.matches.find((m) => m.gw === gw && (m.home === id || m.away === id));
+  const other = h2h && lineupFor(h2h.home === id ? h2h.away : h2h.home, gw);
+  const top = (h2h ? matchStatus(h2h) === 'done' : !feed) ? bestOfMatch([...l.xi, ...(other?.xi ?? [])], gw) : new Set<number>();
   const onPitch = (pid: number): PitchPlayer => {
     const match = feed ? playerState(feed, pid, player(pid).club) : null;
     return {
       pid,
-      badge: statBadge(pid, gw) ?? pitchPill(pid, gw, match),
+      badge: statBadge(pid, gw, top.has(pid)) ?? pitchPill(pid, gw, match, top.has(pid)),
       events: showsEvents(gw) ? gwEvents(pid, gw) : undefined,
-      mark: autoSubOf(l, pid),
+      mark: autoSubOf(l, pid, gw),
       note: match?.state === 'live' ? stateLabel(match) : '', // one taken off has his minute by the arrow
     };
   };
   return {
     sub: `GW ${gw} · ${plural(l.pts, 'pt')}${feed ? ' so far' : ''} · ${formationOf(l.xi)}`,
-    body:
-      lineupFilters(gw) + (feed?.fixtures.some((f) => !f.started) ? dueFilters(gw) : '') + pitch(l.xi.map(onPitch), l.bench.map(onPitch)),
+    body: lineupFilters(gw, Boolean(feed?.fixtures.some((f) => !f.started))) + pitch(l.xi.map(onPitch), l.bench.map(onPitch)),
   };
 }
 
@@ -253,16 +256,17 @@ function bestLineup(id: number) {
   if (!xi.ids.length) return { sub: '', body: empty('No points yet') };
   // Badges are coloured by points per gameweek of the season, on a scale of their own: a
   // gameweek's 6 for green is more than even the best average, so here green beats the
-  // league's average XI player (about 4 a week) and blue is half as much again.
+  // league's average XI player (about 4 a week). Blue is the XI's best.
   const gameweeks = Math.max(1, D.meta.currentGw - D.meta.firstGw + 1);
-  const tier = (perWeek: number) => (perWeek >= 6 ? 'p4' : perWeek >= 4 ? 'p3' : perWeek >= 2 ? 'p2' : perWeek >= 1 ? 'p1' : 'p0');
+  const tier = (perWeek: number) => (perWeek >= 4 ? 'p2' : perWeek >= 1 ? 'p1' : 'p0');
+  const top = bestOf(xi.ids, scored);
   const onPitch = (pid: number): PitchPlayer => {
     const { pts, goals, assists, starts } = record.get(pid)!;
     const owner = player(pid).owner;
     const now = owned.has(pid) ? '' : owner ? ` · now with ${mgr(owner)?.first}` : ' · a free agent now';
     return {
       pid,
-      badge: `<span class="ptsp ${tier(pts / gameweeks)}">${pts}</span>`,
+      badge: `<span class="ptsp ${top.has(pid) ? 'top' : tier(pts / gameweeks)}">${pts}</span>`,
       icons: totalSlots(goals, assists, starts),
       tip: `${player(pid).name}: ${plural(pts, 'pt')} in ${plural(starts, 'start')}${now}`,
       faded: !owned.has(pid),
@@ -426,7 +430,6 @@ function rivalsCard(id: number) {
   );
   return card({
     title: 'Head to head',
-    sub: 'Best record first: points per match, then points difference',
     body: `<div class="tiles">${tiles.join('')}</div><div class="list">${list.join('')}</div>`,
   });
 }
@@ -478,7 +481,7 @@ function positionSplit(id: number) {
 
 function positionCard(id: number) {
   const split = positionSplit(id);
-  return split ? card({ title: 'Points by position', sub: 'In the XI this season', body: split }) : '';
+  return split ? card({ title: 'Points by position', body: split }) : '';
 }
 
 // The draft picks still here, those gone and where to, and who has come in since.
@@ -490,7 +493,6 @@ function originalCard(id: number) {
   const where = (owner: number | null) => (owner ? avatar(owner) : tag('FA', 'A free agent now'));
   return card({
     title: 'Original squad',
-    sub: `${r.kept.length} of ${r.size} draft picks still here · ${pct(r.originalShare)} of the XI’s points`,
     body: `<div class="squad-detail">
       <div><div class="squad-head">Still here · ${r.kept.length}</div><div class="pchips">${r.kept.map((pid) => chipOf(pid)).join('') || '<span class="muted">Nobody</span>'}</div></div>
       <div><div class="squad-head">Gone · ${r.gone.length}</div><div class="pchips">${r.gone.map((g) => chipOf(g.player, where(g.owner))).join('') || '<span class="muted">Nobody, yet</span>'}</div></div>

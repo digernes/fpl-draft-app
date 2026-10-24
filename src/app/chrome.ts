@@ -2,7 +2,7 @@
 // which runs whatever action the element clicked registered (actions.ts).
 
 import { onAction, runAction } from './actions.ts';
-import { avatar, crest, empty, markLoadingPhotos, photo, tag } from './components.ts';
+import { alignHead, alignHeads, avatar, crest, empty, markLoadingPhotos, photo, tag } from './components.ts';
 import { esc, fmtShortDay } from './format.ts';
 import { leagueSvg, premierLeagueSvg } from './icons.ts';
 import { applyLatestLive, applyLatestTransfers, loadData, pollTransfers, scheduleRefresh } from './live-scores.ts';
@@ -67,9 +67,15 @@ onAction('theme', (value) => {
 onAction('odds', setting('odds', 'draft.odds'));
 onAction('xp', setting('xp', 'draft.xp'));
 onAction('table-mode', setting('tableMode', 'draft.tableMode'));
-onAction('due', setting('due'));
+// The lineup's chips are one choice, and tapping the chosen one again goes back to the
+// default: the points, and the kick-offs (or projections) of those still to play.
+onAction('due', (value) => {
+  state.lineupStat = '';
+  setting('due')(value);
+});
 onAction('lineup-stat', (value) => {
-  state.lineupStat = state.lineupStat === value ? '' : value; // tapping the chosen filter again goes back to points
+  state.lineupStat = state.lineupStat === value ? '' : value;
+  state.due = '';
   renderView();
 });
 onAction('table-view', (value) => {
@@ -79,6 +85,8 @@ onAction('table-view', (value) => {
 onAction('manager', (value) => navigate(href.team(Number(value)))); // a table row
 // A gameweek's arrows and picker, and any other move that shouldn't pile up in the history.
 onAction('go', (value) => navigate(value, { replace: true }));
+// Elsewhere, as a link inside a link to something else would (a player's manager's pill).
+onAction('open', (value) => navigate(value));
 onAction('follow', (value) => {
   state.myTeam = state.myTeam === Number(value) ? null : Number(value);
   store.set('draft.myTeam', state.myTeam ? String(state.myTeam) : '');
@@ -92,6 +100,7 @@ function onClick(event: MouseEvent) {
   const target = (event.target as Element).closest<HTMLElement>('[data-action]');
   const link = (event.target as Element).closest('a[href]');
   if (!target || target.tagName === 'SELECT' || (link && link !== target && target.contains(link))) return;
+  if (link && link !== target) event.preventDefault(); // inside a link, the action wins
   runAction(target);
 }
 
@@ -110,7 +119,16 @@ export function bindChrome() {
     renderView();
     window.scrollTo({ top: 0 });
   });
-  window.addEventListener('resize', () => placeTabIndicator());
+  window.addEventListener('resize', () => {
+    placeTabIndicator();
+    alignHeads();
+  });
+  // Scrolls don't bubble: a table's rows scrolled sideways, for its header to follow.
+  document.addEventListener(
+    'scroll',
+    (event) => event.target instanceof HTMLElement && event.target.matches('.split-rows') && alignHead(event.target),
+    { capture: true, passive: true },
+  );
   document.fonts?.ready.then(() => placeTabIndicator());
   matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => state.theme === 'system' && applyTheme());
 
@@ -353,7 +371,7 @@ function suggestions(kind: Kind) {
 function bindTooltips() {
   const tip = document.getElementById('tooltip')!;
   let hideTimer: ReturnType<typeof setTimeout> | undefined;
-  const show = (el: Tipped) => {
+  const show = (el: Tipped, part?: EventTarget | null) => {
     clearTimeout(hideTimer);
     tip.textContent = el.dataset.tip ?? el.getAttribute('data-tip');
     const line = (text: string, className = '') => Object.assign(document.createElement('div'), { className, textContent: text });
@@ -371,7 +389,10 @@ function bindTooltips() {
       tip.replaceChildren(line(head, 'tip-head'), ...below.map((text) => line(text)), grid);
     }
     tip.hidden = false;
-    const r = el.getBoundingClientRect();
+    // At the point of the part of it under the pointer, when that has one (the momentum's
+    // minutes), else at its own last point, else at it.
+    const point = (part instanceof Element && part.querySelector(':scope > .tip-at')) || [...el.querySelectorAll('.tip-at')].pop() || el;
+    const r = point.getBoundingClientRect();
     const half = tip.offsetWidth / 2;
     const center = r.left + r.width / 2;
     const x = Math.min(Math.max(center, half + 8), window.innerWidth - half - 8);
@@ -388,7 +409,7 @@ function bindTooltips() {
   document.addEventListener('pointerover', (event) => {
     if (event.pointerType === 'touch') return;
     const el = tipped(event.target);
-    if (el) show(el);
+    if (el) show(el, event.target);
   });
   document.addEventListener('pointerout', (event) => {
     const el = tipped(event.target);

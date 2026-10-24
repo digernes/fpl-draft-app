@@ -64,6 +64,22 @@
   font-weight: 400;
 }
 
+/* On the front page the holder is a list row's size, as quiet as the cards around it. */
+.prize-compact .prize {
+  gap: 12px;
+  padding-block: 12px;
+}
+
+.prize-compact .prize-name {
+  margin-top: 2px;
+  font-size: 15px;
+}
+
+.prize-compact .prize-score {
+  min-width: 40px;
+  font-size: 18px;
+}
+
 .prize-live {
   display: grid;
   gap: 6px;

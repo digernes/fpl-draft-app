@@ -1,12 +1,14 @@
 /* --- Home page: fotmob.com's front page --------------------------------------------
    The round in the middle, the leagues and teams on the left and everything else on the
    right. As on fotmob.com the right column comes in at 769px and the left at 1120px; on
-   phones the right column's cards, then the left's, go under the round. */
+   phones the right column's cards go under the round. Until the left column comes in, its
+   prize is in the right one, after the table (`front-narrow`), and its leagues are left to
+   the top and bottom bars. */
 
 .front {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  grid-template-areas: 'main' 'right' 'left';
+  grid-template-areas: 'main' 'right';
   align-items: start;
   gap: 16px;
 }
@@ -29,6 +31,7 @@
 }
 
 .front-left {
+  display: none;
   grid-area: left;
 }
 
@@ -36,10 +39,6 @@
   .front {
     grid-template-columns: minmax(0, 1fr) 268px;
     grid-template-areas: 'main right';
-  }
-
-  .front-left {
-    display: none;
   }
 }
 
@@ -51,6 +50,10 @@
 
   .front-left {
     display: grid;
+  }
+
+  .front-narrow {
+    display: none;
   }
 }
 

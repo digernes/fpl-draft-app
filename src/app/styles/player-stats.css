@@ -1,11 +1,36 @@
 /* --- Player stats -------------------------------------------------------------------
    A Premier League match's, as fotmob.com's at the bottom of a match's Stats tab: chips
    for the category, then a table whose player column stays put while the numbers scroll
-   under it, every column's heading a button that sorts by it. */
+   under it, every column's heading a button that sorts by it. As steady as fotmob.com's
+   from one category to the next: the player column always as wide, and the stats sharing
+   the rest equally, 80px at least (the table scrolls when they don't fit). */
 
 .ps-cats {
   min-height: 56px;
   border-bottom: 0;
+}
+
+/* The season's: a club, a position, and the free agents alone, a line under them to keep
+   them apart from the categories, which have room of their own. The club's picker keeps
+   its width in the row, which scrolls on a phone. */
+.ps-filters {
+  min-height: 64px;
+}
+
+.ps-club {
+  flex: none;
+  width: 168px;
+}
+
+.ps-filters + .ps-cats {
+  min-height: 64px;
+}
+
+/* On one column they're in a sheet instead (pl-stats.ts), the Transfer center's. */
+@media (max-width: 768px) {
+  .ps-filters {
+    display: none;
+  }
 }
 
 .ps-scroll {
@@ -14,7 +39,9 @@
 }
 
 .ps-table {
-  width: 100%;
+  --player: 148px;
+  width: max(100%, calc(var(--player) + var(--cols) * 80px));
+  table-layout: fixed;
   border-collapse: separate;
   border-spacing: 0;
   font-size: 13px;
@@ -23,8 +50,10 @@
 
 .ps-table th,
 .ps-table td {
+  overflow: hidden;
   border-right: 1px solid var(--divider);
   text-align: center;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 
@@ -33,12 +62,83 @@
   border-right: 0;
 }
 
+/* A line over the headings, as fotmob.com's, and one under them. */
 .ps-table th {
   height: 56px;
   padding: 0;
+  border-top: 1px solid var(--divider);
+  border-bottom: 1px solid var(--divider);
+  background: var(--card);
   color: var(--text-2);
   font-size: 12px;
   font-weight: 500;
+}
+
+/* Both tables' columns: the player's as wide whatever the category. */
+.ps-col-player {
+  width: var(--player);
+}
+
+/* The headings in a table of their own over the rows (pl-stats.ts), stuck under the top
+   bar as the page scrolls, as a spreadsheet's (the card clips instead of hiding, which
+   would keep them to it); and following the rows sideways, tied to their scroll where the
+   browser can (else moved along by alignHeads, components.ts), the player's staying put. */
+.card.ps-card {
+  overflow: clip;
+}
+
+.ps-split {
+  timeline-scope: --ps-rows;
+}
+
+.ps-head {
+  position: sticky;
+  top: 64px;
+  z-index: 2;
+  overflow: hidden;
+}
+
+.ps-scroll {
+  scroll-timeline: --ps-rows inline;
+}
+
+@supports (animation-timeline: --a) {
+  .ps-head > table {
+    animation: ps-follow linear both;
+    animation-timeline: --ps-rows;
+  }
+
+  .ps-head th.ps-player {
+    animation: ps-hold linear both;
+    animation-timeline: --ps-rows;
+  }
+}
+
+@keyframes ps-follow {
+  to {
+    transform: translateX(calc(-1 * var(--shift, 0px)));
+  }
+}
+
+@keyframes ps-hold {
+  to {
+    transform: translateX(var(--shift, 0px));
+  }
+}
+
+@media (min-width: 992px) {
+  .ps-head {
+    top: 80px;
+  }
+}
+
+/* The rows' own headings, for a screen reader alone: no height, no ink. */
+.ps-sr th {
+  height: 0;
+  padding: 0;
+  border: 0;
+  font-size: 0;
+  line-height: 0;
 }
 
 .ps-table td {
@@ -53,7 +153,6 @@
   justify-content: center;
   gap: 2px;
   width: 100%;
-  min-width: 80px;
   height: 56px;
   padding: 0 10px;
   color: inherit;
@@ -62,8 +161,11 @@
   white-space: normal;
 }
 
+/* A long one breaks, as fotmob.com's do: Defensive contri-butions. */
 .ps-sort > span {
-  max-width: 96px;
+  max-width: 100%;
+  overflow-wrap: break-word;
+  hyphens: auto;
 }
 
 .ps-sort.on {
@@ -98,7 +200,12 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  max-width: 200px;
+  min-width: 0;
+}
+
+/* The row under the keyboard, as under the pointer (hover.css). */
+.ps-table tbody tr:focus-within > td {
+  background: var(--table-hover);
 }
 
 .ps-photo {
@@ -133,6 +240,10 @@
 }
 
 @media (min-width: 769px) {
+  .ps-table {
+    --player: 200px;
+  }
+
   .ps-table th.ps-player,
   .ps-table td.ps-player {
     padding-left: 24px;

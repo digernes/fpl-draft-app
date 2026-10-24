@@ -8,8 +8,9 @@ import { avatar, crest, photo } from './components.ts';
 import { eventRow, eventSlots, type EventSlots } from './event-icons.ts';
 import { esc } from './format.ts';
 import { arrowSvg } from './icons.ts';
-import { club, first, mgr, player, slotOf } from './lookups.ts';
+import { club, first, mgr, namedIn, player, slotOf } from './lookups.ts';
 import { href } from './router.ts';
+import { D } from './state.ts';
 
 export interface PitchPlayer {
   pid: number;
@@ -25,6 +26,8 @@ export interface PitchPlayer {
   owner?: number | null;
   /** And whether that manager has him on the bench, where his points don't count (the pill only outlined), or in the XI; unknown for a gameweek to come. */
   benched?: boolean;
+  /** The real match's gameweek, when the pill leads to that manager's head-to-head in it. */
+  gw?: number;
   /** Under the name: where their match stands, or that they play twice. */
   note?: string;
   tip?: string;
@@ -52,22 +55,33 @@ const LINES: Position[] = ['FWD', 'MID', 'DEF', 'GKP'];
 const box = (cls: string) =>
   `<svg class="pitch-mark ${cls}" viewBox="0 0 316 174" aria-hidden="true"><path d="M3 174V40a10 10 0 0 1 10-10h290a10 10 0 0 1 10 10v134M102.6 30a76.8 76.8 0 0 1 110.8 0M84 174v-52a8 8 0 0 1 8-8h132a8 8 0 0 1 8 8v52"/></svg>`;
 
-/** An automatic substitution's mark by a name: one who came on for `other`, or (off) a starter who didn't play and made way for him. */
-export function autoSubMark(dir: 'on' | 'off', other?: number) {
+/**
+ * An automatic substitution's mark by a name: one who came on for `other`, or (off) a
+ * starter who made way for him: `left out` of his club's squad, or on its bench and not on.
+ */
+export function autoSubMark(dir: 'on' | 'off', other?: number, leftOut = false) {
   const name = other === undefined ? undefined : player(other)?.name;
   const tip =
     dir === 'on'
       ? `Came on for ${name ?? 'a starter who didn’t play'}, an automatic substitution`
-      : `Didn’t play, so ${name ?? 'a substitute'} came on for him`;
+      : `${leftOut ? 'Not in the squad' : 'Didn’t play'}, so ${name ?? 'a substitute'} came on for him`;
   return `<span class="pp-sub ${dir}" data-tip="${esc(tip)}">${arrowSvg}</span>`;
 }
 
-/** The mark for a player in a lineup, if he was in one of its automatic substitutions. */
-export function autoSubOf(l: { subs: number[]; off?: number[] }, pid: number) {
+/** The mark for a player in a lineup that gameweek, if he was in one of its automatic substitutions. */
+export function autoSubOf(l: { subs: number[]; off?: number[] }, pid: number, gw: number) {
   const on = l.subs.indexOf(pid);
   if (on >= 0) return autoSubMark('on', l.off?.[on]);
   const off = l.off?.indexOf(pid) ?? -1;
-  return off >= 0 ? autoSubMark('off', l.subs[off]) : '';
+  return off >= 0 ? autoSubMark('off', l.subs[off], leftOut(pid, gw)) : '';
+}
+
+// Left out of his club's squad for each of its matches that gameweek, as the Premier
+// League's lineups have it.
+function leftOut(pid: number, gw: number) {
+  const named = namedIn(gw);
+  const fixtures = (D.plMatches ?? []).filter((x) => x.gw === gw && (x.home === player(pid)?.club || x.away === player(pid)?.club));
+  return fixtures.length > 0 && fixtures.every((x) => named(pid, x.id) === 'out');
 }
 
 export const formationOf = (xi: number[]) =>
@@ -78,14 +92,25 @@ export const formationOf = (xi: number[]) =>
 function nameOf(p: PitchPlayer, club: number, name: string) {
   if (p.owner === undefined) return `<div class="pp-name">${crest(club, 12)}<span>${esc(name)}</span>${p.mark ?? ''}</div>`;
   if (p.owner === null) return `<div class="pp-name"><span>${esc(name)}</span>${p.mark ?? ''}</div>`;
-  return ownerPill(p.owner, p.benched, name, 'div');
+  return ownerPill(p.owner, p.benched, name, { tag: 'div', gw: p.gw });
 }
 
-/** An owned player's name in a real match: a pill in his manager's colours, their avatar at its left, only outlined on the bench. */
-export function ownerPill(owner: number, benched: boolean | undefined, name: string, tag = 'span') {
+/**
+ * An owned player's name in a real match: a pill in his manager's colours, their avatar at
+ * its left, only outlined on the bench. With `gw`, a tap on it opens that manager's
+ * head-to-head that gameweek on its lineup, rather than the player.
+ */
+export function ownerPill(
+  owner: number,
+  benched: boolean | undefined,
+  name: string,
+  { tag = 'span', gw }: { tag?: string; gw?: number } = {},
+) {
   const who = mgr(owner)?.first ?? '?';
   const where = benched ? `on ${who}’s bench` : benched === false ? `in ${who}’s XI` : `in ${who}’s squad`;
-  return `<${tag} class="pp-name owned m${slotOf(owner)}${benched ? ' benched' : ''}" data-tip="${esc(`${name}: ${where}`)}">${avatar(owner, 16)}<span>${esc(name)}</span></${tag}>`;
+  const m = gw === undefined ? undefined : D.matches.find((x) => x.gw === gw && (x.home === owner || x.away === owner));
+  const to = m ? ` data-action="open" data-value="${href.match(m, 'lineup')}"` : '';
+  return `<${tag} class="pp-name owned m${slotOf(owner)}${benched ? ' benched' : ''}"${to} data-tip="${esc(`${name}: ${where}`)}">${avatar(owner, 16)}<span>${esc(name)}</span></${tag}>`;
 }
 
 function pitchPlayer(p: PitchPlayer) {
@@ -153,7 +178,7 @@ function benchRow(p: PitchPlayer) {
   const name =
     p.owner === undefined || p.owner === null
       ? `<div class="mp-sub-name"><span>${esc(pl.name)}</span>${p.mark ?? ''}</div>`
-      : `<div class="mp-sub-name">${ownerPill(p.owner, p.benched, pl.name)}</div>`;
+      : `<div class="mp-sub-name">${ownerPill(p.owner, p.benched, pl.name, { gw: p.gw })}</div>`;
   const where = p.owner === undefined ? `${crest(pl.club, 12)}${esc(club(pl.club).short)} · ` : '';
   return `<a class="mp-sub" href="${href.player(p.pid)}">${photo(p.pid, 28)}<div class="mp-sub-main">${name}<div class="mp-sub-meta">${where}${pl.pos}${p.note ? ` · ${p.note}` : ''}</div></div>${eventRow(p.events)}${p.badge}</a>`;
 }

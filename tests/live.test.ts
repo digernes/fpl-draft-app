@@ -4,9 +4,10 @@ import { describe, it } from 'node:test';
 
 import { buildLiveData } from '../src/build/lineups.ts';
 import type { Season } from '../src/build/season.ts';
-import type { Data, Position, XpParts } from '../src/shared/data.ts';
+import { PL_STATS, type Data, type Position, type XpParts } from '../src/shared/data.ts';
 import {
   liveProjection,
+  playerProjection,
   provisionalBonus,
   scoreLineup,
   playerState,
@@ -134,6 +135,35 @@ describe('scoreLineup live', () => {
     clubs[2] = 2;
     const { [2]: _, ...rest } = everyonePlayed;
     assert.deepEqual(scoreLineup(order, feedWith(rest), info).subs, []);
+    delete clubs[2];
+  });
+
+  it('subs a starter left out of the squad for his match still to come', () => {
+    clubs[2] = 2;
+    const { [2]: _, ...rest } = everyonePlayed;
+    const named = (id: number) => (id === 2 ? 'out' : 'xi');
+    const scored = scoreLineup(order, feedWith(rest), info, undefined, named);
+    assert.deepEqual([scored.subs, scored.off], [[13], [2]]);
+    assert.equal(scored.pts, 22);
+    // On the bench he might still come on, so the substitution waits for full time.
+    assert.deepEqual(scoreLineup(order, feedWith(rest), info, undefined, (id) => (id === 2 ? 'bench' : 'xi')).subs, []);
+    delete clubs[2];
+  });
+
+  it('passes over a bench player left out of the squad, rather than wait for him', () => {
+    clubs[13] = 2;
+    const { [2]: _a, [13]: _b, ...rest } = everyonePlayed;
+    const scored = scoreLineup(order, feedWith(rest), info, undefined, (id) => (id === 13 ? 'out' : 'xi'));
+    assert.deepEqual(scored.subs, [14]);
+    delete clubs[13];
+  });
+
+  it('subs a double gameweek starter only once he is out of both matches', () => {
+    clubs[2] = 2;
+    const { [2]: _, ...rest } = everyonePlayed;
+    const twice: SlimLive = { elements: rest, fixtures: [...fixtures, { id: 3, h: 5, a: 2, started: true, done: true }] };
+    assert.deepEqual(scoreLineup(order, twice, info, undefined, () => undefined).subs, []); // fixture 2's teams aren't out
+    assert.deepEqual(scoreLineup(order, twice, info, undefined, (id, f) => (id === 2 && f === 2 ? 'out' : undefined)).subs, [13]);
     delete clubs[2];
   });
 
@@ -279,6 +309,52 @@ describe('slimLive', () => {
     ]);
     assert.deepEqual(slim.events, { 12: { off: 1, min: 52 }, 13: { on: 1, onAt: 52, min: 9 }, 14: { red: 1 } });
   });
+
+  it('has one sent off off the pitch at once, a substitute too, before his minutes fall behind', () => {
+    const stats = {
+      total_points: -1,
+      minutes: 61,
+      goals_scored: 0,
+      assists: 0,
+      clean_sheets: 0,
+      goals_conceded: 0,
+      starts: 1,
+      red_cards: 1,
+    };
+    const sentOff = (value: number): [{ stat: string; value: number }[], number][] => [
+      [
+        [
+          { stat: 'minutes', value },
+          { stat: 'red_cards', value: 1 },
+        ],
+        10,
+      ],
+    ];
+    const slim = slimLive({
+      elements: {
+        11: { stats: { ...stats, red_cards: 0, total_points: 2 }, explain: [[[{ stat: 'minutes', value: 61 }], 10]] }, // still on
+        12: { stats, explain: sentOff(61) }, // a starter, sent off this minute
+        13: { stats: { ...stats, minutes: 9, starts: 0 }, explain: sentOff(9) }, // a substitute, sent off
+      },
+      fixtures: [
+        {
+          id: 10,
+          team_h: 1,
+          team_a: 2,
+          started: true,
+          finished: false,
+          finished_provisional: false,
+          team_h_score: 0,
+          team_a_score: 0,
+          minutes: 0,
+        },
+      ],
+    });
+    assert.deepEqual(slim.fixtures[0].off, [
+      [12, 61],
+      [13, 9],
+    ]);
+  });
 });
 
 describe('who is still to play', () => {
@@ -295,7 +371,8 @@ describe('who is still to play', () => {
   };
   it('tells live, done, due and blank apart', () => {
     assert.deepEqual(playerState(feed, 99, 1), { state: 'done' });
-    assert.deepEqual(playerState(feed, 99, 4), { state: 'live', min: 60 });
+    assert.deepEqual(playerState(feed, 99, 4), { state: 'live', min: 60, on: false });
+    assert.deepEqual(playerState({ ...feed, elements: { 99: [2, 60] } }, 99, 4), { state: 'live', min: 60, on: true });
     assert.deepEqual(playerState(feed, 99, 6), { state: 'due', ko: '2026-10-25T14:00:00Z', opp: 5, home: false });
     assert.deepEqual(playerState(feed, 99, 7), { state: 'due', ko: '2026-10-27T19:30:00Z', opp: 9, home: false });
     assert.deepEqual(playerState(feed, 99, 10), { state: 'blank' });
@@ -310,7 +387,7 @@ describe('who is still to play', () => {
   it('has nothing more to come from a player taken off', () => {
     const on: SlimLive = { ...feed, fixtures: feed.fixtures.map((f) => (f.id === 2 ? { ...f, off: [[42, 59]] } : f)) };
     assert.deepEqual(playerState(on, 42, 3), { state: 'off', min: 59 });
-    assert.deepEqual(playerState(on, 43, 3), { state: 'live', min: 60 });
+    assert.deepEqual(playerState(on, 43, 3), { state: 'live', min: 60, on: false });
     assert.equal(shareToCome(on, 42, 3), 0);
     const scored = { xi: [42], bench: [], subs: [], off: [], pts: 3, points: () => 3 };
     assert.equal(liveProjection(scored, on, () => ({ pos: 'MID' as const, club: 3 }), { points: () => 6 }).mean, 3);
@@ -331,30 +408,155 @@ describe('who is still to play', () => {
     assert.ok(Math.abs(variance - (lastHalfHour + 1) * 9) < 1e-9);
   });
 
+  // A defender expected to play 81 minutes (and to play at all 95% of the time) for 4.9
+  // points: 1.9 for playing, 1.6 for a clean sheet, 0.6 bonus and 0.8 from the rest.
+  const defender: XpParts = [81, 1.9, 0.4, 0, 0.3, 1.6, -0.4, 0.6, 0, 0.6, -0.1];
+  const asExpected = { points: () => 4.9, parts: () => defender, cleanSheet: { DEF: 4 } };
+  const alone = (pts: number) => ({ xi: [9], bench: [], subs: [], off: [], pts, points: () => pts });
+
   it('works out appearance points, clean sheets and bonus from where the match stands', () => {
-    // A defender 60 minutes into a goalless match with 9 points (2 for playing, 4 for the
-    // clean sheet FPL shows from 60 minutes and 3 provisional bonus). He's expected to
-    // play 81 minutes (and play at all 95% of the time) for 4.9 points: 1.9 for playing,
-    // 1.6 for a clean sheet, 0.6 bonus and 0.8 from the rest.
+    // 60 minutes into a goalless match with 9 points: 2 for playing, 4 for the clean sheet
+    // FPL shows from 60 minutes and 3 provisional bonus, with nobody else in the BPS race.
     const live: SlimLive = {
       elements: { 9: [6, 60] },
       fixtures: [{ id: 1, h: 9, a: 10, started: true, done: false, min: 60, score: [0, 0], bps: [[9, 30]] }],
     };
     const info = () => ({ pos: 'DEF' as const, club: 9 });
-    const parts: XpParts = [81, 1.9, 0.4, 0, 0.3, 1.6, -0.4, 0.6, 0, 0.6, -0.1];
-    const expected = { points: () => 4.9, parts: () => parts, cleanSheet: { DEF: 4 } };
-    const scored = { xi: [9], bench: [], subs: [], off: [], pts: 9, points: () => 9 };
     const onFor = 90 * lastHalfHour * (81 / 0.95 / 90); // the time he's likely to stay on, weighted by when goals come
-    const keepsIt = (1.6 / 4 / 0.95) ** (onFor / 90);
+    const keepsIt = (1.6 / 4 / 0.95) ** lastHalfHour;
     // Nothing more for playing; the rest at his rate a minute; the clean sheet kept with
-    // that chance instead of counted on top of the 4 in; the bonus a third of the way back
-    // from 3 to his 0.6 / 0.95.
-    const rest = (0.8 / 81) * onFor + 4 * (keepsIt - 1) + (0.6 / 0.95 - 3) / 3;
-    assert.ok(Math.abs(liveProjection(scored, live, info, expected).mean - (9 + rest)) < 1e-9);
+    // that chance instead of counted on top of the 4 in; the 3 bonus his, and for the time
+    // left a nudge towards his usual 0.6 / 0.95 from a fair share of a match's 6.
+    const rest = (0.8 / 81) * onFor + 4 * (keepsIt - 1) + lastHalfHour * (0.6 / 0.95 - 6 / 22);
+    assert.ok(Math.abs(liveProjection(alone(9), live, info, asExpected).mean - (9 + rest)) < 1e-9);
     // Once a goal goes in, the clean sheet is gone from the points and from the projection.
     const behind = { ...live, fixtures: [{ ...live.fixtures[0], score: [0, 1] as [number, number] }] };
-    const after = (0.8 / 81) * onFor + (0.6 / 0.95 - 3) / 3;
-    assert.ok(Math.abs(liveProjection({ ...scored, pts: 5 }, behind, info, expected).mean - (5 + after)) < 1e-9);
+    const after = (0.8 / 81) * onFor + lastHalfHour * (0.6 / 0.95 - 6 / 22);
+    assert.ok(Math.abs(liveProjection(alone(5), behind, info, asExpected).mean - (5 + after)) < 1e-9);
+  });
+
+  it('starts at kick-off where his expected points left him, and doesn’t jump at 60 minutes', () => {
+    const info = () => ({ pos: 'DEF' as const, club: 9 });
+    const expected = { ...asExpected, named: () => 'xi' as const };
+    const at = (min: number, played: number, pts: number, started = true) =>
+      liveProjection(
+        alone(pts),
+        {
+          elements: played ? { 9: [pts, played] } : {},
+          fixtures: [{ id: 1, h: 9, a: 10, started, done: false, min, score: [0, 0] }],
+        },
+        info,
+        expected,
+      ).mean;
+    const before = at(0, 0, 0, false);
+    assert.ok(Math.abs(before - 4.9 / 0.95) < 1e-9); // named to start: his expected points if he plays
+    assert.ok(Math.abs(at(1, 0, 0) - before) < 0.05); // before the feed has his minutes
+    assert.ok(Math.abs(at(2, 1, 1) - before) < 0.05);
+    assert.ok(Math.abs(at(60, 60, 6) - at(59, 59, 1)) < 0.05); // FPL's hour and clean sheet in his points
+  });
+
+  it('projects one player as it does a lineup of him alone', () => {
+    const live: SlimLive = {
+      elements: { 9: [6, 60] },
+      fixtures: [
+        {
+          id: 1,
+          h: 9,
+          a: 10,
+          started: true,
+          done: false,
+          min: 60,
+          score: [0, 0],
+          bps: [
+            [9, 30],
+            [5, 28],
+          ],
+        },
+      ],
+    };
+    const info = () => ({ pos: 'DEF' as const, club: 9 });
+    const pts = 6 + 3; // and his 3 provisional bonus
+    assert.ok(Math.abs(playerProjection(9, live, info, asExpected) - liveProjection(alone(pts), live, info, asExpected).mean) < 1e-9);
+  });
+
+  it('takes the bonus from the BPS race, a narrow lead less safe than a wide one', () => {
+    // 70 minutes in: 9 leads the BPS, by 2 or by 20, and has 3 bonus as it stands.
+    const info = (id: number) => ({ pos: 'DEF' as const, club: id === 9 ? 9 : 10 });
+    const match = (bps: [number, number][], off?: [number, number][]): SlimLive => ({
+      elements: { 9: [9, 70] },
+      fixtures: [{ id: 1, h: 9, a: 10, started: true, done: false, min: 70, score: [1, 1], bps, ...(off ? { off } : {}) }],
+    });
+    const race = (lead: number) =>
+      [
+        [9, 28 + lead],
+        [5, 28],
+        [6, 27],
+        [7, 26],
+      ] as [number, number][];
+    const [narrow, wide] = [2, 20].map((lead) => liveProjection(alone(9), match(race(lead)), info, asExpected).mean);
+    assert.ok(wide - narrow > 0.5);
+    // Once FPL has put its live bonus in the points, the relay's stats for the match run the same race.
+    const cells = (bps: number, bonus: number) => PL_STATS.map((s) => (s === 'bps' ? bps : s === 'bonus' ? bonus : 0));
+    const fromStats: SlimLive = {
+      ...match([]),
+      fixtures: [{ ...match([]).fixtures[0], bps: undefined }],
+      matches: { 1: { 9: cells(30, 3), 5: cells(28, 2), 6: cells(27, 1), 7: cells(26, 0) } },
+    };
+    assert.ok(Math.abs(liveProjection(alone(9), fromStats, info, asExpected).mean - narrow) < 1e-9);
+    // Gone off, he can still be caught: some of his 3 goes, and nothing else is to come.
+    const gone = liveProjection(alone(9), match(race(2), [[9, 65]]), info, asExpected).mean;
+    assert.ok(gone < 9 && gone > 8);
+  });
+
+  it('spreads a clean sheet at stake over all of its club’s players on the pitch', () => {
+    // Two defenders 80 minutes into goalless matches, on 3 and 2 provisional bonus: one goal
+    // against costs either his clean sheet and his bonus with it.
+    const parts: XpParts = [81, 1.9, 0.4, 0, 0.3, 1.6, -0.4, 0.6, 0, 0.6, -0.1];
+    const expected = { points: () => 4.9, parts: () => parts, cleanSheet: { DEF: 4 } };
+    const match = (id: number, h: number, bps: [number, number][]): SlimFixture => ({
+      id,
+      h,
+      a: h + 1,
+      started: true,
+      done: false,
+      min: 80,
+      score: [0, 0],
+      bps,
+    });
+    const elements: SlimLive['elements'] = { 1: [9, 80], 2: [8, 80] };
+    const together: SlimLive = {
+      elements,
+      fixtures: [
+        match(1, 9, [
+          [1, 30],
+          [2, 25],
+        ]),
+      ],
+    };
+    const apart: SlimLive = {
+      elements,
+      fixtures: [
+        match(1, 9, [[1, 30]]),
+        match(2, 11, [
+          [3, 30],
+          [2, 25],
+        ]),
+      ],
+    };
+    const spread = (feed: SlimLive, club: (id: number) => number) =>
+      liveProjection(
+        { xi: [1, 2], bench: [], subs: [], off: [], pts: 17, points: () => 0 },
+        feed,
+        (id) => ({ pos: 'DEF', club: club(id) }),
+        expected,
+      ).variance;
+    const share = (1 - 80 / 90) * (1 + 80 / 90 / 4);
+    const keepsIt = (1.6 / 4 / 0.95) ** share;
+    const bet = keepsIt * (1 - keepsIt);
+    // Both in one club's defence: the 4 + 3 and the 4 + 2 go on the same goal.
+    assert.ok(Math.abs(spread(together, () => 9) - (2 * share * 9 + bet * (7 + 6) ** 2)) < 1e-9);
+    // At two clubs, two bets.
+    assert.ok(Math.abs(spread(apart, (id) => (id === 2 ? 11 : 9)) - (2 * share * 9 + bet * (7 ** 2 + 6 ** 2))) < 1e-9);
   });
 
   it('counts the bench player who will come on for a starter who won’t play', () => {

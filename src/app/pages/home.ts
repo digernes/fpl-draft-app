@@ -1,12 +1,13 @@
 // The home page, as fotmob.com's front page: the round in the middle (the draft league's
 // head-to-heads, then the Premier League's matches), the leagues (with the team followed)
 // and the prize on the left, and on the right the next deadline, the table, the recent
-// transfers and the monthly awards. Phones get the sidebars under the round.
+// transfers and the monthly awards. Without the left column (narrower, and on phones under
+// the round) the prize comes after the table, and the leagues are left to the bars.
 
 import { avatar, card, gwNav } from '../components.ts';
 import { countdown, esc, fmtShortDay, fmtTime, ordinal } from '../format.ts';
 import { leagueSvg, premierLeagueSvg, shirtSvg } from '../icons.ts';
-import { first, isArchive, mgr } from '../lookups.ts';
+import { first, isArchive, isLive, mgr } from '../lookups.ts';
 import { featuredGw, matchList, oddsToggle, roundSubtitle } from '../matches.ts';
 import { plRound, plRoundList } from '../pl.ts';
 import type { PageView } from '../render.ts';
@@ -23,11 +24,12 @@ export function pageHome(route: Route): PageView {
     body: `<div class="round-sub"><span>${roundSubtitle(gw) || '&nbsp;'}</span>${D.matches.some((m) => m.gw === gw && m.odds) ? oddsToggle() : ''}</div>`,
     cls: 'round-card',
   });
+  const prize = gwPrizeCard({ compact: true });
   return {
     body: `<div class="front">
       <div class="front-main">${nav}${draftGroup(gw)}${plGroup(gw)}</div>
-      <aside class="front-right">${deadlineCard()}${tableCard({ compact: true })}${recentTransfersCard()}${awardsCard()}</aside>
-      <aside class="front-left">${leaguesCard()}${gwPrizeCard()}</aside>
+      <aside class="front-right">${deadlineCard()}${tableCard({ compact: true })}${prize ? `<div class="front-narrow">${prize}</div>` : ''}${recentTransfersCard()}${awardsCard({ compact: true })}</aside>
+      <aside class="front-left">${leaguesCard()}${prize}</aside>
     </div>`,
   };
 }
@@ -38,8 +40,10 @@ const groupHead = (icon: string, name: string, to: string, note = '') =>
 
 function draftGroup(gw: number) {
   const list = D.matches.filter((m) => m.gw === gw);
+  // Under way, between its matches too: the dot by its name.
+  const on = gw === D.meta.currentGw && isLive() ? '<i class="live-dot" data-tip="Under way"></i>' : '';
   return card({
-    header: groupHead(leagueSvg, esc(D.meta.name), href.league(), `Gameweek ${gw}`),
+    header: groupHead(leagueSvg, esc(D.meta.name), href.league(), `${on}Gameweek ${gw}`),
     body: matchList(list),
     cls: 'match-group',
   });

@@ -40,6 +40,8 @@ export interface Data {
   events?: ById<ById<PlayerEvents>>;
   /** Finished gameweek → player → his underlying numbers, for everyone in a lineup who played. Missing from older archives. */
   underlying?: ById<ById<Underlying>>;
+  /** Beside `underlying`: the points in his xP that stay as FPL scored them, in shared/underlying.ts's AS_SCORED order without the noughts at the end, for its tooltip. Missing from older data. */
+  asScored?: ById<ById<number[]>>;
   /** The real Premier League's matches, the whole season's, in kick-off order. Missing from older archives. */
   plMatches?: PlMatch[];
   /** While a gameweek is being played: its live feed, so the page can tell who is still to play. */
@@ -152,6 +154,21 @@ export interface PlStats {
   moments?: ById<PlMoment[]>;
   /** The matches whose moments were asked for after full time, so they're kept as they are. */
   final?: number[];
+}
+
+/**
+ * stats/season.json: everyone's FPL stats over the season so far, for the Premier League's
+ * Players tab: player id → his minutes, then PL_STATS, then his xP and xCS (shared/underlying.ts;
+ * no xCS where a clean sheet scores nothing for him), for anyone who has played.
+ */
+export interface PlSeasonStats {
+  players: ById<(number | null)[]>;
+  /**
+   * The site's projections for the gameweeks to come (`gws`), for its Projected category:
+   * player id → his expected points in each, then over them all his minutes, goals and
+   * assists, and his points from clean sheets, defensive contributions and bonus.
+   */
+  projected?: { gws: number[]; players: ById<number[]> };
 }
 
 /**

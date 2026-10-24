@@ -38,6 +38,7 @@ export const DEFAULT_OPTIONS: ModelOptions = {
     matches: 10,
     decay: 0.7,
     missed: 0.7,
+    spread: 10,
     absent: 0.035,
     flagPower: 1.25,
   },

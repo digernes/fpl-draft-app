@@ -1,5 +1,6 @@
 /* --- Bottom bar: the way between the pages on phones, as in the FotMob app ------------
-   From 769px the top bar's links take over. */
+   From 769px the top bar's links take over. It runs under the phone's gesture bar, its
+   colour to the screen's foot (viewport-fit=cover in index.html), and clear of a notch. */
 
 .bottom-bar {
   position: fixed;
@@ -10,7 +11,7 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   height: calc(60px + env(safe-area-inset-bottom, 0px));
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   background: var(--header-bg);
   border-top: 1px solid var(--header-border);
 }

@@ -146,7 +146,6 @@ function contestedCard() {
   );
   return card({
     title: 'Most wanted',
-    sub: 'Waiver targets claimed by more than one manager',
     body: rows.length ? `<div class="list">${rows.join('')}</div>` : empty('No contested claims yet'),
   });
 }

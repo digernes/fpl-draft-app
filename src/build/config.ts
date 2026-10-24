@@ -17,6 +17,9 @@ export const ODDS_OVERROUND = 1.05;
 export const ODDS_GAMEWEEKS = 3;
 // Of those, how many show their projected XIs and xP on the page (the rest use them only in the odds).
 export const PROJECTED_GAMEWEEKS = 3;
+// How many gameweeks ahead the Premier League's Player stats project everyone (their
+// Projected category): about a month of fixtures, beyond which a player's barely move.
+export const STATS_GAMEWEEKS = 5;
 export const MIN_SCORE_SPREAD = 13;
 // Season simulation: runs of the remaining fixtures, and how far a manager's true
 // level may sit from their projections (points a week), drawn once per run. Seeded, so

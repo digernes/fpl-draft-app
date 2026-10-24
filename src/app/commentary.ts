@@ -201,18 +201,18 @@ export function commentary(
   }
 
   // An automatic substitute was on the bench until the substitution was made: once his
-  // starter's club had played all its matches, or once he'd come on himself if that was
-  // later. Until then what he did doesn't count (and shows only with the benches), and
-  // then all of it comes in at once.
+  // starter was sure not to play, or once he'd come on himself if that was later. Until
+  // then what he did doesn't count (and shows only with the benches), and then all of it
+  // comes in at once.
   for (const [side, l] of lineups.entries())
     (l.subs ?? []).forEach((sub, i) => {
       const starter = l.off?.[i];
-      const ended = starter === undefined ? null : endOfClub(data, stats, starter, m.gw, isDone);
+      const ended = starter === undefined ? null : outFrom(data, stats, starter, m.gw, isDone);
       const came = firstOn(data, stats, sub, m.gw, byMatch);
       if (!came && !ended) return;
       // Made at the later of the two, in that one's match.
       const [made, match, minute] =
-        ended && (!came || ended.at >= came.at) ? [ended.at, ended.match, 'FT'] : [came!.at, came!.match, came!.minute];
+        ended && (!came || ended.at >= came.at) ? [ended.at, ended.match, ended.minute] : [came!.at, came!.match, came!.minute];
       let before = 0;
       for (const e of entries)
         for (const p of e.players)
@@ -234,7 +234,9 @@ export function commentary(
             what: 'Came in',
             ...(starter !== undefined ? { other: starter } : {}),
           },
-          ...(starter !== undefined ? [{ pid: starter, side: side as 0 | 1, bench: false, pts: 0, what: 'Didn’t play' }] : []),
+          ...(starter !== undefined
+            ? [{ pid: starter, side: side as 0 | 1, bench: false, pts: 0, what: ended?.what ?? 'Didn’t play' }]
+            : []),
         ],
       });
     });
@@ -258,14 +260,23 @@ function endOf(stats: PlStats, pm: PlMatch) {
   return Date.parse(pm.ko ?? '') + (last + 15) * 60_000 + 30_000;
 }
 
-// When a player's club had played all its matches in the gameweek, and the last of them.
-function endOfClub(data: Data, stats: PlStats, pid: number, gw: number, isDone: (pm: PlMatch) => boolean) {
+// When a starter was sure not to play in the gameweek, and in which match: once each of his
+// club's matches was over, or kicked off without him in the squad, the last of them. Null
+// while he might still play.
+function outFrom(data: Data, stats: PlStats, pid: number, gw: number, isDone: (pm: PlMatch) => boolean) {
   const club = data.players[pid]?.club;
-  const last = (data.plMatches ?? [])
-    .filter((pm) => pm.gw === gw && isDone(pm) && (pm.home === club || pm.away === club))
-    .map((match) => ({ at: endOf(stats, match), match }))
-    .sort((a, b) => b.at - a.at)[0];
-  return last ?? null;
+  const named = (pm: PlMatch) => pm.formations?.some((f) => f.lines.some((line) => line.includes(pid)) || f.subs.includes(pid));
+  let last: { at: number; match: PlMatch; minute: string; what: string } | null = null;
+  for (const match of (data.plMatches ?? []).filter((pm) => pm.gw === gw && (pm.home === club || pm.away === club))) {
+    const out = isDone(match)
+      ? { at: endOf(stats, match), match, minute: 'FT', what: 'Didn’t play' }
+      : match.formations && match.ko && !named(match)
+        ? { at: Date.parse(match.ko), match, minute: 'KO', what: 'Not in the squad' }
+        : null;
+    if (!out) return null;
+    if (!last || out.at > last.at) last = out;
+  }
+  return last;
 }
 
 // When a player first came on in the gameweek, in which match and at what minute: its

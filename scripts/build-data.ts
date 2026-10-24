@@ -47,7 +47,14 @@ import {
   writeIfChanged,
   writeSeasonIndex,
 } from '../src/build/output.ts';
-import { buildPlMatches, buildPlStats, fetchFormations, fetchMoments, readMoments } from '../src/build/premier-league.ts';
+import {
+  buildPlMatches,
+  buildPlSeasonStats,
+  buildPlStats,
+  fetchFormations,
+  fetchMoments,
+  readMoments,
+} from '../src/build/premier-league.ts';
 import { readSeason } from '../src/build/season.ts';
 import { simulate } from '../src/build/simulation.ts';
 import {
@@ -80,7 +87,7 @@ const formations = await fetchFormations(season, previous, CACHE_DIR);
 
 const { managers, managerIds, entryByLeagueEntry } = buildManagers(season);
 const matches = buildMatches(season, entryByLeagueEntry);
-const lineups = buildLineups(season, matches);
+const lineups = buildLineups(season, matches, formations);
 const lineup = lineupOf(lineups);
 patchLiveScores(matches, lineup);
 
@@ -120,7 +127,7 @@ const data: Data = {
   plTwins: premierLeagueTwins(overall, plTable),
   lineups,
   events: buildEvents(season, lineups),
-  underlying: buildUnderlying(season, lineups),
+  ...buildUnderlying(season, lineups),
   plMatches: buildPlMatches(season, formations),
   flags: deadlineFlags(season, previous),
   live: buildLiveData(
@@ -157,15 +164,18 @@ if (await writeIfChanged(OUT_FILE, data)) {
 }
 
 // Everyone's stats in each match and what happened in it when, a file per gameweek, which
-// the Premier League's player stats and a match's commentary load when they're opened.
+// the Premier League's player stats and a match's commentary load when they're opened, and
+// the season's so far, for its Players tab.
 // Moments asked for after full time stay as the last build's files had them (on the live
 // site, the deploy downloads them first).
 const STATS_DIR = path.join(path.dirname(OUT_FILE), 'stats');
 const moments = await fetchMoments(season, await readMoments(STATS_DIR), CACHE_DIR);
 const plStats = buildPlStats(season, data.plMatches ?? [], moments);
+const plSeason = buildPlSeasonStats(season, model.upcoming);
 const writeStats = async (dir: string) => {
   await mkdir(dir, { recursive: true });
   for (const s of plStats) await writeIfChanged(path.join(dir, `${s.gw}.json`), s);
+  await writeIfChanged(path.join(dir, 'season.json'), plSeason);
 };
 await writeStats(STATS_DIR);
 

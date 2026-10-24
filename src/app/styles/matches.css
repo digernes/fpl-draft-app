@@ -227,33 +227,57 @@
   font-weight: 500;
 }
 
-.prob-bar {
+/* A player on the pitch, or a gameweek under way: a green dot that softly blinks, as the
+   top bar's Live chip's does. */
+.live-dot {
+  display: inline-block;
+  flex: none;
+  width: 6px;
+  height: 6px;
+  margin: 0 4px 1px 0;
+  border-radius: 50%;
+  background: var(--green-text);
+  vertical-align: middle;
+  animation: blink 2s ease-in-out infinite;
+}
+
+/* Before kick-off, as fotmob.com's Who will win? (its poll): its title centred, then each
+   side's chance under it and the draw's, greyed, under an X, the odds under those. */
+.poll-card .card-header {
+  justify-content: center;
+}
+
+.poll {
   display: flex;
-  gap: 2px;
-  height: 8px;
+  justify-content: space-around;
 }
 
-.prob-bar span {
-  min-width: 2px;
-  border-radius: 4px;
+.poll-side {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  min-width: 69px;
+  font-size: 14px;
+  font-weight: 500;
 }
 
-.prob-draw {
-  background: var(--draw);
-}
-
-.prob-legend {
-  display: flex;
-  justify-content: space-between;
-  margin-top: 8px;
+.poll-side.draw {
   color: var(--text-2);
-  font-size: 12px;
 }
 
-.detail-note {
+.poll-x {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  font-size: 18px;
+}
+
+/* The score the chances come from, its working in its tip. */
+.prob-score {
   color: var(--text-2);
-  font-size: 12px;
-  line-height: 1.5;
+  font-size: 13px;
+  text-align: center;
 }
 
 .gw-nav {

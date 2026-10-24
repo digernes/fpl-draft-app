@@ -9,7 +9,7 @@ export interface Route {
   page: Page;
   /** The page's tab; '' for a page without tabs. */
   tab: string;
-  /** The team (entry), Premier League match (fixture) or player. */
+  /** The team (entry), Premier League match (fixture) or player, or the club of the Premier League's player stats. */
   id?: number;
   /** The gameweek: the home page's round, a fixtures tab's, or a match's. */
   gw?: number;
@@ -21,7 +21,7 @@ export interface Route {
 }
 
 export const LEAGUE_TABS = ['overview', 'table', 'fixtures', 'stats', 'transfer-stats', 'draft'] as const;
-export const PL_TABS = ['overview', 'fixtures', 'table'] as const;
+export const PL_TABS = ['overview', 'fixtures', 'table', 'players'] as const;
 export const TEAM_TABS = ['overview', 'squad', 'fixtures', 'transfers', 'stats'] as const;
 export const MATCH_TABS = ['facts', 'commentary', 'lineup', 'table', 'stats', 'h2h'] as const;
 export const PL_MATCH_TABS = ['facts', 'player-stats'] as const;
@@ -59,6 +59,8 @@ export function parseRoute(hash: string): Route {
     }
     case 'premier-league':
       if (a === 'match' && num(b)) return { page: 'pl-match', tab: tabOf(PL_MATCH_TABS, rest[2]), id: num(b) };
+      // The Player stats tab takes a club, the others a round.
+      if (a === 'players') return { page: 'pl', tab: 'players', id: num(b) };
       return { page: 'pl', tab: tabOf(PL_TABS, a), gw: num(b) };
     case 'transfers':
       return { page: 'transfers', tab: '' };
@@ -86,8 +88,9 @@ export const href = {
   home: (gw?: number) => (gw ? `#/round/${gw}` : '#/'),
   league: (tab = 'overview', arg?: string | number) =>
     `#/league${tab === 'overview' && arg == null ? '' : `/${tab}`}${arg != null ? `/${arg}` : ''}`,
-  pl: (tab = 'overview', gw?: number) =>
-    `#/premier-league${tab === 'overview' && gw == null ? '' : `/${tab}`}${gw != null ? `/${gw}` : ''}`,
+  /** A tab, with its round (or for the Player stats tab, a club). */
+  pl: (tab = 'overview', arg?: number) =>
+    `#/premier-league${tab === 'overview' && arg == null ? '' : `/${tab}`}${arg != null ? `/${arg}` : ''}`,
   transfers: () => '#/transfers',
   teams: () => '#/teams',
   team: (id: number, tab = 'overview') => `#/team/${id}${tabPath(tab, 'overview')}`,

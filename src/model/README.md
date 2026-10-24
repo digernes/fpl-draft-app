@@ -60,6 +60,12 @@ points = his minutes × (his goals and assists per xG of his club's × his club'
     rotation risk and someone who has lost his place each come out as they should. The
     minutes that matter count scenario by scenario: 60 for a clean sheet and the second
     appearance point, and enough to reach the defensive threshold.
+  - **Spread.** A part of a match is a spread, not a certainty: one who came off at 62
+    might go at 52 or 72 next time. So each one within 20 minutes of the hour becomes a
+    rough normal, 10 minutes either way and a little at 20 (90 at most). Without it, a 62 would
+    always reach the hour and a 58 never, and a defender who comes off just after it
+    would keep almost all of a full match's clean sheet points from far fewer minutes:
+    a shorter match is likelier to stay clean, and FPL only counts the goals while he's on.
   - **Missed matches** count 0.7 of a played one. Often it was an injury or a ban that
     is over, or his flag would still say so, so a regular who missed a week is still a
     regular.

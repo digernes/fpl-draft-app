@@ -30,6 +30,9 @@ describe('router', () => {
     assert.deepEqual(parseRoute('#/premier-league/table'), { page: 'pl', tab: 'table', gw: undefined });
     assert.deepEqual(parseRoute('#/premier-league/match/64'), { page: 'pl-match', tab: 'facts', id: 64 });
     assert.deepEqual(parseRoute('#/premier-league/match/64/player-stats'), { page: 'pl-match', tab: 'player-stats', id: 64 });
+    assert.deepEqual(parseRoute('#/premier-league/players'), { page: 'pl', tab: 'players', id: undefined });
+    assert.deepEqual(parseRoute('#/premier-league/players/14'), { page: 'pl', tab: 'players', id: 14 });
+    assert.equal(href.pl('players', 14), '#/premier-league/players/14');
     assert.deepEqual(parseRoute('#/team/123/squad'), { page: 'team', tab: 'squad', id: 123 });
     assert.deepEqual(parseRoute('#/match/9/1-2/stats'), { page: 'match', tab: 'stats', gw: 9, home: 1, away: 2 });
     assert.deepEqual(parseRoute('#/transfers'), { page: 'transfers', tab: '' });
@@ -469,5 +472,34 @@ describe('commentary', () => {
       [[3, true, 1]],
     );
     assert.deepEqual(sub?.score, [7, 1]);
+  });
+
+  it('brings an automatic substitute in at the kick-off his starter wasn’t in the squad for', () => {
+    // 10's starter 4 (club 3) isn't in the squad for club 3's match the next day, so 3 comes in.
+    const later: PlMatch = {
+      id: 8,
+      gw: 5,
+      home: 3,
+      away: 4,
+      ko: '2026-10-04T14:00:00Z',
+      formations: [
+        { shape: '4-4-2', lines: [[40]], subs: [41] },
+        { shape: '4-4-2', lines: [[50]], subs: [] },
+      ],
+    };
+    const both = { ...d, players: { ...d.players, 4: { pos: 'MID', club: 3 } }, plMatches: [pm, later] } as unknown as Data;
+    const [latest, ...rest] = commentary(both, stats, m, [lineup([1, 3], [4], [3], [4]), lineup([2])]);
+    assert.deepEqual(
+      [latest.kind, latest.minute, latest.match.id, latest.at, latest.score],
+      ['autosub', 'KO', 8, Date.parse(later.ko!) + 1, [10, 1]],
+    );
+    assert.deepEqual(
+      latest.players.map((p) => [p.pid, p.what, p.pts]),
+      [
+        [3, 'Came in', 1],
+        [4, 'Not in the squad', 0],
+      ],
+    );
+    assert.ok(!rest.some((e) => e.players.some((p) => p.pid === 3))); // on the bench until then
   });
 });

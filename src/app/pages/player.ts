@@ -25,6 +25,7 @@ import {
 import { eventRow } from '../event-icons.ts';
 import { esc, fmtShortDay, ordinal, plural, sum } from '../format.ts';
 import { club, first, isArchive, liveParts, liveXp, mgr, nextParts, nextXp, opponents, partsAt, player, xpAt } from '../lookups.ts';
+import { projectedFor } from '../matches.ts';
 import { playerHistory, type History, type StoryEvent, type Week } from '../player-history.ts';
 import { clubMatches, lineEvents, linesIn, plState } from '../pl.ts';
 import type { PageView } from '../render.ts';
@@ -41,7 +42,7 @@ export function pagePlayer(route: Route): PageView {
   const h = playerHistory(D, pid);
   const owner = p.owner
     ? `<a class="owner-chip" href="${href.team(p.owner)}">${avatar(p.owner, 24)}<span>${first(p.owner)}</span></a>`
-    : tag('Free agent', 'In nobody’s squad');
+    : tag('Free agent');
   const news = p.status !== 'a' ? `<div class="player-news">${tag('!', '', 'tag-flag')} ${esc(p.news || 'Flagged by FPL')}</div>` : '';
   return {
     title: p.name,
@@ -49,7 +50,7 @@ export function pagePlayer(route: Route): PageView {
       logo: photo(pid, 64),
       // Whose he is, beside his name.
       title: `<span>${esc(p.full)}</span>${owner}`,
-      sub: `${crest(p.club, 16)} ${esc(club(p.club)?.name ?? '')} · ${POSITIONS[p.pos]}`,
+      sub: `<a class="club-link" href="${href.pl('players', p.club)}">${crest(p.club, 16)} ${esc(club(p.club)?.name ?? '')}</a> · ${POSITIONS[p.pos]}`,
       cls: 'player-header',
     },
     body: `${news}<div class="cols">
@@ -210,7 +211,9 @@ function weekRow(pid: number, p: Player, w: Week, sub: StoryEvent | undefined) {
 // is still to play).
 function pointsFor(pid: number, pts: number, matches: PlMatch[], bonus: number) {
   const due = pts === 0 && matches.length > 0 && matches.every((m) => plState(m).state === 'due') && matches[0].gw === D.meta.currentGw;
-  return due ? xpPill(liveXp(pid), liveParts(pid), opponents(player(pid).club, matches[0].gw), ' (not played yet)') : ptsPill(pts, bonus);
+  return due
+    ? xpPill(liveXp(pid), liveParts(pid), opponents(player(pid).club, matches[0].gw), ' (not played yet)')
+    : ptsPill(pts, bonus, { projected: projectedFor(pid, matches[0]?.gw) });
 }
 
 // A double gameweek's two matches as one: what he did in both.
@@ -251,7 +254,6 @@ function ownersCard(h: History) {
     );
   return card({
     title: 'Points for each owner',
-    sub: 'In the XI, and as a free agent',
     body: rows.length ? `<div class="list">${rows.join('')}</div>` : empty('Not played yet'),
   });
 }

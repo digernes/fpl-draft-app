@@ -3,7 +3,7 @@
 import type { Data, SeasonEntry } from '../shared/data.ts';
 import { provisionalBonus, scoreLineup, type SlimLive } from '../shared/live.ts';
 import { mergeTransfers, type SlimTransfers } from '../shared/transfers.ts';
-import { gwInfo, isArchive, isLive, player, seasonEntry, seasonSlug } from './lookups.ts';
+import { gwInfo, isArchive, isLive, namedIn, player, seasonEntry, seasonSlug } from './lookups.ts';
 import { renderAll, renderView } from './render.ts';
 import {
   D,
@@ -58,11 +58,12 @@ function applyLive(feed: SlimLive) {
   const gw = D.meta.currentGw;
   const doubles = new Set(gwInfo(gw)?.doubles ?? []);
   const lineups: Record<number, LiveLineup> = {};
+  const named = namedIn(gw);
   let points: (id: number) => number = () => 0;
   for (const m of D.managers) {
     const l = D.lineups[m.id]?.[gw];
     if (!l?.picks) continue;
-    const scored = scoreLineup(l.picks, feed, (pid) => player(pid) ?? { pos: undefined, club: undefined }, D.meta.formation);
+    const scored = scoreLineup(l.picks, feed, (pid) => player(pid) ?? { pos: undefined, club: undefined }, D.meta.formation, named);
     const dgw = scored.xi.filter((pid) => doubles.has(player(pid)?.club)).length;
     points = scored.points;
     lineups[m.id] = {

@@ -16,7 +16,6 @@
 .gw-select select,
 .match,
 .squad-summary,
-.side-link,
 .rc-row,
 .fx-row,
 .h2h-row,
@@ -62,9 +61,12 @@
     color: var(--text);
   }
 
-  .ps-table tbody tr:hover td,
   .h2h-row:hover {
     background: var(--hover);
+  }
+
+  .ps-table tbody tr:hover > td {
+    background: var(--table-hover);
   }
 
   .pill:hover {
@@ -93,7 +95,6 @@
     background: var(--match-hover);
   }
 
-  .side-link:hover,
   .rc-row:hover,
   .fx-row:hover,
   .sq-row:hover,
@@ -111,6 +112,8 @@
   .ml-match:hover > span:not(.livep),
   .mh-team:is(a):hover .mh-name,
   .mh-scorers a:hover,
+  .club-link:hover .who-name,
+  .poster-sub .club-link:hover,
   .tl-text a:hover,
   .tl-main a:hover,
   .lrow a:hover,
@@ -130,11 +133,15 @@
   }
 
   .form-item:hover,
+  .tf-row:hover,
   .next-match:hover {
     opacity: 0.75;
   }
 
-  .mo-col:hover i,
+  .mo-cell:hover .mo-mark {
+    opacity: 1;
+  }
+
   .tl-pts a:hover .ptsp,
   .tl-who a:hover .av {
     opacity: 0.75;

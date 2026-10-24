@@ -1,7 +1,7 @@
 // Puts the page the address asks for on screen: its header and tabs, its body, the
 // document title, and which of the top bar's and the bottom bar's links is lit.
 
-import { avatar, markLoadingPhotos } from './components.ts';
+import { alignHeads, avatar, markLoadingPhotos } from './components.ts';
 import { countdown, esc, fmtShortDay, fmtStamp, fmtTime } from './format.ts';
 import { caretSvg, leagueSvg, matchesSvg, premierLeagueSvg, shirtSvg, swapSvg } from './icons.ts';
 import { isLive, mgr, seasonLabel, seasonSlug } from './lookups.ts';
@@ -24,6 +24,8 @@ export interface PageView {
   title?: string;
   header?: Header;
   body: string;
+  /** A right column (and the classes of the grid it makes with the body), as a match's page has on fotmob.com: the header then heads the body's column. */
+  aside?: { html: string; cls: string };
 }
 
 const PAGES: Record<Page, (route: Route) => PageView> = {
@@ -89,7 +91,10 @@ export function renderView() {
   // changed): without sliding up again, and scrolled where it was.
   const sheet = app.querySelector<HTMLDialogElement>('dialog[open]');
   const scrolled = sheet?.querySelector('.sheet-body')?.scrollTop ?? 0;
-  app.innerHTML = `${page.header ? pageHeader(page.header) : ''}<div class="view" id="view">${page.body}</div>`;
+  const header = page.header ? pageHeader(page.header) : '';
+  app.innerHTML = page.aside
+    ? `<div class="view" id="view"><div class="cols ${page.aside.cls}"><div class="col">${header}${page.body}</div><div class="col">${page.aside.html}</div></div></div>`
+    : `${header}<div class="view" id="view">${page.body}</div>`;
   const again = sheet?.id ? document.getElementById(sheet.id) : null;
   if (again instanceof HTMLDialogElement) {
     again.classList.add('kept');
@@ -97,6 +102,7 @@ export function renderView() {
     again.querySelector('.sheet-body')?.scrollTo({ top: scrolled });
   }
   markLoadingPhotos(app);
+  alignHeads(app);
   revealPicked();
   document.title = page.title ? `${page.title} · ${D.meta.name}` : D.meta.name;
   if (key !== last) recordVisit(route);

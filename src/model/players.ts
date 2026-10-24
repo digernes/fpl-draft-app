@@ -28,6 +28,12 @@ export interface PlayerOptions {
   decay: number;
   /** How much a match he missed counts next to one he played: often it was an injury or a ban, which his flag now says is over. */
   missed: number;
+  /**
+   * How far a part of a match he played might go either way next time, in minutes: one
+   * who came off at 62 might go at 52 or 72, which decides an hour's two points and a
+   * clean sheet. Only those it could take across the hour (0: just as he played them).
+   */
+  spread: number;
   /** The chance a player doesn't play at all, whatever his recent minutes say (a knock, a rest). */
   absent: number;
   /**
@@ -217,9 +223,22 @@ export function minutesScenarios(h: History, o: PlayerOptions): (pid: number, cl
     const minutes = (recent.get(club) ?? []).map((m) => played.get(`${m.fixture}:${pid}`) ?? 0);
     const weights = minutes.map((x, i) => o.decay ** i * (x > 0 ? 1 : o.missed));
     const total = weights.reduce((t, w) => t + w, 0);
-    return minutes.map((x, i) => ({ minutes: x, weight: total > 0 ? weights[i] / total : 1 / minutes.length }));
+    return minutes.flatMap((x, i) => {
+      const weight = total > 0 ? weights[i] / total : 1 / minutes.length;
+      if (!o.spread || x <= 0 || x >= 90 || Math.abs(x - 60) >= 2 * o.spread) return [{ minutes: x, weight }];
+      return SPREAD.map(([k, p]) => ({ minutes: Math.min(90, Math.max(1, x + k * o.spread)), weight: weight * p }));
+    });
   };
 }
+
+// A part of a match, spread over `spread` and twice that either way, roughly a normal's.
+const SPREAD = [
+  [-2, 0.06],
+  [-1, 0.24],
+  [0, 0.4],
+  [1, 0.24],
+  [2, 0.06],
+] as const;
 
 export interface StandInOptions {
   /** A starter's usual minutes by position, for a stand-in who gets the start. */

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>FotMob Draft League</title>
   <meta name="description" content="The FotMob FPL Draft League: its rounds with odds, tables, teams, players and every move, and the real Premier League beside it.">
   <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%2300985f'/%3E%3Cpath d='M10 8h12v4h-8v3h7v4h-7v5h-4z' fill='%23fff'/%3E%3C/svg%3E">
@@ -14,12 +14,14 @@
   <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,700&display=swap">
   <link rel="stylesheet" href="assets/styles.css">
   <script>
-    // Pick the theme before first paint so dark mode never flashes white.
+    // Pick the theme before first paint so dark mode never flashes white, the phone's bars
+    // too (chrome.ts keeps them in step after that).
     (function () {
       var theme = 'system';
       try { theme = localStorage.getItem('draft.theme') || 'system'; } catch (e) {}
       var dark = theme === 'dark' || (theme === 'system' && matchMedia('(prefers-color-scheme: dark)').matches);
       document.documentElement.dataset.theme = dark ? 'dark' : 'light';
+      document.querySelector('meta[name="theme-color"]').setAttribute('content', dark ? '#1a1a1a' : '#ffffff');
     })();
   </script>
   <script type="module" src="assets/app.js"></script>

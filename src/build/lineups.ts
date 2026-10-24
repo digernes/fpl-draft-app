@@ -2,9 +2,9 @@
 // the double-gameweek adjustment, bench points and expected points, and what the
 // players in it did.
 
-import type { ById, Data, LiveData, Lineup, Manager, Match, Underlying, XpParts } from '../shared/data.ts';
-import { scoreLineup, slimLive, type PlayerEvents, type SlimLive } from '../shared/live.ts';
-import { packUnderlying, underlyingOf } from '../shared/underlying.ts';
+import type { ById, Data, LiveData, Lineup, Manager, Match, PlFormation, Underlying, XpParts } from '../shared/data.ts';
+import { namedFrom, scoreLineup, slimLive, type PlayerEvents, type SlimLive } from '../shared/live.ts';
+import { packAsScored, packUnderlying, underlyingOf, type Scored } from '../shared/underlying.ts';
 import { readScoring } from '../model/points.ts';
 import { DGW_PENALTY } from './config.ts';
 import type { Season } from './season.ts';
@@ -47,8 +47,10 @@ export function buildMatches(season: Season, entryByLeagueEntry: Map<number, num
 
 export type Lineups = ById<ById<Lineup>>;
 
-export function buildLineups(season: Season, matches: Match[]) {
+/** `formations`: the real matches', by fixture, for who's in each squad. */
+export function buildLineups(season: Season, matches: Match[], formations: Map<number, [PlFormation, PlFormation]> = new Map()) {
   const { picks, finishedGws, live, doubleClubs, clubOf, pointsIn, positionOf, formation } = season;
+  const named = namedFrom((fixture) => formations.get(fixture));
   const matchPoints = new Map<string, number | null>();
   for (const m of matches.filter((x) => x.started)) {
     matchPoints.set(`${m.home}:${m.gw}`, m.homePts);
@@ -77,7 +79,7 @@ export function buildLineups(season: Season, matches: Match[]) {
       } else {
         // Still being played: score it as the page does live (provisional bonus and
         // auto-subs) rather than wait for the draft site's own head-to-head numbers.
-        ({ xi, bench, subs, off, pts } = scoreLineup(order, (liveFeeds[gw] ??= slimLive(live[gw])), playerInfo, formation));
+        ({ xi, bench, subs, off, pts } = scoreLineup(order, (liveFeeds[gw] ??= slimLive(live[gw])), playerInfo, formation, named));
       }
       const doubles = new Set(doubleClubs[gw]);
       const dgw = xi.filter((id) => doubles.has(clubOf(id) as number)).length;
@@ -186,25 +188,33 @@ export function patchLiveScores(matches: Match[], lineup: ReturnType<typeof line
 }
 
 // Each lineup player's xG, xA, expected clean sheets and expected points, gameweek by
-// gameweek, for the pitches' lineup filters. Only players who got on the pitch.
-export function buildUnderlying(season: Season, lineups: Lineups): ById<ById<Underlying>> {
-  const out: ById<ById<Underlying>> = {};
+// gameweek, for the pitches' lineup filters, and the points in those that stay as scored,
+// for their tooltips. Only players who got on the pitch.
+export function buildUnderlying(season: Season, lineups: Lineups) {
+  const underlying: ById<ById<Underlying>> = {};
+  const asScored: ById<ById<number[]>> = {};
   for (const gw of season.finishedGws) {
     const ids = Object.values(lineups).flatMap((byGw) => [...(byGw[gw]?.xi ?? []), ...(byGw[gw]?.bench ?? [])]);
     const week: ById<Underlying> = {};
+    const kept: ById<number[]> = {};
     for (const pid of [...ids].sort((a, b) => a - b)) {
-      const u = packUnderlying(underlyingIn(season, pid, gw));
-      if (u) week[pid] = u;
+      const u = underlyingIn(season, pid, gw);
+      const [packed, parts] = [packUnderlying(u), packAsScored(u)];
+      if (packed) week[pid] = packed;
+      if (parts) kept[pid] = parts;
     }
-    if (Object.keys(week).length) out[gw] = week;
+    if (Object.keys(week).length) [underlying[gw], asScored[gw]] = [week, kept];
   }
-  return out;
+  return { underlying, asScored };
 }
 
-// A player's underlying numbers in a finished gameweek (shared/underlying.ts).
+// A player's underlying numbers in a finished gameweek (shared/underlying.ts), with FPL's
+// points for each of his stats from its explanation of them, match by match.
 export function underlyingIn(season: Season, pid: number, gw: number) {
-  const s = season.live[gw]?.elements[pid]?.stats;
-  if (!s) return undefined;
+  const el = season.live[gw]?.elements[pid];
+  if (!el) return undefined;
+  const scored: Scored = {};
+  for (const [stats] of el.explain ?? []) for (const { stat, points = 0 } of stats) scored[stat] = (scored[stat] ?? 0) + points;
   const fixtures = season.doubleClubs[gw]?.includes(season.clubOf(pid) as number) ? 2 : 1;
-  return underlyingOf(s, season.boot.settings.scoring, season.positionOf(pid), fixtures);
+  return underlyingOf(el.stats, season.boot.settings.scoring, season.positionOf(pid), fixtures, scored);
 }

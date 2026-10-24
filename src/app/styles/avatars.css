@@ -179,20 +179,21 @@
   font-weight: 500;
 }
 
+/* As fotmob.com's ratings (pointsTier): red, orange and green, and blue for a match's best. */
+.ptsp:is(.p0, .p1, .p2, .top) {
+  color: var(--pts-text);
+}
 .ptsp.p0 {
-  background: var(--lose);
+  background: var(--pts-low);
 }
 .ptsp.p1 {
-  background: #f08022;
+  background: var(--pts-mid);
 }
 .ptsp.p2 {
-  background: var(--draw);
+  background: var(--pts-high);
 }
-.ptsp.p3 {
-  background: var(--win);
-}
-.ptsp.p4 {
-  background: #0e87e0;
+.ptsp.top {
+  background: var(--pts-top);
 }
 
 .ptsp.xp {

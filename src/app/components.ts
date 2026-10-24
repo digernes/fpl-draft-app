@@ -2,7 +2,7 @@
 
 import type { MatchResult, XpParts } from '../shared/data.ts';
 import { onAction } from './actions.ts';
-import { esc, ordinal, plural } from './format.ts';
+import { esc, figure, ordinal, plural } from './format.ts';
 import { caretSvg, chevronSvg, infoSvg, triangleSvg } from './icons.ts';
 import { club, mgr, player, slotOf } from './lookups.ts';
 import { href } from './router.ts';
@@ -63,16 +63,59 @@ export function markLoadingPhotos(root: ParentNode) {
   for (const img of root.querySelectorAll<HTMLImageElement>('.photo img')) if (!img.complete) img.classList.add('loading');
 }
 
-export const pointsTier = (pts: number) => (pts >= 10 ? 'p4' : pts >= 6 ? 'p3' : pts >= 3 ? 'p2' : pts >= 1 ? 'p1' : 'p0');
+// A table's header apart from its rows, so that it can stay under the top bar as the page
+// scrolls (a header inside a box that scrolls sideways can't): the header follows the rows
+// sideways. Where the browser can tie that to the scroll itself, a scroll-driven animation
+// (player-stats.css), it only needs to know how far they go; elsewhere it's moved along on
+// every scroll of the rows. Run after each render and resize, and on those scrolls (chrome.ts).
+export function alignHeads(root: ParentNode = document) {
+  for (const rows of root.querySelectorAll<HTMLElement>('.split-rows')) alignHead(rows);
+}
 
-// With bonus points, the way FPL shows them: 10+3 rather than 13.
-export function ptsPill(pts: number, bonus = 0) {
-  if (!bonus) return `<span class="ptsp ${pointsTier(pts)}">${pts}</span>`;
-  return `<span class="ptsp ${pointsTier(pts)}" data-tip="${plural(pts, 'point')}, ${bonus} of them bonus">${pts - bonus}+${bonus}</span>`;
+export function alignHead(rows: HTMLElement) {
+  const head = rows.previousElementSibling;
+  if (!(head instanceof HTMLElement) || !head.matches('.split-head')) return;
+  head.style.setProperty('--shift', `${rows.scrollWidth - rows.clientWidth}px`);
+  if (!tiedToScroll) head.scrollLeft = rows.scrollLeft;
+}
+
+const tiedToScroll = typeof CSS !== 'undefined' && CSS.supports('animation-timeline: --a');
+
+// Points coloured as fotmob.com colours its ratings: red for nothing (or less), orange up to
+// 5, green from 6 (a goal, or a defender's clean sheet), and blue for the best in a match once
+// it's over (`top` in ptsPill), whatever he scored.
+export const pointsTier = (pts: number) => (pts >= 6 ? 'p2' : pts >= 1 ? 'p1' : 'p0');
+
+/**
+ * The best in a match by `value`, for the blue, and none when the best is nothing. Of those
+ * level, the one ahead by `tiebreak` (all of them while it can't tell them apart).
+ */
+export function bestOf(ids: number[], value: (id: number) => number | undefined, tiebreak?: (id: number) => number | undefined) {
+  const top = (list: number[], by: (id: number) => number | undefined) => {
+    const best = Math.max(...list.map((id) => by(id) ?? -Infinity));
+    return best === -Infinity ? list : list.filter((id) => by(id) === best);
+  };
+  if (!ids.some((id) => (value(id) ?? 0) > 0)) return new Set<number>();
+  const level = top(ids, value);
+  return new Set(tiebreak && level.length > 1 ? top(level, tiebreak) : level);
+}
+
+// With bonus points, the way FPL shows them: 10+3 rather than 13. While his gameweek is
+// played, the tip has where it's heading (`projected`).
+export function ptsPill(pts: number, bonus = 0, { top = false, projected }: { top?: boolean; projected?: number } = {}) {
+  const tip = [
+    projected !== undefined && `${plural(pts, 'point')} so far`,
+    projected !== undefined && `${tenths(projected)} projected`,
+    top && 'the match’s best',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const attr = tip ? ` data-tip="${tip[0].toUpperCase()}${tip.slice(1)}"` : '';
+  return `<span class="ptsp ${top ? 'top' : pointsTier(pts)}"${attr}>${bonus ? `${figure(pts - bonus)}+${bonus}` : figure(pts)}</span>`;
 }
 
 const XP_PARTS = ['Playing', 'Goals', 'Penalties', 'Assists', 'Clean sheet', 'Conceded', 'Defcon', 'Saves', 'Bonus', 'Cards'];
-const tenths = (x: number) => (x < 0 ? `−${(-x).toFixed(1)}` : x.toFixed(1));
+export const tenths = (x: number) => (x < 0 ? `−${(-x).toFixed(1)}` : x.toFixed(1));
 
 // Expected points, with a tip that takes them apart when the site's model gave the parts
 // (FPL's form has none): his expected minutes, who against on the line below, then every

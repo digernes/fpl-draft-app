@@ -3,18 +3,19 @@
 // squad he was in that week, and what each draft team took from the match. While it is
 // being played the lineups come from the live relay's feed, fresher than data.json's. A
 // Player stats tab has everyone's FPL stats in it (pl-stats.ts); the right column, what
-// the draft took from it and the round's other matches, stays on both tabs.
+// the draft took from it and the round's other matches, stays on both tabs (on one column,
+// under the Facts tab alone).
 
 import type { PlLine, PlMatch, PlMoment } from '../../shared/data.ts';
 import type { PlayerEvents } from '../../shared/live.ts';
-import { avatar, card, crest, empty, listRow, ptsPill, roundCard, xpPill, type RoundRow } from '../components.ts';
+import { avatar, bestOf, card, crest, empty, listRow, ptsPill, roundCard, xpPill, type RoundRow } from '../components.ts';
 import { esc, fmtShortDay, fmtTime, fmtWeekday, plural, sum } from '../format.ts';
 import { ballSvg, cardSvg, chevronSvg, missSvg, premierLeagueSvg } from '../icons.ts';
-import { club, first, lineupFor, nextParts, nextXp, player } from '../lookups.ts';
-import { statusDot } from '../matches.ts';
+import { club, first, gwInfo, lineupFor, nextParts, nextXp, player } from '../lookups.ts';
+import { projectedFor, statusDot } from '../matches.ts';
 import { matchPitch, playerColumns, type PitchPlayer, type PitchSide } from '../pitch.ts';
 import { lineEvents, plMatch, plRound, plState } from '../pl.ts';
-import { playerLeadsCard, playerStatsCard, statsFor, type StatsRow } from '../pl-stats.ts';
+import { bpsIn, playerLeadsCard, playerStatsCard, statsFor, type StatsRow } from '../pl-stats.ts';
 import type { PageView } from '../render.ts';
 import { href, PL_MATCH_TABS, type Route } from '../router.ts';
 import { D, live, state } from '../state.ts';
@@ -35,10 +36,8 @@ export function pagePlMatch(route: Route): PageView {
   const sides = linesOf(m);
   const main =
     route.tab === 'player-stats'
-      ? playerStatsCard(m.gw, m.id, statsRows(m, sides), plState(m).state === 'live')
+      ? playerStatsCard(m.gw, m.id, statsRows(m, sides))
       : `${playerLeadsCard(m.gw, m.id, statsRows(m, sides), href.plMatch(m.id, 'player-stats'))}${lineupCard(m, sides)}${squadsCard(m)}`;
-  // As on fotmob.com, the right column stays the same whichever tab is open.
-  const side = `${sides ? draftCard(m, sides) : ''}${roundMatches(m)}`;
   return {
     title: `${club(m.home)?.name} v ${club(m.away)?.name}`,
     header: {
@@ -47,7 +46,9 @@ export function pagePlMatch(route: Route): PageView {
       tab: route.tab,
       cls: 'match-header',
     },
-    body: `<div class="cols cols-match"><div class="col">${main}</div><div class="col">${side}</div></div>`,
+    body: main,
+    // As on fotmob.com, the right column stays the same whichever tab is open.
+    aside: { html: `${sides ? draftCard(m, sides) : ''}${roundMatches(m)}`, cls: `cols-match${route.tab === 'facts' ? ' facts' : ''}` },
   };
 }
 
@@ -61,6 +62,7 @@ function statsRows(m: PlMatch, sides: [Line[], Line[]] | null): StatsRow[] {
     pts: l?.pts ?? 0,
     owner: ownerOf(pid, m.gw) ?? null,
     benched: m.gw <= D.meta.currentGw ? benched(pid, m.gw) : undefined,
+    gw: m.gw,
     ...(l ? {} : { unused: true }),
   });
   const played = new Set((sides ?? [[], []]).flat().map((l) => l.pid));
@@ -118,8 +120,9 @@ function poster(m: PlMatch, sides: [Line[], Line[]] | null) {
       ? `<span class="mh-time">${m.ko ? fmtTime.format(new Date(m.ko)) : 'TBC'}</span>`
       : `<span class="mh-score">${s.score?.[0] ?? 0} - ${s.score?.[1] ?? 0}</span>`;
   const status = s.state === 'due' ? '' : s.state === 'done' ? 'Full time' : statusDot('live', s.min ? `${s.min}’` : 'Live');
+  // Each club leads to its players' stats, as its name does in the table.
   const side = (id: number, cls: string) =>
-    `<div class="mh-team ${cls}">${crest(id, 48)}<span class="mh-team-text"><span class="mh-name">${esc(club(id)?.name ?? '?')}</span></span></div>`;
+    `<a class="mh-team ${cls}" href="${href.pl('players', id)}">${crest(id, 48)}<span class="mh-team-text"><span class="mh-name">${esc(club(id)?.name ?? '?')}</span></span></a>`;
   const file = statsFor(m.gw);
   const moments = typeof file === 'object' ? (file.moments?.[m.id] ?? null) : null;
   return `<div class="mh">
@@ -178,14 +181,31 @@ function incidents(sides: [Line[], Line[]], i: 0 | 1, score: number, moments: Pl
 function lineupCard(m: PlMatch, sides: [Line[], Line[]] | null) {
   const lineOf = new Map((sides ?? [[], []]).flat().map((l) => [l.pid, l]));
   const ahead = !sides && m.gw === D.meta.nextGw;
+  // The match's best of those who played is blue after full time (on a tie, by BPS).
+  const over = sides && plState(m).state === 'done';
+  const top = over
+    ? bestOf(
+        [...lineOf.keys()],
+        (pid) => lineOf.get(pid)?.pts,
+        (pid) => bpsIn(pid, m.gw, m.id),
+      )
+    : new Set<number>();
+  // A player's points here are this match's, so only one with no other match this gameweek has his projection in their tip.
+  const doubles = new Set(gwInfo(m.gw)?.doubles ?? []);
+  const once = (pid: number) => !doubles.has(player(pid)?.club);
   const onPitch = (pid: number): PitchPlayer => {
     const l = lineOf.get(pid);
     return {
       pid,
-      badge: l ? ptsPill(l.pts, l.events?.bonus ?? 0) : ahead ? xpPill(nextXp(pid), nextParts(pid)) : '',
+      badge: l
+        ? ptsPill(l.pts, l.events?.bonus ?? 0, { top: top.has(pid), projected: once(pid) ? projectedFor(pid, m.gw) : undefined })
+        : ahead
+          ? xpPill(nextXp(pid), nextParts(pid))
+          : '',
       events: l?.events,
       owner: ownerOf(pid, m.gw) ?? null,
       benched: m.gw <= D.meta.currentGw ? benched(pid, m.gw) : undefined,
+      gw: m.gw,
       faded: Boolean(sides) && !l, // a substitute who didn't come on
     };
   };

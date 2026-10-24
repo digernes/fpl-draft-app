@@ -53,9 +53,12 @@ export const state = {
   due: '', // what the pitches' players still to play show: 'xp' (projected points), 'ko' (kick-off) or '' (projections before a gameweek, kick-offs once it's on)
   squadScope: 'now', // a team's squad: 'now' (the squad) or 'all' (everyone ever owned)
   squadSort: 'lineup', // a team's squad's column: 'lineup' (XI, bench, new signings), 'gw', 'xp' or 'total'
-  statsCategory: 'top', // a Premier League match's player stats: 'top', 'attack', 'defence', 'goalkeeping' or 'fpl'
-  statsSort: 'points', // and the column they're sorted by, highest first unless statsAsc
+  statsCategory: 'top', // the Premier League's player stats: 'top', 'expected', 'projected' (the season's alone), 'attack', 'defence', 'goalkeeping' or 'fpl'
+  statsSort: '', // and the column they're sorted by (none: the category's first), highest first unless statsAsc
   statsAsc: false,
+  playersPos: 'all', // the Premier League's season of player stats: a position, or 'all'
+  playersFree: false, // only the free agents
+  playersAll: false, // all of them, rather than the first 50
   commentaryBench: false, // a head-to-head's commentary: the benches' players too
   season: null as string | null, // slug of an archived season being viewed, e.g. "2025-26"; null = current
 };

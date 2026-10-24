@@ -6,7 +6,7 @@
 import type { Data, Match, Odds, Price } from '../shared/data.ts';
 import { bestXi } from '../shared/best-xi.ts';
 import { price as sharedPrice, winDrawWin } from '../shared/odds.ts';
-import { MIN_SCORE_SPREAD, ODDS_GAMEWEEKS, ODDS_OVERROUND, POSITIONS, PROJECTED_GAMEWEEKS } from './config.ts';
+import { MIN_SCORE_SPREAD, ODDS_GAMEWEEKS, ODDS_OVERROUND, POSITIONS, PROJECTED_GAMEWEEKS, STATS_GAMEWEEKS } from './config.ts';
 import { modelBefore, modelExpected } from './expected.ts';
 import type { Season } from './season.ts';
 import { range, round, sum } from './util.ts';
@@ -93,6 +93,13 @@ export function oddsModel(season: Season, managerIds: number[], scoresByGw: Reco
     partsNow: model?.partsNow,
     /** The site's for the gameweeks after the next that the page shows (PROJECTED_GAMEWEEKS). */
     ahead: model ? priced.slice(1, PROJECTED_GAMEWEEKS).flatMap((gw) => forecasts.get(gw) ?? []) : [],
+    /** The site's for everyone over the next STATS_GAMEWEEKS, for the Premier League's Player stats. */
+    upcoming: model
+      ? projectedGws.slice(0, STATS_GAMEWEEKS).flatMap((gw) => {
+          const f = gw === nextGw ? { points: model.next, parts: model.parts } : forecasts.get(gw);
+          return f ? [{ gw, ...f }] : [];
+        })
+      : [],
     priced,
     projectedGws,
     projections,
