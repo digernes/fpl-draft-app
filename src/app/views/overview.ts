@@ -7,9 +7,9 @@ import { monthlyAwards } from '../awards.ts';
 import { dgwRule, gameweekReviewCard, resultText, squadStrip } from '../cards.ts';
 import { avatar, card, empty, infoButton, listRow, teamName } from '../components.ts';
 import { esc, plural } from '../format.ts';
-import { first, isLive, lineupFor } from '../lookups.ts';
+import { first, isLive, isSettling, lineupFor } from '../lookups.ts';
 import { oddsToggle } from '../match-odds.ts';
-import { featuredGw, matchList, roundSubtitle } from '../matches.ts';
+import { featuredGw, matchList, roundSubtitle, showsOdds } from '../matches.ts';
 import { recentTransfersCard } from '../pages/transfers.ts';
 import { href } from '../router.ts';
 import { D, state } from '../state.ts';
@@ -31,7 +31,7 @@ export function roundCard(gw = featuredGw()) {
   return card({
     title: `Gameweek ${gw}`,
     sub: roundSubtitle(gw, { short: true }),
-    action: list.some((m) => m.odds) ? oddsToggle() : '',
+    action: list.some(showsOdds) ? oddsToggle() : '',
     body: matchList(list),
     footer: { href: href.league('fixtures', gw), label: 'All fixtures' },
   });
@@ -43,7 +43,7 @@ export function roundCard(gw = featuredGw()) {
 // team's match stands rather than its score.
 export function tableCard({ compact = false } = {}) {
   return card({
-    title: compact && isLive() ? 'Live table' : 'Table',
+    title: compact && isLive() && !isSettling() ? 'Live table' : 'Table',
     action: compact ? '' : tableModeToggle('overall'),
     body: standingsTable('overall', { compact }),
     footer: { href: href.league('table'), label: 'Full table' },
@@ -126,7 +126,7 @@ export function gwPrizeCard({ compact = false } = {}) {
     ? D.managers.map((m) => ({ id: m.id, l: lineupFor(m.id, D.meta.currentGw) })).filter((x) => x.l && x.l.adj > record)
     : [];
   const live = threats.length
-    ? `<div class="prize-live">${threats.map((x) => `<span>${avatar(x.id)} ${first(x.id)} is on ${x.l!.adj} in GW ${D.meta.currentGw}, live</span>`).join('')}</div>`
+    ? `<div class="prize-live">${threats.map((x) => `<span>${avatar(x.id)} ${first(x.id)} is on ${x.l!.adj} in GW ${D.meta.currentGw}, ${isSettling() ? 'provisional' : 'live'}</span>`).join('')}</div>`
     : '';
   const chasers = D.topGameweeks
     .filter((g) => g.rank > 1)

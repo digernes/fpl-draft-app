@@ -157,6 +157,14 @@ describe('the live odds', () => {
     assert.equal(chances.prices.length, 3);
   });
 
+  it('has none once every match is over, the points only waiting to be confirmed', () => {
+    const d = playing();
+    d.live!.fixtures[1] = { ...d.live!.fixtures[1], started: true, done: true, score: [1, 1] };
+    setData(d);
+    applyLatestLive();
+    assert.equal(inPlayOdds(d.matches.at(-1)!), null);
+  });
+
   it('has none without the live lineups of both sides', () => {
     assert.equal(inPlayOdds(match(3, 1, 2, 0, 0, false)), null);
   });

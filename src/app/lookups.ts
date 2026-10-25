@@ -27,6 +27,12 @@ export const slotOf = (id: number) => {
   return slot < COLOR_SLOTS ? slot + 1 : 0;
 };
 export const isLive = () => D.matches.some((m) => m.started && !m.finished);
+/** Still open, every one of its matches over, as it is until FPL confirms the points (the bonus): no longer live, the points provisional. */
+export const isSettling = () => {
+  const gw = D.meta.currentGw;
+  const feed = live?.gw === gw ? live.feed : D.live?.gw === gw ? D.live : null;
+  return isLive() && Boolean(feed?.fixtures.length) && feed!.fixtures.every((f) => f.done);
+};
 // A club's Premier League matches in a gameweek, [home, away, kick-off]: from the relay's
 // feed while the gameweek is being played, else data.json's for the few gameweeks to come
 // that it lists them for, else the season's matches (plMatches), which have every gameweek's

@@ -5,6 +5,7 @@ import { beforeEach, describe, it } from 'node:test';
 
 import { navItems, pageHtml, seasonChip, statusChips } from '../src/app/render.ts';
 import { setData, state } from '../src/app/state.ts';
+import type { Data } from '../src/shared/data.ts';
 import { league, match } from './fixtures/league.ts';
 
 beforeEach(() => {
@@ -27,6 +28,17 @@ describe('the top bar’s chips', () => {
     const chips = statusChips();
     assert.match(chips, /Live · GW 3/);
     assert.doesNotMatch(chips, /deadline in/);
+  });
+
+  it('says the gameweek is provisional, not live, once its matches are all over, the deadline back', () => {
+    const d = league();
+    d.matches.push(match(3, 1, 2, 10, 12, false));
+    d.live = { gw: 3, elements: {}, fixtures: [{ id: 1, h: 1, a: 2, started: true, done: true }] } as unknown as Data['live'];
+    setData(d);
+    const chips = statusChips();
+    assert.doesNotMatch(chips, /Live · GW 3/);
+    assert.match(chips, /<span class="status-chip" data-tip="[^"]+">GW 3 provisional<\/span>/);
+    assert.match(chips, /GW 4 deadline in/);
   });
 
   it('names the season, with no picker while there’s only the one', () => {

@@ -4,6 +4,7 @@ import assert from 'node:assert/strict';
 import { before, beforeEach, describe, it } from 'node:test';
 
 import { runAction } from '../src/app/actions.ts';
+import { applyLatestLive } from '../src/app/live-scores.ts';
 import { pageMatch } from '../src/app/pages/match.ts';
 import { href, type Route } from '../src/app/router.ts';
 import { statsFor } from '../src/app/stats-files.ts';
@@ -11,7 +12,7 @@ import { setData, setLive, state } from '../src/app/state.ts';
 import type { Data, Match } from '../src/shared/data.ts';
 import { cardTitled, cardTitles, listRows, text, tiles } from './fixtures/html.ts';
 import { match } from './fixtures/league.ts';
-import { bobVCy, statsFile } from './fixtures/match.ts';
+import { annVBobLive, bobVCy, statsFile } from './fixtures/match.ts';
 
 // GW 2's stats file comes at once and GW 1's isn't there; the others, and the relay's
 // polls, never answer.
@@ -152,6 +153,25 @@ describe('beside a head-to-head', () => {
     d.lineups[3][2] = { ...d.lineups[3][2], subs: [16] };
     setData(d);
     assert.equal(tiles(cardTitled(aside(), 'On the bench'))[1], 'Cy’s bench: 5 · On automatically: Isak');
+  });
+
+  it('reports it as over once every player in it is done, before FPL finishes it, with no live odds', () => {
+    const report = (d: Data) => {
+      setData(d);
+      setLive(null);
+      applyLatestLive();
+      const html = aside(page(3, 1, 2));
+      return { html, lines: text(cardTitled(html, 'Match report')) };
+    };
+    const on = report(annVBobLive());
+    assert.match(on.lines, /still to play/);
+    assert.match(on.html, /class="odd/);
+    const d = annVBobLive();
+    d.live!.fixtures[1] = { ...d.live!.fixtures[1], done: true, min: 90 };
+    d.plMatches![1].done = true;
+    const over = report(d);
+    assert.doesNotMatch(over.lines, /still to play|As it stands|so far/);
+    assert.doesNotMatch(over.html, /class="odd/);
   });
 
   it('asks who will win before kick-off, with the model’s chances, and previews the match', () => {

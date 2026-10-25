@@ -9,7 +9,7 @@ import { setData, setLive, state } from '../src/app/state.ts';
 import type { InPlayRecord } from '../src/shared/data.ts';
 import { recordsNow } from '../src/shared/in-play.ts';
 import { slimFeed } from '../worker/feed.ts';
-import { forgetLookups, InPlay, parseInPlayPath, playingNow, recordMinute, seasonAt, type InPlayEnv } from '../worker/in-play.ts';
+import { forgetLookups, gameweekNow, InPlay, parseInPlayPath, recordMinute, seasonAt, type InPlayEnv } from '../worker/in-play.ts';
 import { annVBobLive } from './fixtures/match.ts';
 
 // The page's stats file never comes: its live odds read the relay's matches instead.
@@ -69,30 +69,30 @@ function fixture(id: number, h: number, a: number, ko: string, rest: object = {}
   };
 }
 
-const GAME = { current_event: 3, current_event_finished: false, next_event: 4 };
-const FIXTURES = [
-  { id: 30, kickoff_time: '2026-08-29T11:30:00Z' },
-  { id: 31, kickoff_time: '2026-08-29T14:00:00Z' },
-  { id: 32, kickoff_time: null },
-];
+/** GW 3's feed with every match over (`finished_provisional`), or with none kicked off yet. */
+function allOver() {
+  const raw = rawFeed();
+  raw.fixtures.forEach((f) => (f.finished_provisional = true));
+  return raw;
+}
+function noneStarted() {
+  const raw = rawFeed();
+  raw.fixtures.forEach((f) => (f.started = false));
+  return raw;
+}
 
-/** FPL and the site as fetch answers them, each answer counted by what was asked. */
-function upstream(answers: { game?: unknown; fixtures?: unknown; live?: unknown; site?: unknown; fail?: string } = {}) {
+const GAME = { current_event: 3, current_event_finished: false, next_event: 4 };
+
+/** FPL Draft and the site as fetch answers them, each answer counted by what was asked. Anything else is turned away. */
+function upstream(answers: { game?: unknown; live?: unknown; site?: unknown; fail?: string } = {}) {
   const asked: string[] = [];
   const fetch = mock.method(globalThis, 'fetch', async (url: string) => {
     const u = String(url);
     asked.push(u);
-    const kind = u.endsWith('/api/game')
-      ? 'game'
-      : u.includes('/fixtures/')
-        ? 'fixtures'
-        : u.includes('/live')
-          ? 'live'
-          : u.startsWith(SITE)
-            ? 'site'
-            : 'other';
-    if (answers.fail === kind) return new Response('busy', { status: 503 });
-    const body = { game: GAME, fixtures: FIXTURES, live: rawFeed(), site: annVBobLive(), ...answers }[kind as 'game'];
+    const draft = u.startsWith('https://draft.premierleague.com/api/');
+    const kind = draft && u.endsWith('/api/game') ? 'game' : draft && u.includes('/live') ? 'live' : u.startsWith(SITE) ? 'site' : 'other';
+    if (answers.fail === kind || kind === 'other') return new Response('Forbidden', { status: 403 });
+    const body = { game: GAME, live: rawFeed(), site: annVBobLive(), ...answers }[kind];
     return Response.json(body ?? null);
   });
   return { fetch, asked, count: (part: string) => asked.filter((u) => u.includes(part)).length };
@@ -103,6 +103,7 @@ function namespace(env: InPlayEnv) {
   const objects = new Map<string, InPlay>();
   const stored = new Map<string, Map<string, unknown>>();
   const asked: string[] = [];
+  let writes = 0;
   const ns: DurableObjectNamespace = {
     idFromName: (name: string) => ({ toString: () => name }),
     get: (id) => ({
@@ -114,7 +115,10 @@ function namespace(env: InPlayEnv) {
           stored.set(name, data);
           const storage = {
             get: async <T>(key: string) => structuredClone(data.get(key)) as T | undefined,
-            put: async (entries: Record<string, unknown>) => Object.entries(entries).forEach(([k, v]) => data.set(k, structuredClone(v))),
+            put: async (entries: Record<string, unknown>) => {
+              writes++;
+              Object.entries(entries).forEach(([k, v]) => data.set(k, structuredClone(v)));
+            },
           };
           objects.set(name, new InPlay({ storage }, { ...env, IN_PLAY: ns }));
         }
@@ -122,7 +126,12 @@ function namespace(env: InPlayEnv) {
       },
     }),
   };
-  return { ns, asked, records: (name: string) => stored.get(name)?.get('records') as Record<string, InPlayRecord[]> | undefined };
+  return {
+    ns,
+    asked,
+    writes: () => writes,
+    records: (name: string) => stored.get(name)?.get('records') as Record<string, InPlayRecord[]> | undefined,
+  };
 }
 
 // The live odds as the page's code works them out from the relay's slim feed of the same moment.
@@ -146,47 +155,50 @@ describe('the in-play route and season', () => {
   });
 });
 
-describe('the timer’s look at what’s on', () => {
+describe('the timer’s look at the gameweek', () => {
   beforeEach(() => forgetLookups());
   afterEach(() => mock.restoreAll());
 
-  it('finds the gameweek being played from kick-off until two and a half hours after', async () => {
+  it('finds the gameweek being played, from its deadline until it’s finished, a match on or not', async () => {
     upstream();
-    assert.equal(await playingNow(Date.parse('2026-08-29T11:29:00Z')), null); // before the first
-    assert.deepEqual(await playingNow(Date.parse('2026-08-29T11:30:00Z')), { season: '2026-27', gw: 3 });
-    assert.deepEqual(await playingNow(NOW), { season: '2026-27', gw: 3 });
-    assert.deepEqual(await playingNow(KICK_OFF + 149 * 60_000), { season: '2026-27', gw: 3 });
-    assert.equal(await playingNow(KICK_OFF + 150 * 60_000), null);
+    assert.deepEqual(await gameweekNow(NOW), { season: '2026-27', gw: 3 });
+    assert.deepEqual(await gameweekNow(KICK_OFF + 2 * 86_400_000), { season: '2026-27', gw: 3 }); // between match days
   });
 
-  it('asks FPL’s game state every five minutes and the fixtures every ten, a few hundred bytes and a few KB', async () => {
-    const { count } = upstream();
-    for (let minute = 0; minute < 30; minute++) await playingNow(NOW + minute * 60_000);
-    assert.equal(count('/api/game'), 6);
-    assert.equal(count('/fixtures/?event=3'), 3);
+  it('asks FPL Draft’s game state every five minutes, a few hundred bytes, and nothing of FPL’s main game', async () => {
+    const { count, asked } = upstream();
+    for (let minute = 0; minute < 30; minute++) await gameweekNow(NOW + minute * 60_000);
+    assert.equal(count('https://draft.premierleague.com/api/game'), 6);
+    assert.equal(asked.length, 6);
+    assert.equal(count('fantasy.premierleague.com'), 0);
   });
 
-  it('finds nothing on once the gameweek is finished, or before one has begun, without asking for fixtures', async () => {
-    const { count } = upstream({ game: { ...GAME, current_event_finished: true } });
-    assert.equal(await playingNow(NOW), null);
+  it('finds nothing once the gameweek is finished, or before one has begun', async () => {
+    upstream({ game: { ...GAME, current_event_finished: true } });
+    assert.equal(await gameweekNow(NOW), null);
     forgetLookups();
+    mock.restoreAll();
     upstream({ game: { ...GAME, current_event: null } });
-    assert.equal(await playingNow(NOW), null);
-    assert.equal(count('/fixtures/'), 0);
+    assert.equal(await gameweekNow(NOW), null);
   });
 
-  it('finds nothing on when FPL can’t be asked or answers oddly', async () => {
-    for (const answers of [{ fail: 'game' }, { fail: 'fixtures' }, { game: { current_event: '3' } }, { fixtures: { fixtures: [] } }]) {
+  it('finds nothing when FPL can’t be asked or answers oddly', async () => {
+    for (const answers of [
+      { fail: 'game' },
+      { game: { current_event: '3', current_event_finished: false } },
+      { game: { current_event: 3 } },
+      { game: null },
+    ]) {
       forgetLookups();
       mock.restoreAll();
       upstream(answers);
-      assert.equal(await playingNow(NOW), null, JSON.stringify(answers));
+      assert.equal(await gameweekNow(NOW), null, JSON.stringify(answers));
     }
     forgetLookups();
     mock.method(globalThis, 'fetch', async () => {
       throw new Error('offline');
     });
-    assert.equal(await playingNow(NOW), null);
+    assert.equal(await gameweekNow(NOW), null);
   });
 });
 
@@ -221,13 +233,62 @@ describe('recording a minute', () => {
     assert.deepEqual([minutes, home, away, homePts, awayPts], [MINUTES, Math.round(p[0] * 1000), Math.round(p[2] * 1000), 11, 7]);
   });
 
-  it('asks no object anything while nothing is on, or without the binding', async () => {
-    const { count } = upstream();
+  it('asks the gameweek’s object once a minute while the gameweek is played, and never FPL’s main game', async () => {
+    const { count } = upstream({ live: noneStarted() });
     const objects = namespace({ SITE_URL: SITE });
-    await recordMinute({ SITE_URL: SITE, IN_PLAY: objects.ns }, KICK_OFF + 200 * 60_000);
+    for (let minute = 0; minute < 10; minute++) await recordMinute({ SITE_URL: SITE, IN_PLAY: objects.ns }, NOW + minute * 60_000);
+    assert.deepEqual(objects.asked, Array(10).fill('2026-27:3'));
+    assert.equal(count('/event/3/live'), 10);
+    assert.equal(count('fantasy.premierleague.com'), 0);
+  });
+
+  it('asks no object anything once the gameweek is finished, when FPL can’t be asked, or without the binding', async () => {
+    for (const answers of [
+      { game: { ...GAME, current_event_finished: true } },
+      { game: { ...GAME, current_event: null } },
+      { fail: 'game' },
+    ]) {
+      forgetLookups();
+      mock.restoreAll();
+      const { count } = upstream(answers);
+      const objects = namespace({ SITE_URL: SITE });
+      await recordMinute({ SITE_URL: SITE, IN_PLAY: objects.ns }, NOW);
+      assert.deepEqual(objects.asked, [], JSON.stringify(answers));
+      assert.equal(count('/live'), 0);
+    }
+    forgetLookups();
+    mock.restoreAll();
+    const { asked } = upstream();
     await recordMinute({ SITE_URL: SITE }, NOW);
-    assert.deepEqual(objects.asked, []);
-    assert.equal(count(SITE), 0);
+    assert.deepEqual(asked, []);
+  });
+
+  it('records from kick-off until two and a half hours after, and writes nothing between match days', async () => {
+    const { count } = upstream({ live: noneStarted() });
+    const objects = namespace({ SITE_URL: SITE });
+    const env = { SITE_URL: SITE, IN_PLAY: objects.ns };
+    await recordMinute(env, Date.parse('2026-08-29T11:29:00Z')); // before the first kick-off
+    assert.equal(objects.writes(), 0);
+    assert.equal(count(SITE), 0); // nor is data.json read
+    mock.restoreAll();
+    const later = upstream({ live: allOver() });
+    await recordMinute(env, KICK_OFF + 149 * 60_000); // the last match just over
+    assert.equal(objects.writes(), 1);
+    assert.equal(objects.records('2026-27:3')!['1-2'].length, 1);
+    for (const after of [150, 200, 24 * 60]) await recordMinute(env, KICK_OFF + after * 60_000);
+    assert.equal(objects.writes(), 1);
+    assert.equal(later.count('/event/3/live'), 4);
+    assert.equal(later.count(SITE), 1); // the day after, past its five minutes, data.json isn't read again
+    assert.deepEqual(objects.asked, Array(5).fill('2026-27:3'));
+  });
+
+  it('records the first kick-off from its first minute', async () => {
+    const raw = noneStarted();
+    raw.fixtures[0].started = true;
+    upstream({ live: raw });
+    const objects = namespace({ SITE_URL: SITE });
+    await recordMinute({ SITE_URL: SITE, IN_PLAY: objects.ns }, Date.parse('2026-08-29T11:30:00Z'));
+    assert.equal(objects.writes(), 1);
   });
 
   it('adds minute by minute, thinned as the build thins them, and keeps each gameweek apart', async () => {
@@ -309,7 +370,8 @@ describe('recording a minute', () => {
     const objects = namespace({ SITE_URL: SITE });
     for (let minute = 0; minute < 10; minute++) await recordMinute({ SITE_URL: SITE, IN_PLAY: objects.ns }, NOW + minute * 60_000);
     assert.equal(count(`${SITE}/data.json`), 2);
-    assert.equal(count('/event/3/live'), 0);
+    assert.equal(count('/event/3/live'), 10);
+    assert.equal(objects.writes(), 0);
   });
 
   it('keeps the last data.json it read when the site stops answering', async () => {

@@ -7,9 +7,9 @@
 import { avatar, card, gwNav } from '../components.ts';
 import { countdown, esc, fmtShortDay, fmtTime, ordinal } from '../format.ts';
 import { leagueSvg, premierLeagueSvg, shirtSvg } from '../icons.ts';
-import { first, isArchive, isLive, mgr } from '../lookups.ts';
+import { first, isArchive, isLive, isSettling, mgr } from '../lookups.ts';
 import { oddsToggle } from '../match-odds.ts';
-import { featuredGw, matchList, roundSubtitle } from '../matches.ts';
+import { featuredGw, matchList, roundSubtitle, showsOdds } from '../matches.ts';
 import { plRound, plRoundList } from '../pl.ts';
 import type { PageView } from '../render.ts';
 import { href, type Route } from '../router.ts';
@@ -22,7 +22,7 @@ export function pageHome(route: Route): PageView {
   const gw = Math.min(Math.max(route.gw ?? featuredGw(), meta.firstGw), meta.lastGw);
   const nav = card({
     header: `<div class="round-nav">${gwNav(gw, meta.firstGw, meta.lastGw, href.home, { current: featuredGw() })}</div>`,
-    body: `<div class="round-sub"><span>${roundSubtitle(gw) || '&nbsp;'}</span>${D.matches.some((m) => m.gw === gw && m.odds) ? oddsToggle() : ''}</div>`,
+    body: `<div class="round-sub"><span>${roundSubtitle(gw) || '&nbsp;'}</span>${D.matches.some((m) => m.gw === gw && showsOdds(m)) ? oddsToggle() : ''}</div>`,
     cls: 'round-card',
   });
   const prize = gwPrizeCard({ compact: true });
@@ -42,7 +42,7 @@ const groupHead = (icon: string, name: string, to: string, note = '') =>
 function draftGroup(gw: number) {
   const list = D.matches.filter((m) => m.gw === gw);
   // Under way, between its matches too: the dot by its name.
-  const on = gw === D.meta.currentGw && isLive() ? '<i class="live-dot" data-tip="Under way"></i>' : '';
+  const on = gw === D.meta.currentGw && isLive() && !isSettling() ? '<i class="live-dot" data-tip="Under way"></i>' : '';
   return card({
     header: groupHead(leagueSvg, esc(D.meta.name), href.league(), `${on}Gameweek ${gw}`),
     body: matchList(list),

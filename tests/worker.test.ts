@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { afterEach, describe, it, mock } from 'node:test';
 
+import { forgetLookups } from '../worker/in-play.ts';
 import worker, { Poll } from '../worker/index.ts';
 import { buildDue, buildFiring } from '../worker/timer.ts';
 
@@ -288,26 +289,34 @@ describe('build timer', () => {
     assert.equal(calls.mock.callCount(), 1);
   });
 
-  it('records the minute when a match is on, every minute, with the build’s firings too', async () => {
+  it('hands every minute of a gameweek being played to its object, with the build’s firings too, and none once it’s finished', async () => {
     const asked: string[] = [];
     const IN_PLAY = {
       idFromName: (name: string) => ({ toString: () => name }),
       get: (id: { toString(): string }) => ({
         fetch: async (input: string | Request) => {
           asked.push(`${id.toString()} ${String(input)}`);
-          return Response.json({ added: 1 });
+          return Response.json({ added: 0 });
         },
       }),
     };
-    mock.method(globalThis, 'fetch', async (url: string) =>
-      String(url).endsWith('/api/game')
-        ? Response.json({ current_event: 9, current_event_finished: false, next_event: 10 })
-        : String(url).includes('/fixtures/')
-          ? Response.json([{ kickoff_time: '2026-10-24T14:00:00Z' }])
-          : new Response(null, { status: 204 }),
-    );
-    for (const iso of ['2026-10-24T15:41:00Z', '2026-10-24T15:50:00Z', '2026-10-24T13:59:00Z']) await fire(iso, { IN_PLAY });
-    assert.deepEqual(asked, ['2026-27:9 https://in-play/record/2026-27/9', '2026-27:9 https://in-play/record/2026-27/9']);
+    const answer = (finished: boolean) =>
+      mock.method(globalThis, 'fetch', async (url: string) =>
+        String(url) === 'https://draft.premierleague.com/api/game'
+          ? Response.json({ current_event: 9, current_event_finished: finished, next_event: 10 })
+          : new Response(null, { status: 403 }),
+      );
+    const fpl = answer(false);
+    // During a match, at a build's firing, and on a Tuesday morning with nothing on: the object decides.
+    for (const iso of ['2026-10-24T15:41:00Z', '2026-10-24T15:50:00Z', '2026-10-27T09:01:00Z']) await fire(iso, { IN_PLAY });
+    assert.deepEqual(asked, Array(3).fill('2026-27:9 https://in-play/record/2026-27/9'));
+    assert.ok(fpl.mock.calls.every((call) => !String(call.arguments[0]).includes('fantasy.premierleague.com')));
+    mock.restoreAll();
+    forgetLookups();
+    answer(true);
+    await fire('2026-10-28T09:01:00Z', { IN_PLAY });
+    assert.equal(asked.length, 3);
+    forgetLookups();
   });
 });
 

@@ -7,7 +7,7 @@ import { playerOutlook, type Expected } from '../shared/live-projection.ts';
 import { playerState, type Scored } from '../shared/live.ts';
 import { avatar, empty, seg } from './components.ts';
 import { esc, pct, priceText } from './format.ts';
-import { mgr, player } from './lookups.ts';
+import { isSettling, mgr, player } from './lookups.ts';
 import { D, live, state } from './state.ts';
 import { statsFor, toComeRows } from './stats-files.ts';
 
@@ -59,7 +59,9 @@ export function projectedPill(pid: number, gw: number | undefined): { projected?
 }
 
 /** Live odds for a match in play (the build records the same at each build: src/build/in-play.ts). */
+// None once every match is over: the result is in, only the points still to be confirmed.
 export function inPlayOdds(m: Match) {
+  if (isSettling()) return null;
   const home = live?.gw === m.gw ? live.lineups[m.home] : undefined;
   const away = live?.gw === m.gw ? live.lineups[m.away] : undefined;
   if (!home || !away) return null;

@@ -63,15 +63,17 @@ describe('the home page', () => {
     assert.match(home(40), /<option value="#\/round\/4" selected>/);
   });
 
-  it('marks the round under way, and offers the odds format when its matches have odds', () => {
+  it('marks the round under way, and offers the odds format while its matches show odds', () => {
     const d = data();
     d.matches.push(match(3, 1, 2, 10, 12, false));
     const price = { dec: 2, frac: '1/1' };
     d.matches[0].odds = { p: [0.4, 0.2, 0.4], prices: [price, price, price], expected: [40, 40] };
     setData(d);
     assert.match(home(3), /<span class="group-note"><i class="live-dot" data-tip="Under way"><\/i>Gameweek 3<\/span>/);
+    assert.match(home(3), /data-action="odds" data-value="decimal"/);
     assert.doesNotMatch(home(4), /data-action="odds"/);
-    assert.match(home(1), /data-action="odds" data-value="decimal"/);
+    // Over, its odds are no longer shown.
+    assert.doesNotMatch(home(1), /data-action="odds"/);
   });
 
   it('has the deadline, the table, the prize, the recent transfers on the right, and the leagues and the prize on the left', () => {

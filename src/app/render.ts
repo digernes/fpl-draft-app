@@ -4,7 +4,7 @@
 import { alignHeads, avatar, markLoadingPhotos } from './components.ts';
 import { countdown, esc, fmtShortDay, fmtStamp, fmtTime } from './format.ts';
 import { caretSvg, leagueSvg, matchesSvg, premierLeagueSvg, shirtSvg, swapSvg } from './icons.ts';
-import { isLive, mgr, seasonLabel, seasonSlug } from './lookups.ts';
+import { isLive, isSettling, mgr, seasonLabel, seasonSlug } from './lookups.ts';
 import { pageHeader, type Header } from './page-header.ts';
 import { pageHome } from './pages/home.ts';
 import { pageLeague } from './pages/league.ts';
@@ -42,17 +42,21 @@ const PAGES: Record<Page, (route: Route) => PageView> = {
 };
 
 // Between rounds the waiver run comes first, then the deadline; during a live
-// gameweek the live chip replaces the deadline.
+// gameweek the live chip replaces the deadline. Once its matches are all over, until FPL
+// confirms the points, it says so, plainly, and the deadline is back.
 export function statusChips() {
   const { meta } = D;
+  const settling = isSettling();
   const at = (iso: string) => `${fmtShortDay.format(new Date(iso))}, ${fmtTime.format(new Date(iso))}`;
   const waivers = meta.nextWaivers && countdown(meta.nextWaivers);
   const deadline = meta.nextDeadline && countdown(meta.nextDeadline);
   return [
-    isLive() && `<span class="status-chip live"><i></i>Live · GW ${meta.currentGw}</span>`,
+    isLive() && !settling && `<span class="status-chip live"><i></i>Live · GW ${meta.currentGw}</span>`,
+    settling &&
+      `<span class="status-chip" data-tip="Every match is over: the points are provisional until FPL confirms them">GW ${meta.currentGw} provisional</span>`,
     waivers &&
       `<span class="status-chip" data-tip="GW ${meta.nextGw} waivers process ${at(meta.nextWaivers!)}">Waivers in <strong>${waivers}</strong></span>`,
-    !isLive() &&
+    (!isLive() || settling) &&
       deadline &&
       `<span class="status-chip" data-tip="GW ${meta.nextGw} deadline ${at(meta.nextDeadline!)}">GW ${meta.nextGw} deadline in <strong>${deadline}</strong></span>`,
   ]

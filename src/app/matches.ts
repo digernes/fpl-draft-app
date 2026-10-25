@@ -5,7 +5,7 @@ import type { Match } from '../shared/data.ts';
 import { playerState } from '../shared/live.ts';
 import { avatar, empty } from './components.ts';
 import { countdown, esc, fmtShortDay, fmtTime, fmtWeekday, plural } from './format.ts';
-import { first, gwInfo, isLive, lineupFor, mgr, player } from './lookups.ts';
+import { first, gwInfo, isLive, isSettling, lineupFor, mgr, player } from './lookups.ts';
 import { inPlayOdds, oddsRow } from './match-odds.ts';
 import { href } from './router.ts';
 import { D, live, state } from './state.ts';
@@ -79,10 +79,12 @@ export function matchStatusText(m: Match) {
 
 // FT or Live, and between a gameweek's match days when the next of its players kicks off:
 // the time if it's today, the short day if not, green as Live is, the gameweek being on.
-// Over before FPL has checked the gameweek's stats, FT* with what can still change.
+// Over before FPL has checked the gameweek's stats, FT* with what can still change (and
+// while the gameweek settles, should the last build predate FPL's flag).
 function statusChip(m: Match) {
   const state = matchStatus(m);
-  if (state === 'done' && gwInfo(m.gw)?.checked === false)
+  const unchecked = gwInfo(m.gw)?.checked === false || (m.gw === D.meta.currentGw && isSettling());
+  if (state === 'done' && unchecked)
     return statusDot(
       'done',
       '<span data-tip="Until FPL has checked the gameweek’s stats, the bonus, defensive contributions and contentious goals can still change">FT*</span>',
@@ -104,10 +106,16 @@ function matchBlock(m: Match, compact = false, current = false) {
   </div>`;
 }
 
+/** Over, as its Full time says: FPL has finished it, or every player in either squad is done. */
+export const isOver = (m: Match) => m.finished || matchStatus(m) === 'done';
+
+/** Whether a head-to-head shows odds: the pre-match ones until it starts, then the live ones while it's played. */
+export const showsOdds = (m: Match) => (m.started ? !isOver(m) && !isSettling() : Boolean(m.odds));
+
 // The pre-match odds until it starts, then the live ones while it's played.
 function blockOdds(m: Match) {
   if (m.odds && !m.started) return oddsRow(m.odds, m);
-  const inPlay = m.started && !m.finished ? inPlayOdds(m) : null;
+  const inPlay = m.started && !isOver(m) ? inPlayOdds(m) : null;
   return inPlay ? oddsRow(inPlay, m, null, true) : '';
 }
 
@@ -145,10 +153,17 @@ export function deadlineNote(gw: number) {
 
 const liveNow = (gw: number) => isLive() && gw === D.meta.currentGw;
 
+// Every match over but the points not yet confirmed: plain, as it's no longer live.
+const settlingLine = (gw: number, matches: number, short: boolean) =>
+  short
+    ? `All ${matches} played · points provisional`
+    : `Gameweek ${gw} · all ${matches} matches played · points provisional until FPL confirms them`;
+
 // The gameweek being played, in green, then how far its Premier League matches have got:
 // how many are over, and how many are on now or, between them, when the next kicks off.
 function liveLine(gw: number, short: boolean) {
   const fixtures = feedFor(gw)?.fixtures ?? [];
+  if (isSettling()) return settlingLine(gw, fixtures.length, short);
   const done = fixtures.filter((f) => f.done).length;
   const on = fixtures.filter((f) => f.started && !f.done).length;
   const next = fixtures

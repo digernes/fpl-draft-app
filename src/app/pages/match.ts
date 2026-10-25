@@ -20,7 +20,7 @@ import { matchReport, type ReportLine } from '../match-report.ts';
 import { matchLineups, projectedLineups } from '../match-lineups.ts';
 import { inPlayOdds, oddsRow, preMatchOdds } from '../match-odds.ts';
 import { pollResults, whoWillWin } from '../match-poll.ts';
-import { matchStatus, matchStatusText, statusDot } from '../matches.ts';
+import { isOver, matchStatus, matchStatusText, statusDot } from '../matches.ts';
 import { momentum, type Step } from '../momentum.ts';
 import { gwTiebreaks } from '../lineup-filters.ts';
 import { statsFor } from '../stats-files.ts';
@@ -158,7 +158,8 @@ function reportCard(m: Match, chances: Chances, steps: Step[]) {
     live?.gw === m.gw
       ? lineup.xi.filter((pid) => ['due', 'live'].includes(playerState(live!.feed, pid, player(pid).club).state)).length
       : 0;
-  const report = matchReport(D, m, {
+  // Over once its Full time shows, though FPL finishes it only when the gameweek is settled.
+  const report = matchReport(D, isOver(m) ? { ...m, finished: true } : m, {
     lineup: (id) => lineupFor(id, m.gw),
     points: (pid) => gwPoints(pid, m.gw),
     momentum: steps,
@@ -181,7 +182,7 @@ function insights(lines: ReportLine[]) {
 // The right column, the same on every tab: the odds, the round's other matches, the top
 // stats once it's over, the top players (or before kick-off each side's form) and the benches.
 function sideColumn(m: Match, steps: Step[]) {
-  const chances = m.started && !m.finished ? inPlayOdds(m) : null;
+  const chances = m.started && !isOver(m) ? inPlayOdds(m) : null;
   const l = lineups(m);
   // Once it's on, its top stats above the report that tells them.
   const stats = m.started && l ? topStatsCard(m, l) : '';

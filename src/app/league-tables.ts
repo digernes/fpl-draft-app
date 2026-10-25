@@ -4,7 +4,7 @@
 import type { ClubRow, LuckRow, OverallRow, PointsRow, XgRow } from '../shared/data.ts';
 import { clubCell, formPills, infoButton, managerCell, rankDelta, seg, withDiff } from './components.ts';
 import { plural, signed } from './format.ts';
-import { first, isLive } from './lookups.ts';
+import { first, isLive, isSettling } from './lookups.ts';
 import { PL_LEGEND, plZone } from './premier-league-table.ts';
 import { simulationCols, simulationFormula, type SimRow } from './simulation-table.ts';
 import { liveDot, livePill, liveStandings, nextLink, type StandingRow } from './standings.ts';
@@ -86,7 +86,8 @@ export const TABLE_VIEWS: Record<string, RenderedView> = {
   overall: tableView<StandingRow>({
     label: 'All',
     rows: () => (isLive() ? liveStandings() : D.tables.overall),
-    cols: (extras) => standingsCols(extras, isLive()),
+    cols: (extras) => standingsCols(extras, isLive() && !isSettling()),
+    note: () => (isSettling() ? `With gameweek ${D.meta.currentGw}’s provisional points` : ''),
     qual: (r, rows) =>
       r.rank === 1 ? 'var(--qual-top)' : r.rank === 2 ? 'var(--qual-europe)' : r.rank === rows.length ? 'var(--qual-bottom)' : null,
     legend: [
@@ -238,6 +239,6 @@ function renderTable<R extends Keyed>(view: TableView<R>, extras: TableExtras) {
   if (compact) return table;
   const info = view.info ? infoButton(view.info(), 'How this is worked out') : '';
   const legend = view.legend || info ? `<div class="legend">${legendItems(view.legend ?? [])}${info}</div>` : '';
-  const note = view.note ? `<div class="table-note">${view.note()}</div>` : '';
+  const note = view.note?.() ? `<div class="table-note">${view.note()}</div>` : '';
   return table + legend + note;
 }

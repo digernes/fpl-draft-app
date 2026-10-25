@@ -4,18 +4,21 @@
 //
 //   GET /in-play/<season>/<gw>   { "<home>-<away>": InPlayRecord[] }
 //
-// The timer fires every minute (index.ts). It looks first, cheaply, at whether any of the
-// gameweek's matches is on (from kick-off until RECENT_MS after it, as /live has them), from
-// FPL's game state and the gameweek's fixtures, kept a while: no Durable Object hears of a
-// minute with nothing on. When one is, the gameweek's object works out each head-to-head's
-// live odds from the site's data.json (kept five minutes) and the relay's own slim live feed,
-// with the same code as the page's live odds and the build's records (shared/in-play.ts),
-// and keeps them as the build does (withRecord). It does the work rather than the timer, as a
-// Durable Object has 30 seconds of CPU a request where the Free plan gives a timer 10 ms.
+// The timer fires every minute (index.ts). It asks only FPL Draft's game state, kept a while,
+// which gameweek is being played: while one is (current and not finished), it hands the minute
+// to the gameweek's object, one request a minute. (FPL's main game, whose fixtures would tell
+// the kick-offs, turns Cloudflare's addresses away.) The object reads the relay's own slim live
+// feed, which /live shares, and records only while a match is on (from kick-off until RECENT_MS
+// after it, as /live has them); in a minute with nothing on it writes nothing. When one is, it
+// works out each head-to-head's live odds from the site's data.json (kept five minutes) and the
+// feed, with the same code as the page's live odds and the build's records (shared/in-play.ts),
+// and keeps them as the build does (withRecord). The object does the work rather than the
+// timer, as a Durable Object has 30 seconds of CPU a request where the Free plan gives a timer
+// 10 ms.
 
 import type { InPlayRecord } from '../src/shared/data.ts';
 import { recordsNow, withRecord, type RecordData } from '../src/shared/in-play.ts';
-import { liveFeed, RECENT_MS, Upstream } from './feed.ts';
+import { API, liveFeed, Upstream } from './feed.ts';
 
 export interface InPlayEnv {
   /** The gameweeks' Durable Objects (wrangler.toml). */
@@ -24,10 +27,8 @@ export interface InPlayEnv {
   SITE_URL?: string;
 }
 
-const FPL = 'https://fantasy.premierleague.com/api';
-const GAME = 'https://draft.premierleague.com/api/game';
-const GAME_MS = 5 * 60 * 1000; // a deadline passing reaches the timer within five minutes
-const FIXTURES_MS = 10 * 60 * 1000; // a kick-off moved reaches it within ten
+const GAME = `${API}/game`;
+const GAME_MS = 5 * 60 * 1000; // a deadline passing, or the gameweek finishing, reaches the timer within five minutes
 const SITE_MS = 5 * 60 * 1000; // data.json changes about every ten minutes while matches are on
 
 /** A gameweek's address among the relay's routes and the Durable Objects: its season's slug ("2026-27") and its number. */
@@ -50,13 +51,12 @@ export function seasonAt(at: number): string {
 }
 
 // What the timer looked up last, in this isolate: it may be a new one next minute, when it
-// asks again (a few hundred bytes and a few KB, through Cloudflare's cache).
+// asks again (a few hundred bytes, through Cloudflare's cache).
 let game: { at: number; gw: number | null; finished: boolean } | undefined;
-let fixtures: { at: number; gw: number; kickOffs: number[] } | undefined;
 
 /** Forget what the timer looked up (for the tests). */
 export function forgetLookups() {
-  game = fixtures = undefined;
+  game = undefined;
 }
 
 // Read without a schema library, which the timer's 10 ms needn't spend on: only what it uses.
@@ -70,41 +70,28 @@ function gameState(body: unknown) {
   return (Number.isInteger(gw) || gw === null) && typeof finished === 'boolean' ? { gw: gw as number | null, finished } : null;
 }
 
-const kickOffsIn = (body: unknown) =>
-  Array.isArray(body)
-    ? body.flatMap((f: { kickoff_time?: unknown }) => (typeof f?.kickoff_time === 'string' ? [Date.parse(f.kickoff_time)] : []))
-    : null;
-
 /**
- * The gameweek with a Premier League match on at `now` (ms), from kick-off until RECENT_MS
- * after it, or null: FPL's game state says which gameweek is being played, and nothing is,
- * once it's finished; then its fixtures' kick-offs. Nothing on whenever FPL can't be asked.
+ * The gameweek being played at `now` (ms), from its deadline until FPL calls it finished, or
+ * null: FPL Draft's game state, kept GAME_MS. Whether any of its matches is on is the
+ * gameweek's object's to say, from the live feed. None whenever FPL can't be asked.
  */
-export async function playingNow(now: number): Promise<Gameweek | null> {
+export async function gameweekNow(now: number): Promise<Gameweek | null> {
   try {
     if (!game || now - game.at >= GAME_MS) {
       const state = gameState(await getJson(GAME, 60));
       if (!state) return null;
       game = { at: now, ...state };
     }
-    const { gw } = game;
-    if (gw === null || game.finished) return null;
-    if (!fixtures || fixtures.gw !== gw || now - fixtures.at >= FIXTURES_MS) {
-      const kickOffs = kickOffsIn(await getJson(`${FPL}/fixtures/?event=${gw}`, 300));
-      if (!kickOffs) return null;
-      fixtures = { at: now, gw, kickOffs };
-    }
-    const on = fixtures.kickOffs.some((ko) => ko <= now && now < ko + RECENT_MS);
-    return on ? { season: seasonAt(now), gw } : null;
+    return game.gw === null || game.finished ? null : { season: seasonAt(now), gw: game.gw };
   } catch {
     return null;
   }
 }
 
-/** The timer's minute: the gameweek's object records it when a match is on. */
+/** The timer's minute: the gameweek's object records it while a gameweek is played, if a match is on. */
 export async function recordMinute(env: InPlayEnv, now: number): Promise<void> {
   if (!env.IN_PLAY) return;
-  const on = await playingNow(now);
+  const on = await gameweekNow(now);
   if (!on) return;
   const stub = env.IN_PLAY.get(env.IN_PLAY.idFromName(`${on.season}:${on.gw}`));
   const res = await stub.fetch(`https://in-play/record/${on.season}/${on.gw}`, { method: 'POST', body: JSON.stringify({ now }) });
@@ -143,11 +130,9 @@ export class InPlay {
   }
 
   // The live odds now in each head-to-head being played, added to its records: how many changed.
+  // None while no match is on or just over (the feed's `matches`, by recentFixtures), as
+  // between match days: then nothing else is read, nor anything written.
   private async record({ season, gw }: Gameweek, now: number): Promise<number | string> {
-    const site = await this.siteData(now);
-    if (!site) return 'Can’t read the site’s data.json just now';
-    // Until a build has caught up with the gameweek, its data.json can't tell its lineups.
-    if (site.meta.season.replace('/', '-') !== season || site.live?.gw !== gw) return 0;
     let feed: Awaited<ReturnType<typeof liveFeed>>;
     try {
       feed = await liveFeed(gw, now);
@@ -155,6 +140,11 @@ export class InPlay {
       if (!(err instanceof Upstream)) throw err;
       return err.message;
     }
+    if (!Object.keys(feed.matches).length) return 0;
+    const site = await this.siteData(now);
+    if (!site) return 'Can’t read the site’s data.json just now';
+    // Until a build has caught up with the gameweek, its data.json can't tell its lineups.
+    if (site.meta.season.replace('/', '-') !== season || site.live?.gw !== gw) return 0;
     const latest = recordsNow(site, feed, now, (fixture) => feed.matches[fixture]);
     const records = await this.records();
     let added = 0;

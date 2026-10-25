@@ -3,9 +3,9 @@ import './fixtures/browser.ts';
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 
-import { matchList, roundSubtitle } from '../src/app/matches.ts';
+import { matchList, roundSubtitle, showsOdds } from '../src/app/matches.ts';
 import { setData, setLive } from '../src/app/state.ts';
-import type { Data, LiveData } from '../src/shared/data.ts';
+import type { Data, LiveData, Match } from '../src/shared/data.ts';
 import { league, lineup, match, player } from './fixtures/league.ts';
 import { text } from './fixtures/html.ts';
 
@@ -44,6 +44,44 @@ describe('the round’s line while it’s played', () => {
       ]),
     );
     assert.equal(text(roundSubtitle(3, { short: true })), 'Live · 1 of 2 played · 1 on now');
+  });
+
+  it('says it plainly once every match is over and FPL has still to confirm the points', () => {
+    setData(
+      playing([
+        { started: true, done: true },
+        { started: true, done: true },
+      ]),
+    );
+    const line = roundSubtitle(3);
+    assert.doesNotMatch(line, /round-live|live-dot/);
+    assert.equal(line, 'Gameweek 3 · all 2 matches played · points provisional until FPL confirms them');
+    assert.equal(roundSubtitle(3, { short: true }), 'All 2 played · points provisional');
+  });
+
+  it('shows its head-to-heads full time, starred, while FPL has still to confirm the points', () => {
+    const d = playing([{ started: true, done: true }]);
+    d.gameweeks = [{ id: 3, deadline: '2026-08-29T10:00:00Z', finished: false, doubles: [], checked: false }];
+    setData(d);
+    assert.match(matchList(d.matches.filter((m) => m.gw === 3)), />FT\*<\/span>/);
+    // Starred too when the last build has no word from FPL yet.
+    delete d.gameweeks[0].checked;
+    setData(d);
+    assert.match(matchList(d.matches.filter((m) => m.gw === 3)), />FT\*<\/span>/);
+  });
+
+  it('shows odds before kick-off and while it’s played, none once it’s over or every match is', () => {
+    const due = { ...match(4, 1, 2, 0, 0, false), started: false, odds: { p: [0.5, 0.1, 0.4], prices: [] } } as unknown as Match;
+    const on = playing([{ started: true, done: false }]);
+    on.players[12] = player('Saka', 'MID', 1, 0, 1);
+    on.lineups = { 1: { 3: lineup([12]) }, 2: { 3: lineup([]) } };
+    setData(on);
+    assert.equal(showsOdds(due), true);
+    assert.equal(showsOdds({ ...due, odds: undefined }), false);
+    assert.equal(showsOdds(match(3, 1, 2, 10, 12, false)), true);
+    assert.equal(showsOdds(match(2, 1, 2, 10, 12)), false);
+    setData(playing([{ started: true, done: true }]));
+    assert.equal(showsOdds(match(3, 1, 2, 10, 12, false)), false);
   });
 
   it('keeps the live line to the gameweek being played', () => {

@@ -33,7 +33,7 @@ page can be shared. The old tab links (`#table`, `#squads/123`) still land in th
 - **Search**, as fotmob.com's: players, matches (head-to-heads by manager or team, the Premier League's by club, the nearest to now first), teams and leagues, each a chip of its own or all together, and before anything is typed the pages opened last (of the chip's kind, then its usual suggestions).
 - Search players and teams in the top bar; before anything is typed it suggests the pages opened last. Under the cog: light/dark theme, decimal/fractional odds, and whose expected points to show, the site's own or FPL's form (which also picks the projected XIs and drives the live odds; the pre-match odds stay on the site's).
 - The draft league's header counts down to the waiver run and the deadline, and shows "Live" while a gameweek is being played.
-- During a gameweek the table gets fotmob.com's Live column and live positions, with rows sliding as they change. With the live relay set up (below), the scores keep up within 30 seconds.
+- During a gameweek the table gets fotmob.com's Live column and live positions, with rows sliding as they change. With the live relay set up (below), the scores keep up within 30 seconds. Once all the gameweek's matches are over, until FPL confirms the points, it's no longer live: the top bar says the gameweek's points are provisional, the round's line that all its matches are played, the head-to-heads show FT* without live odds (each one's report tells it as over as soon as its Full time shows), and the table keeps the gameweek's provisional points without the Live column, as a note under it says.
 - Installable: on Android Chrome use the menu → Install app (on iPhone, Share → Add to Home Screen).
 - The table marks the prize places (1st and 2nd) and last place, whose penalty is still to be decided. Managers appear by first name only, since the page is public.
 - Finished seasons are kept: the season chip becomes a picker once there is more than one.
@@ -84,13 +84,17 @@ chance, recorded every minute while the gameweek's matches are on).
 The page, the Worker and the build all score with `src/shared/live.ts`, which adds provisional
 bonus and provisional auto-subs.
 
-Its timer fires every minute. Each minute it asks FPL's game state and the gameweek's fixtures
-(kept a few minutes, a few KB) whether a Premier League match is on, from kick-off until two and
-a half hours after; when one is, the gameweek's Durable Object (`worker/in-play.ts`, one per
-gameweek) works out each head-to-head's live odds from the site's `data.json` (read at most every
-5 minutes) and the relay's own live feed, with the page's code (`src/shared/in-play.ts`), and
-keeps them as the build does. Nothing else runs in a minute with nothing on, and the build's
-timer keeps its own cadence (every tenth minute's firing, as above). Each data build copies the
+Its timer fires every minute. Each minute it asks FPL Draft's game state (kept five minutes, a
+few hundred bytes) which gameweek is being played; from its deadline until FPL calls it finished,
+it hands the minute to the gameweek's Durable Object (`worker/in-play.ts`, one per gameweek, one
+request a minute). FPL's main game, whose fixtures would tell the kick-offs, turns Cloudflare's
+addresses away, so the object decides from the relay's own live feed (the one `/live` shares)
+whether a Premier League match is on, from kick-off until two and a half hours after; when one
+is, it works out each head-to-head's live odds from the site's `data.json` (read at most every
+5 minutes) and that feed, with the page's code (`src/shared/in-play.ts`), and keeps them as the
+build does. In a minute with nothing on it reads nothing more and writes nothing; once the
+gameweek is finished, nothing runs at all. The build's timer keeps its own cadence (every tenth
+minute's firing, as above). Each data build copies the
 records into `data.json` (the relay's URL is `RELAY_URL` in `src/build/config.ts`); when the relay
 can't be reached it records at each build alone, as before. While a gameweek is played, a
 head-to-head's page asks the relay for the records since the last build, at most once a minute.
