@@ -47,15 +47,17 @@ beforeEach(() => {
 });
 
 const allTransfers = () => cardTitled(pageTransfers().body, 'All transfers');
-// Each row's player and how he moved.
+// Each row's team (both, for a trade) and how, then from → to: the player out and the player in, each pair a trade swapped.
 const rows = (html: string) =>
   html
     .split('<div class="tc-row">')
     .slice(1)
-    .map(
-      (row) =>
-        `${text(row.split('<span class="tc-name"><span>')[1].split('</span>')[0])}: ${text(row.split('<span class="tc-how">')[1].split('</span>')[0])}`,
-    );
+    .map((row) => {
+      const team = text(row.split('<span class="tc-swaps">')[0].replace(/<span class="tc-meta">.*?<\/span>/, ''));
+      const how = text(row.split('<span class="tc-how">')[1].split('</span>')[0]);
+      const swaps = [...row.matchAll(/<span class="tc-move">([\s\S]*?)<\/a><\/span>/g)].map((m) => text(m[1] + '</a>'));
+      return `${team}, ${how}: ${swaps.join(', ')}`;
+    });
 
 describe('the Transfer center', () => {
   it('counts the season’s moves, a trade once, and says when the next waivers are', () => {
@@ -67,67 +69,48 @@ describe('the Transfer center', () => {
     assert.equal(pageTransfers().header!.sub, '3 moves this season');
   });
 
-  it('lists every player who moved by gameweek, a waiver or free-agent move as the player in and the player out', () => {
+  it('lists every move by gameweek as the game makes it: from the player a team let go to the one it brought in, a trade once', () => {
     const html = allTransfers();
-    assert.match(html, /<div class="card-sub">6 players<\/div>/);
+    assert.match(html, /<div class="card-sub">3 moves<\/div>/);
     assert.deepEqual(
       [...html.matchAll(/<div class="date-head"><span>([^<]+)<\/span><span class="muted">([^<]+)<\/span>/g)].map((m) => `${m[1]}: ${m[2]}`),
-      ['Gameweek 3: 4 players', 'Gameweek 2: 2 players'],
+      ['Gameweek 3: 2 moves', 'Gameweek 2: 1 move'],
     );
-    assert.deepEqual(rows(html), [
-      'Saka: Trade, for Palmer',
-      'Palmer: Trade, for Saka',
-      'Gabriel: Free agent, for White',
-      'White: Free agent, dropped for Gabriel',
-      'Watkins: Waiver, for Isak',
-      'Isak: Waiver, dropped for Watkins',
-    ]);
+    assert.deepEqual(rows(html), ['Bob ⇄ Ann, Trade: Palmer → Saka', 'Ann, Free agent: White → Gabriel', 'Cy, Waiver: Isak → Watkins']);
   });
 
-  it('shows where each player came from and went: a team, waivers or free agency', () => {
-    const moves = allTransfers()
-      .split('<div class="tc-row">')
-      .slice(1)
-      .map((row) => text(row.split('<span class="tc-move">')[1].split('<a class="tc-player"')[0]));
-    assert.deepEqual(moves, ['Ann → Bob', 'Bob → Ann', 'Free agent → Ann', 'Ann → Free agent', 'Waivers → Cy', 'Cy → Free agent']);
+  it('puts all of a trade’s players in its one row', () => {
+    const d = data();
+    d.transfers.moves.splice(2, 0, move('trade', 2, 14, 15, 3, 29, 1), move('trade', 1, 15, 14, 3, 29, 2));
+    setData(d);
+    assert.deepEqual(rows(allTransfers())[0], 'Bob ⇄ Ann, Trade: Palmer → Saka, Haaland → Salah');
+    assert.match(pageTransfers().header!.sub!, /^3 moves this season/);
   });
 
-  it('narrows the list to a team, and to the players it signed or let go', () => {
+  it('narrows the list to a team’s moves, a trade as its side of it', () => {
     state.logManager = '3';
-    assert.deepEqual(
-      rows(allTransfers()).map((r) => r.split(':')[0]),
-      ['Watkins', 'Isak'],
-    );
-    state.moves = 'in';
-    assert.deepEqual(
-      rows(allTransfers()).map((r) => r.split(':')[0]),
-      ['Watkins'],
-    );
-    state.logManager = 'all';
-    state.moves = 'out';
-    assert.deepEqual(
-      rows(allTransfers()).map((r) => r.split(':')[0]),
-      ['Saka', 'Palmer', 'White', 'Isak'],
-    );
+    assert.deepEqual(rows(allTransfers()), ['Cy, Waiver: Isak → Watkins']);
+    state.logManager = '1';
+    assert.deepEqual(rows(allTransfers()), ['Ann ⇄ Bob, Trade: Saka → Palmer', 'Ann, Free agent: White → Gabriel']);
   });
 
-  it('narrows the list to a kind of move, a gameweek or a position', () => {
-    const names = () => rows(allTransfers()).map((r) => r.split(':')[0]);
+  it('narrows the list to a kind of move, a gameweek or a position of the player in or out', () => {
+    const teams = () => rows(allTransfers()).map((r) => r.split(':')[0]);
     state.moveType = 'trade';
-    assert.deepEqual(names(), ['Saka', 'Palmer']);
+    assert.deepEqual(teams(), ['Bob ⇄ Ann, Trade']);
     state.moveType = 'all';
     state.moveGw = '2';
-    assert.deepEqual(names(), ['Watkins', 'Isak']);
+    assert.deepEqual(teams(), ['Cy, Waiver']);
     state.moveGw = 'all';
     state.movePos = 'DEF';
-    assert.deepEqual(names(), ['Gabriel', 'White']);
+    assert.deepEqual(teams(), ['Ann, Free agent']);
   });
 
   it('says so when no transfer is like that, the sheet’s button too', () => {
     Object.assign(state, { logManager: '3', moveType: 'trade' });
     const { body } = pageTransfers();
     assert.match(cardTitled(body, 'All transfers'), /No transfers like that yet/);
-    assert.match(body, /<button type="button" class="sheet-done" data-action="sheet-close" data-value="tc-sheet">Show 0 players<\/button>/);
+    assert.match(body, /<button type="button" class="sheet-done" data-action="sheet-close" data-value="tc-sheet">Show 0 moves<\/button>/);
   });
 
   it('offers the teams, escaped, and only the gameweeks with moves, newest first, the current choices picked', () => {

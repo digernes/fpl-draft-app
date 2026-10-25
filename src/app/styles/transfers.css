@@ -56,14 +56,15 @@
   margin-bottom: 4px;
 }
 
-/* A row: from and to as pills either side of an arrow, the player, the move, when. */
+/* A row a move: the team, from → to as pills either side of an arrow (the player out, the
+   player in), the move, when. */
 .tc-row {
   display: grid;
-  grid-template-columns: 196px minmax(0, 1fr) minmax(0, 1fr) 48px;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 2fr) 72px 40px;
   align-items: center;
-  gap: 12px;
-  min-height: 56px;
-  padding: 8px 16px;
+  gap: 16px;
+  min-height: 64px;
+  padding: 12px 16px;
   border-top: 1px solid var(--row-divider);
   font-size: 13px;
 }
@@ -80,10 +81,16 @@
   text-align: right;
 }
 
+.tc-swaps {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+}
+
 .tc-move {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 8px;
   min-width: 0;
 }
 
@@ -91,13 +98,13 @@
   display: inline-flex;
   align-items: center;
   flex: 1;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
-  height: 28px;
-  padding: 0 8px 0 4px;
-  border-radius: 8px;
+  height: 36px;
+  padding: 0 12px 0 4px;
+  border-radius: 10px;
   background: var(--hover);
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 500;
   white-space: nowrap;
 }
@@ -107,18 +114,12 @@
   text-overflow: ellipsis;
 }
 
-.tc-pill.free {
-  justify-content: center;
-  padding: 0 8px;
-  color: var(--text-2);
-}
-
 .tc-arrow {
   flex: none;
   color: var(--text-2);
 }
 
-.tc-player {
+.tc-team {
   display: flex;
   align-items: center;
   gap: 10px;
@@ -205,32 +206,32 @@
   }
 }
 
-/* Phones: the player first, then from → to under him; the move goes. */
+/* Phones: the team and how, with when at the right, then from → to under them. */
 @media (max-width: 767px) {
   .tc-row {
-    grid-template-columns: minmax(0, 1fr) 44px;
-    grid-template-areas: 'player when' 'move move';
-    row-gap: 8px;
+    grid-template-columns: auto minmax(0, 1fr) 44px;
+    grid-template-areas: 'team how when' 'swaps swaps swaps';
+    row-gap: 12px;
   }
 
   .tc-head {
     display: none;
   }
 
-  .tc-player {
-    grid-area: player;
+  .tc-swaps {
+    grid-area: swaps;
   }
 
-  .tc-move {
-    grid-area: move;
+  .tc-team {
+    grid-area: team;
+  }
+
+  .tc-how {
+    grid-area: how;
   }
 
   .tc-when {
     grid-area: when;
-  }
-
-  .tc-how {
-    display: none;
   }
 }
 

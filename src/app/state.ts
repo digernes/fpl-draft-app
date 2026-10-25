@@ -47,7 +47,7 @@ export const state = {
   moveGw: 'all', // its gameweek: 'all' or one
   movePos: 'all', // its players' position: 'all', 'GKP', 'DEF', 'MID' or 'FWD'
   openSquad: null as string | null, // manager whose original squad is expanded
-  moves: 'all', // a team's moves, on its Transfers tab and in the Transfer center: 'all', 'in' or 'out'
+  moves: 'all', // a team's moves, on its Transfers tab: 'all', 'in' or 'out'
   lineupView: 'last', // a team's pitch: 'last' (the latest lineup) or 'all' (the season's best XI)
   lineupStat: '', // the pitches' lineup filter: '' (points), 'xp', 'xg', 'xa' or 'xcs'
   due: '', // what the pitches' players still to play show: 'xp' (projected points, and those on the pitch theirs too), 'ko' (kick-off) or '' (projections before a gameweek, kick-offs once it's on)

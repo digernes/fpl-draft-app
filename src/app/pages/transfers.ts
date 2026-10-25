@@ -1,16 +1,17 @@
-// The Transfer center, as fotmob.com's: every player who has moved, from whom to whom,
-// newest first, with the trade offers under them; and on the left a filter for the team
-// and the kind of move, the season's numbers and the waiver order. On a phone the filter
+// The Transfer center, as fotmob.com's: every move, newest first, as the game makes it (the
+// player a team let go and the one it brought in, a trade once for both sides), with the trade offers under
+// them; and on the left a filter for the team and the kind of move, the season's numbers and
+// the waiver order. On a phone the filter
 // is in a sheet behind a button, and the numbers and the order are left out. The home
 // page's recent transfers card leads here.
 
 import type { Move } from '../../shared/data.ts';
 import { onAction } from '../actions.ts';
 import { feed, feedRow, MOVE_TYPES } from '../cards.ts';
-import { avatar, card, crest, empty, listRow, photo, seg, sheet, tile } from '../components.ts';
+import { avatar, card, empty, listRow, photo, seg, sheet, tile } from '../components.ts';
 import { ago, esc, fmtShortDay, plural } from '../format.ts';
 import { slidersSvg, starSvg, swapSvg } from '../icons.ts';
-import { club, first, player } from '../lookups.ts';
+import { first, mgr, player } from '../lookups.ts';
 import { renderView, type PageView } from '../render.ts';
 import { href } from '../router.ts';
 import { D, state } from '../state.ts';
@@ -33,6 +34,38 @@ onAction('move-pos', (value) => {
   renderView();
 });
 
+/** A move as the game makes it: a team's players in and out (one each, but for a trade). */
+interface Deal {
+  move: Move;
+  ins: number[];
+  outs: number[];
+}
+
+// A waiver or free-agent move is a deal of its own. A trade is a move for each side per
+// player swapped, which make one deal: as a team's side for that team, else as the side
+// that offered it, which the build lists first.
+function dealsOf(team: number | null): Deal[] {
+  const deals: Deal[] = [];
+  const trades = new Map<string, Deal>();
+  for (const mv of D.transfers.moves) {
+    if (team && mv.manager !== team) continue;
+    if (mv.type !== 'trade') {
+      deals.push({ move: mv, ins: [mv.in], outs: [mv.out] });
+      continue;
+    }
+    const key = `${mv.at} ${Math.min(mv.manager, mv.partner!)} ${Math.max(mv.manager, mv.partner!)}`;
+    const deal = trades.get(key);
+    if (!deal) {
+      trades.set(key, { move: mv, ins: [mv.in], outs: [mv.out] });
+      deals.push(trades.get(key)!);
+    } else if (deal.move.manager === mv.manager) {
+      deal.ins.push(mv.in);
+      deal.outs.push(mv.out);
+    }
+  }
+  return deals;
+}
+
 /** A player who moved: from a team (or free agency) to a team (or back to it). */
 interface Movement {
   move: Move;
@@ -41,8 +74,8 @@ interface Movement {
   to: number | null;
 }
 
-// Each waiver or free-agent move is two movements, the player in and the player out; a
-// trade's each leg is already a move of its own, so it counts once.
+// For the top transfers: each waiver or free-agent move is two movements, the player in and
+// the player out; a trade's each leg is already a move of its own, so it counts once.
 function movements(): Movement[] {
   return D.transfers.moves.flatMap((mv): Movement[] =>
     mv.type === 'trade'
@@ -67,37 +100,31 @@ function stature() {
 }
 
 export function pageTransfers(): PageView {
-  const all = movements();
   const team = Number(state.logManager) || null;
-  // In: to the team (or any, for all of them); out: from it.
-  const into = (x: Movement) => (team ? x.to === team : x.to !== null);
-  const outOf = (x: Movement) => (team ? x.from === team : x.from !== null);
-  const shown = all.filter(
-    (x) =>
-      ((state.moves !== 'out' && into(x)) || (state.moves !== 'in' && outOf(x))) &&
-      (state.moveType === 'all' || x.move.type === state.moveType) &&
-      (state.moveGw === 'all' || x.move.gw === Number(state.moveGw)) &&
-      (state.movePos === 'all' || player(x.pid)?.pos === state.movePos),
+  const shown = dealsOf(team).filter(
+    ({ move, ins, outs }) =>
+      (state.moveType === 'all' || move.type === state.moveType) &&
+      (state.moveGw === 'all' || move.gw === Number(state.moveGw)) &&
+      (state.movePos === 'all' || [...ins, ...outs].some((pid) => player(pid)?.pos === state.movePos)),
   );
   return {
     title: 'Transfer center',
     header: {
       logo: `<span class="tc-logo">${swapSvg}</span>`,
       title: 'Transfer center',
-      sub: `${plural(D.transfers.moves.filter((mv) => mv.type !== 'trade').length + D.transfers.trades.filter((t) => t.state === 'p').length, 'move')} this season${D.meta.nextWaivers ? ` · next waivers ${fmtShortDay.format(new Date(D.meta.nextWaivers))}` : ''}`,
+      sub: `${plural(dealsOf(null).length, 'move')} this season${D.meta.nextWaivers ? ` · next waivers ${fmtShortDay.format(new Date(D.meta.nextWaivers))}` : ''}`,
       side: `<button type="button" class="tc-edit" data-action="sheet-open" data-value="tc-sheet">Filter${slidersSvg}</button>`,
       cls: 'tc-header',
     },
     body: `<div class="cols-side">
       <div class="col tc-side">${card({ title: 'Filter', body: filters() })}${numbersCard()}${waiverOrderCard()}</div>
-      <div class="col">${card({ title: 'All transfers', sub: plural(shown.length, 'player'), body: shown.length ? byGameweek(shown) : empty('No transfers like that yet') })}${tradesCard()}</div>
-    </div>${sheet('tc-sheet', 'Filter', filters(), `Show ${plural(shown.length, 'player')}`)}`,
+      <div class="col">${card({ title: 'All transfers', sub: plural(shown.length, 'move'), body: shown.length ? byGameweek(shown) : empty('No transfers like that yet') })}${tradesCard()}</div>
+    </div>${sheet('tc-sheet', 'Filter', filters(), `Show ${plural(shown.length, 'move')}`)}`,
   };
 }
 
-// fotmob.com's Edit card (or sheet, on a phone): which team, the players in or out (of it,
-// or of any), when, which kind of move and which position. In or out is the team page's
-// switch (its `moves` action), so both agree.
+// fotmob.com's Edit card (or sheet, on a phone): which team, when, which kind of move and
+// which position (of the player in or out).
 function filters() {
   const options = [
     `<option value="all"${state.logManager === 'all' ? ' selected' : ''}>All teams</option>`,
@@ -114,15 +141,6 @@ function filters() {
       ['trade', 'Trades'],
     ],
     state.moveType,
-  );
-  const direction = seg(
-    'moves',
-    [
-      ['all', 'All'],
-      ['in', 'In'],
-      ['out', 'Out'],
-    ],
-    state.moves,
   );
   const gws = [...new Set(D.transfers.moves.map((mv) => mv.gw))].sort((a, b) => b - a);
   const timeframe = [
@@ -142,7 +160,6 @@ function filters() {
   );
   return `<div class="tc-filter">
       <label class="tc-label">Team<span class="tc-select"><select data-action="log" aria-label="Team">${options}</select></span></label>
-      <div class="tc-label">Direction</div>${direction}
       <label class="tc-label">Timeframe<span class="tc-select"><select data-action="move-gw" aria-label="Timeframe">${timeframe}</select></span></label>
       <div class="tc-label">Kind of move</div>${kinds}
       <div class="tc-label">Position</div>${positions}
@@ -166,41 +183,45 @@ function numbersCard() {
   });
 }
 
-// A team, or where a player came from or went: off waivers, or free agency.
-const sidePill = (id: number | null, nobody = 'Free agent') =>
-  id
-    ? `<a class="tc-pill" href="${href.team(id)}">${avatar(id, 20)}<span>${first(id)}</span></a>`
-    : `<span class="tc-pill free">${nobody}</span>`;
+const playerPill = (pid: number) =>
+  `<a class="tc-pill" href="${href.player(pid)}">${photo(pid, 28)}<span>${esc(player(pid)?.name ?? '?')}</span></a>`;
 
-// fotmob.com's transfer rows: from, to, the player, how and when.
-function table(list: Movement[]) {
-  const rows = list.map(({ move, pid, from, to }) => {
-    const p = player(pid);
-    const other = pid === move.in ? move.out : move.in;
-    const how =
-      move.type === 'trade'
-        ? `Trade, for ${esc(player(other)?.name ?? '?')}`
-        : `${MOVE_TYPES[move.type]}, ${pid === move.in ? 'for' : 'dropped for'} ${esc(player(other)?.name ?? '?')}`;
-    return `<div class="tc-row">
-      <span class="tc-move">${sidePill(from, move.type === 'waiver' ? 'Waivers' : 'Free agent')}<span class="tc-arrow">→</span>${sidePill(to)}</span>
-      <a class="tc-player" href="${href.player(pid)}">${photo(pid, 32)}<span class="tc-name"><span>${esc(p?.name ?? '?')}</span><span class="tc-meta">${crest(p?.club, 12)} ${esc(club(p?.club)?.short ?? '')} · ${p?.pos ?? ''}</span></span></a>
-      <span class="tc-how">${how}</span>
-      <span class="tc-when" data-tip="${esc(ago(move.at))}">GW ${move.gw}</span>
-    </div>`;
-  });
-  return `<div class="tc-table"><div class="tc-row tc-head"><span>From → To</span><span>Player</span><span>Move</span><span>When</span></div>${rows.join('')}</div>`;
+const teamLink = (id: number) => `<a href="${href.team(id)}">${first(id)}</a>`;
+
+// The team that made a move, or both sides of a trade, a line each, the one whose from → to it is first.
+function teamCell(mv: Move) {
+  if (mv.type === 'trade')
+    return `<span class="tc-team"><span class="stack">${avatar(mv.manager, 32)}${avatar(mv.partner, 32)}</span><span class="tc-name"><span>${teamLink(mv.manager)}</span><span>⇄ ${teamLink(mv.partner!)}</span></span></span>`;
+  return `<span class="tc-team">${avatar(mv.manager, 32)}<span class="tc-name"><span>${teamLink(mv.manager)}</span><span class="tc-meta">${esc(mgr(mv.manager)?.team ?? '')}</span></span></span>`;
 }
 
-function byGameweek(list: Movement[]) {
-  const groups: { gw: number; list: Movement[] }[] = [];
-  for (const x of list) {
-    if (groups.at(-1)?.gw !== x.move.gw) groups.push({ gw: x.move.gw, list: [] });
-    groups.at(-1)!.list.push(x);
+// fotmob.com's transfer rows, a move each: the team that made it, from → to (the player out,
+// then the player in, a line for each pair a trade swapped), how and when.
+function table(list: Deal[]) {
+  const rows = list.map(({ move: mv, ins, outs }) => {
+    const swaps = ins.map(
+      (pid, i) => `<span class="tc-move">${playerPill(outs[i])}<span class="tc-arrow">→</span>${playerPill(pid)}</span>`,
+    );
+    return `<div class="tc-row">
+      ${teamCell(mv)}
+      <span class="tc-swaps">${swaps.join('')}</span>
+      <span class="tc-how">${MOVE_TYPES[mv.type]}</span>
+      <span class="tc-when" data-tip="${esc(ago(mv.at))}">GW ${mv.gw}</span>
+    </div>`;
+  });
+  return `<div class="tc-table"><div class="tc-row tc-head"><span>Team</span><span>From → To</span><span>Move</span><span>When</span></div>${rows.join('')}</div>`;
+}
+
+function byGameweek(list: Deal[]) {
+  const groups: { gw: number; list: Deal[] }[] = [];
+  for (const deal of list) {
+    if (groups.at(-1)?.gw !== deal.move.gw) groups.push({ gw: deal.move.gw, list: [] });
+    groups.at(-1)!.list.push(deal);
   }
   return groups
     .map(
       (g) =>
-        `<div class="date-head"><span>Gameweek ${g.gw}</span><span class="muted">${plural(g.list.length, 'player')}</span></div>${table(g.list)}`,
+        `<div class="date-head"><span>Gameweek ${g.gw}</span><span class="muted">${plural(g.list.length, 'move')}</span></div>${table(g.list)}`,
     )
     .join('');
 }
