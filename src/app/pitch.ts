@@ -31,6 +31,7 @@ export interface PitchPlayer {
   /** Under the name: where their match stands, or that they play twice. */
   note?: string;
   tip?: string;
+  /** A named substitute who never came on: his photo and name faded, on the pitch and on a bench row alike. */
   faded?: boolean;
 }
 
@@ -180,5 +181,5 @@ function benchRow(p: PitchPlayer) {
       ? `<div class="mp-sub-name"><span>${esc(pl.name)}</span>${p.mark ?? ''}</div>`
       : `<div class="mp-sub-name">${ownerPill(p.owner, p.benched, pl.name, { gw: p.gw })}</div>`;
   const where = p.owner === undefined ? `${crest(pl.club, 12)}${esc(club(pl.club).short)} · ` : '';
-  return `<a class="mp-sub" href="${href.player(p.pid)}">${photo(p.pid, 28)}<div class="mp-sub-main">${name}<div class="mp-sub-meta">${where}${pl.pos}${p.note ? ` · ${p.note}` : ''}</div></div>${eventRow(p.events)}${p.badge}</a>`;
+  return `<a class="mp-sub${p.faded ? ' faded' : ''}" href="${href.player(p.pid)}">${photo(p.pid, 28)}<div class="mp-sub-main">${name}<div class="mp-sub-meta">${where}${pl.pos}${p.note ? ` · ${p.note}` : ''}</div></div>${eventRow(p.events)}${p.badge}</a>`;
 }

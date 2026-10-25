@@ -9,10 +9,12 @@
     "data": "node scripts/build-data.ts",
     "build": "node scripts/build-site.ts",
     "dev": "node scripts/build-site.ts --serve",
+    "snapshot": "node scripts/snapshot.ts",
     "typecheck": "tsc -p tsconfig.app.json && tsc -p tsconfig.node.json && tsc -p tsconfig.worker.json",
     "lint": "eslint . && prettier --check .",
     "format": "prettier --write . && eslint --fix .",
     "test": "node --test 'tests/**/*.test.ts'",
+    "coverage": "node --test --experimental-test-coverage --test-coverage-exclude='tests/**' 'tests/**/*.test.ts'",
     "check": "npm run typecheck && npm run lint && npm test"
   },
   "dependencies": {

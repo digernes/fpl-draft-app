@@ -6,12 +6,12 @@
 
 import type { Position } from '../shared/data.ts';
 import type { LiveFeed } from '../shared/fpl-api.ts';
-import { fitBonus, type BonusOptions } from './bonus.ts';
+import { fitBonus, type Bonus, type BonusOptions } from './bonus.ts';
 import { readHistory, type History, type ModelPlayer } from './history.ts';
 import { startingPoint, type LastSeason } from './last-season.ts';
-import { minutesScenarios, playerRates, standIns, type Plan, type PlayerOptions, type StandInOptions } from './players.ts';
-import { matchParts, PARTS, readScoring, type Counts, type Parts } from './points.ts';
-import { fitTeams, type TeamOptions } from './teams.ts';
+import { minutesScenarios, playerRates, standIns, type Plan, type PlayerOptions, type Scenario, type StandInOptions } from './players.ts';
+import { matchParts, PARTS, readScoring, type Counts, type Match, type Parts, type Rates, type Scoring } from './points.ts';
+import { fitTeams, type TeamOptions, type Teams } from './teams.ts';
 
 export interface ModelOptions {
   teams: Omit<TeamOptions, 'atGw'>;
@@ -67,93 +67,159 @@ export interface Forecast {
   minutes: Map<number, number>;
 }
 
-export function forecast(input: ModelInput, gw: number, fixtures: { team_h: number; team_a: number }[], o = DEFAULT_OPTIONS): Forecast {
+type Fixtures = { team_h: number; team_a: number }[];
+type Players = Map<number, ModelPlayer>;
+type MinutesFor = Map<number, { options: Scenario[]; chance: number }>;
+
+// What every player's forecast in the gameweek is worked out from.
+interface Gameweek {
+  players: Players;
+  fixtures: Fixtures;
+  teams: Teams;
+  scoring: Scoring;
+  counts: Counts;
+  rates: Map<number, Rates>;
+  bonusRates: Bonus['rates'];
+  minutesFor: MinutesFor;
+  /** The chance that nobody ahead of him in his club's order is there to take a penalty. */
+  first: Map<number, number>;
+  penaltiesAt: (xg: number) => number;
+}
+
+export function forecast(input: ModelInput, gw: number, fixtures: Fixtures, o = DEFAULT_OPTIONS): Forecast {
+  const { players } = input;
   const feeds = Object.fromEntries(Object.entries(input.feeds).filter(([g]) => Number(g) < gw));
-  const history = readHistory(feeds, input.players);
+  const history = readHistory(feeds, players);
   const conversion = { finishing: o.finishing, saves: o.counts.saves, penalties: o.counts.penalties };
   const start =
     input.last && startingPoint(input.last, o.players, { ...conversion, assists: o.assists.perXa }, o.teams, o.lastSeason.clubs);
   const teams = fitTeams(history.matches, { atGw: gw, ...o.teams, centre: start });
   const scoring = readScoring(input.scoring);
-  const assists = assistFactors(history, input.players, o.assists);
-  const bonus = fitBonus(history, input.players, gw, o.players.halfLife, scoring.defconLimit, o.bonus);
+  const assists = assistFactors(history, players, o.assists);
+  const bonus = fitBonus(history, players, gw, o.players.halfLife, scoring.defconLimit, o.bonus);
   const rates = new Map(
-    [...playerRates(history, input.players, o.players, gw, { ...conversion, assists }, start?.shares)].map(([pid, r]) => [
+    [...playerRates(history, players, o.players, gw, { ...conversion, assists }, start?.shares)].map(([pid, r]) => [
       pid,
       { ...r, bonus90: bonus.own.get(pid) ?? 0 },
     ]),
   );
-  const scenarios = minutesScenarios(history, o.players);
+  const plans = matchPlans(players, fixtures, minutesScenarios(history, o.players), o.players);
+  const minutesFor = minutesOptions(players, plans, standIns(players, plans, rates, o.standIns), o);
+  const first = firstOnPenalties(players, plans, minutesFor);
+  const penaltiesAt = penaltiesFor(fixtures, teams, o.counts.penalties.perMatch);
+  const g: Gameweek = {
+    players,
+    fixtures,
+    teams,
+    scoring,
+    counts: o.counts,
+    rates,
+    bonusRates: bonus.rates,
+    minutesFor,
+    first,
+    penaltiesAt,
+  };
 
-  // FPL's chance of playing scales him, and the minutes it takes away go to his stand-ins
-  // (players.ts).
-  const flag = (p: ModelPlayer) => (p.chance == null ? 1 : (p.chance / 100) ** o.players.flagPower);
+  const parts = new Map<number, Parts>();
+  const minutes = new Map<number, number>();
+  // Each match's bonus, player by player, for sharing out below.
+  const bonusIn = fixtures.map(() => new Map<number, number>());
+  for (const [pid] of plans) {
+    const { mine, mins } = playerParts(pid, g, bonusIn);
+    parts.set(pid, mine);
+    minutes.set(pid, mins);
+  }
+  shareBonus(feeds, bonusIn, parts);
+  const points = new Map([...parts].map(([pid, mine]) => [pid, PARTS.reduce((t, part) => t + mine[part], 0)]));
+  return { points, parts, minutes };
+}
+
+const playsIn = (club: number, f: Fixtures[number]) => f.team_h === club || f.team_a === club;
+
+// FPL's chance of playing scales him, and the minutes it takes away go to his stand-ins
+// (players.ts).
+function matchPlans(players: Players, fixtures: Fixtures, scenarios: (pid: number, club: number) => Scenario[], o: PlayerOptions) {
+  const flag = (p: ModelPlayer) => (p.chance == null ? 1 : (p.chance / 100) ** o.flagPower);
   const plans = new Map<number, Plan>();
-  for (const [pid, p] of input.players)
-    if (fixtures.some((f) => f.team_h === p.club || f.team_a === p.club))
-      plans.set(pid, { scenarios: scenarios(pid, p.club), chance: flag(p) });
-  const starts = standIns(input.players, plans, rates, o.standIns);
-  // Each player's minutes scenarios for a match, with a stand-in's chance of starting, and
-  // `absent`: the chance that even an unflagged regular misses out.
-  const minutesFor = new Map(
+  for (const [pid, p] of players)
+    if (fixtures.some((f) => playsIn(p.club, f))) plans.set(pid, { scenarios: scenarios(pid, p.club), chance: flag(p) });
+  return plans;
+}
+
+// Each player's minutes scenarios for a match, with a stand-in's chance of starting, and
+// `absent`: the chance that even an unflagged regular misses out.
+function minutesOptions(players: Players, plans: Map<number, Plan>, starts: Map<number, number>, o: ModelOptions): MinutesFor {
+  return new Map(
     [...plans].map(([pid, plan]) => {
       const q = starts.get(pid) ?? 0;
-      const start = o.standIns.start[input.players.get(pid)!.pos];
+      const start = o.standIns.start[players.get(pid)!.pos];
       const options = q
         ? [...plan.scenarios.map((s) => ({ ...s, weight: (1 - q) * s.weight })), { minutes: start, weight: q }]
         : plan.scenarios;
       return [pid, { options, chance: plan.chance * (1 - o.players.absent) }];
     }),
   );
+}
+
+// Penalties: a club's go to its takers in FPL's order, each when nobody ahead of him is
+// on the pitch.
+function firstOnPenalties(players: Players, plans: Map<number, Plan>, minutesFor: MinutesFor): Map<number, number> {
   const onPitch = (pid: number) => {
     const m = minutesFor.get(pid)!;
     return Math.min(1, (m.chance * m.options.reduce((t, s) => t + s.weight * s.minutes, 0)) / 90);
   };
-  // Penalties: a club's go to its takers in FPL's order, each when nobody ahead of him is
-  // on the pitch. How many it wins follows its attack, from the xG it can expect.
-  const order = (pid: number) => input.players.get(pid)!.penalties ?? Infinity;
+  const order = (pid: number) => players.get(pid)!.penalties ?? Infinity;
   const first = new Map<number, number>();
   const nobodyYet = new Map<number, number>();
-  for (const pid of [...plans.keys()].filter((id) => input.players.get(id)!.penalties).sort((a, b) => order(a) - order(b))) {
-    const club = input.players.get(pid)!.club;
+  for (const pid of [...plans.keys()].filter((id) => players.get(id)!.penalties).sort((a, b) => order(a) - order(b))) {
+    const club = players.get(pid)!.club;
     const left = nobodyYet.get(club) ?? 1;
     first.set(pid, left);
     nobodyYet.set(club, left * (1 - onPitch(pid)));
   }
+  return first;
+}
+
+// How many penalties a club wins follows its attack, from the xG it can expect.
+function penaltiesFor(fixtures: Fixtures, teams: Teams, perMatch: number): (xg: number) => number {
   const expectedXg = fixtures.flatMap((f) => [teams.rate(f.team_h, f.team_a, true), teams.rate(f.team_a, f.team_h, false)]);
   const averageXg = expectedXg.reduce((t, x) => t + x, 0) / Math.max(1, expectedXg.length);
-  const penaltiesAt = (xg: number) => (o.counts.penalties.perMatch * xg) / averageXg;
+  return (xg) => (perMatch * xg) / averageXg;
+}
 
-  const points = new Map<number, number>();
-  const parts = new Map<number, Parts>();
-  const minutes = new Map<number, number>();
-  // Each match's bonus, player by player, for sharing out below.
-  const bonusIn = fixtures.map(() => new Map<number, number>());
-  for (const [pid] of plans) {
-    const p = input.players.get(pid)!;
-    const r = rates.get(pid)!;
-    const { options, chance } = minutesFor.get(pid)!;
-    const mine = Object.fromEntries(PARTS.map((part) => [part, 0])) as Parts;
-    let mins = 0;
-    for (const [i, f] of fixtures.entries()) {
-      if (f.team_h !== p.club && f.team_a !== p.club) continue;
-      const home = f.team_h === p.club;
-      const opp = home ? f.team_a : f.team_h;
-      const xg = teams.rate(p.club, opp, home);
-      const xga = teams.rate(opp, p.club, !home);
-      const match = { xg, xga, penalties: { for: penaltiesAt(xg), against: penaltiesAt(xga), first: first.get(pid) ?? 0 } };
-      for (const s of options) {
-        const got = matchParts(p.pos, scoring, r, s.minutes, match, o.counts, bonus.rates[p.pos]);
-        for (const part of PARTS) mine[part] += chance * s.weight * got[part];
-        bonusIn[i].set(pid, (bonusIn[i].get(pid) ?? 0) + chance * s.weight * got.bonus);
-        mins += chance * s.weight * s.minutes;
-      }
+// A player's expected points in each part over his club's matches and his minutes
+// scenarios in each, adding his expected bonus to each match's (`bonusIn`).
+function playerParts(pid: number, g: Gameweek, bonusIn: Map<number, number>[]): { mine: Parts; mins: number } {
+  const p = g.players.get(pid)!;
+  const r = g.rates.get(pid)!;
+  const { options, chance } = g.minutesFor.get(pid)!;
+  const mine = Object.fromEntries(PARTS.map((part) => [part, 0])) as Parts;
+  let mins = 0;
+  for (const [i, f] of g.fixtures.entries()) {
+    if (!playsIn(p.club, f)) continue;
+    const match = matchFor(p.club, f, g, g.first.get(pid) ?? 0);
+    for (const s of options) {
+      const got = matchParts(p.pos, g.scoring, r, s.minutes, match, g.counts, g.bonusRates[p.pos]);
+      const weight = chance * s.weight;
+      for (const part of PARTS) mine[part] += weight * got[part];
+      bonusIn[i].set(pid, (bonusIn[i].get(pid) ?? 0) + weight * got.bonus);
+      mins += weight * s.minutes;
     }
-    parts.set(pid, mine);
-    minutes.set(pid, mins);
   }
-  // A match hands out the same bonus whoever plays in it (3, 2 and 1, and more for ties),
-  // so its players share the season's average per match, each in proportion to his.
+  return { mine, mins };
+}
+
+function matchFor(club: number, f: Fixtures[number], g: Gameweek, first: number): Match {
+  const home = f.team_h === club;
+  const opp = home ? f.team_a : f.team_h;
+  const xg = g.teams.rate(club, opp, home);
+  const xga = g.teams.rate(opp, club, !home);
+  return { xg, xga, penalties: { for: g.penaltiesAt(xg), against: g.penaltiesAt(xga), first } };
+}
+
+// A match hands out the same bonus whoever plays in it (3, 2 and 1, and more for ties),
+// so its players share the season's average per match, each in proportion to his.
+function shareBonus(feeds: Record<number, LiveFeed>, bonusIn: Map<number, number>[], parts: Map<number, Parts>) {
   const given = Object.values(feeds).reduce((t, feed) => t + Object.values(feed.elements).reduce((s, e) => s + (e.stats.bonus ?? 0), 0), 0);
   const played = Object.values(feeds).reduce((t, feed) => t + feed.fixtures.filter((f) => f.finished || f.finished_provisional).length, 0);
   for (const expected of bonusIn) {
@@ -161,12 +227,6 @@ export function forecast(input: ModelInput, gw: number, fixtures: { team_h: numb
     const scale = total > 0 ? given / Math.max(1, played) / total : 0;
     for (const [pid, b] of expected) parts.get(pid)!.bonus += (scale - 1) * b;
   }
-  for (const [pid, mine] of parts)
-    points.set(
-      pid,
-      PARTS.reduce((t, part) => t + mine[part], 0),
-    );
-  return { points, parts, minutes };
 }
 
 // FPL gives more assists than Opta's xA expects (rebounds, deflections, penalties won),

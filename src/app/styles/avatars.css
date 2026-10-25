@@ -201,6 +201,12 @@
   color: var(--text);
 }
 
+/* A projection for one on the pitch now: green, as his minute under his name, the pill as
+   one still to play has. */
+.ptsp.xp.live {
+  color: var(--green-text);
+}
+
 /* When a projected player plays, before his gameweek starts. */
 .ptsp.ko {
   background: var(--hover);

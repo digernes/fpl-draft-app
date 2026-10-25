@@ -17,6 +17,7 @@ import { pageTeams } from './pages/teams.ts';
 import { pageTransfers } from './pages/transfers.ts';
 import { recordVisit } from './recent.ts';
 import { href, parseRoute, type Page, type Route } from './router.ts';
+import { keepingSideways } from './scroll.ts';
 import { D, seasons, state } from './state.ts';
 
 export interface PageView {
@@ -77,30 +78,49 @@ export function renderAll() {
 }
 
 let shown = '';
+let shownView = '';
 let last = '';
+
+/** Which page is shown, its tabs aside: a match is its gameweek and sides, any other page its id. */
+export const pageKey = (route: Route) =>
+  route.page === 'match' ? `match:${route.gw}:${route.home}:${route.away}` : `${route.page}:${route.id ?? ''}`;
+
+/** A page's markup: its header over its body, or heading the body's column beside the right one. */
+export function pageHtml(page: PageView) {
+  const header = page.header ? pageHeader(page.header) : '';
+  return page.aside
+    ? `<div class="view" id="view"><div class="cols ${page.aside.cls}"><div class="col">${header}${page.body}</div><div class="col">${page.aside.html}</div></div></div>`
+    : `${header}<div class="view" id="view">${page.body}</div>`;
+}
+
+// A sheet open over the page stays open as the page redraws under it (a filter in it
+// changed): without sliding up again, and scrolled where it was.
+function keepingSheet(app: HTMLElement, redraw: () => void) {
+  const sheet = app.querySelector<HTMLDialogElement>('dialog[open]');
+  const scrolled = sheet?.querySelector('.sheet-body')?.scrollTop ?? 0;
+  redraw();
+  const again = sheet?.id ? document.getElementById(sheet.id) : null;
+  if (!(again instanceof HTMLDialogElement)) return;
+  again.classList.add('kept');
+  again.showModal();
+  again.querySelector('.sheet-body')?.scrollTo({ top: scrolled });
+}
 
 export function renderView() {
   const { route } = state;
   // Another tab of the same page: the bar under the tabs slides over from the last one.
-  const key = route.page === 'match' ? `match:${route.gw}:${route.home}:${route.away}` : `${route.page}:${route.id ?? ''}`;
+  const key = pageKey(route);
   const from = key === shown ? indicatorAt() : null;
+  const view = `${key}/${route.tab}`;
+  const again = view === shownView;
   shown = key;
+  shownView = view;
   const page = PAGES[route.page](route);
   const app = document.getElementById('app')!;
-  // A sheet open over the page stays open as the page redraws under it (a filter in it
-  // changed): without sliding up again, and scrolled where it was.
-  const sheet = app.querySelector<HTMLDialogElement>('dialog[open]');
-  const scrolled = sheet?.querySelector('.sheet-body')?.scrollTop ?? 0;
-  const header = page.header ? pageHeader(page.header) : '';
-  app.innerHTML = page.aside
-    ? `<div class="view" id="view"><div class="cols ${page.aside.cls}"><div class="col">${header}${page.body}</div><div class="col">${page.aside.html}</div></div></div>`
-    : `${header}<div class="view" id="view">${page.body}</div>`;
-  const again = sheet?.id ? document.getElementById(sheet.id) : null;
-  if (again instanceof HTMLDialogElement) {
-    again.classList.add('kept');
-    again.showModal();
-    again.querySelector('.sheet-body')?.scrollTo({ top: scrolled });
-  }
+  const redraw = () => keepingSheet(app, () => (app.innerHTML = pageHtml(page)));
+  // The same view again (a sort, a filter, a live score): what scrolls sideways stays put.
+  if (again) keepingSideways(app, redraw);
+  else redraw();
   markLoadingPhotos(app);
   alignHeads(app);
   revealPicked();
@@ -118,12 +138,12 @@ export function navigate(to: string, { replace = false } = {}) {
     location.hash = to; // the hashchange handler (chrome.ts) renders it
     return;
   }
-  history.replaceState(null, '', `${location.pathname}${location.search}${to}`);
+  history.replaceState(history.state, '', `${location.pathname}${location.search}${to}`); // the same entry, its scroll kept
   state.route = parseRoute(to);
   renderView();
 }
 
-// A re-render starts the tabs and filter bars scrolled back to the left, which on a
+// Another view starts the tabs and filter bars scrolled back to the left, which on a
 // phone can hide the one that is picked (say, a team's Stats tab).
 function revealPicked() {
   for (const bar of document.querySelectorAll<HTMLElement>('#app .filter-bar, #app .tabs')) {
@@ -159,26 +179,41 @@ export function placeTabIndicator(from: { left: string; width: string } | null =
 
 // The top bar's links (from 769px) and the bottom bar's (on phones): the leagues, the
 // Transfer center, and the team the visitor follows, or all the teams.
-function renderNav() {
-  const { page, id } = state.route;
+// `face`: the followed team's link has its avatar in the top bar too.
+export interface NavItem {
+  label: string;
+  to: string;
+  icon: string;
+  on: boolean;
+  top: boolean;
+  face?: boolean;
+}
+
+/** The bars' links for a route, lit where it is. */
+export function navItems({ page, id }: Route): NavItem[] {
   const mine = mgr(state.myTeam) ? (state.myTeam as number) : null;
-  // `face`: the followed team's link has its avatar in the top bar too.
-  const items: { label: string; to: string; icon: string; on: boolean; top: boolean; face?: boolean }[] = [
-    { label: 'Home', to: href.home(), icon: matchesSvg, on: page === 'home', top: false },
-    { label: 'Draft league', to: href.league(), icon: leagueSvg, on: page === 'league' || page === 'match', top: true },
-    { label: 'Premier League', to: href.pl(), icon: premierLeagueSvg, on: page === 'pl' || page === 'pl-match', top: true },
-    { label: 'Transfers', to: href.transfers(), icon: swapSvg, on: page === 'transfers', top: true },
+  const on = (...pages: Page[]) => pages.includes(page);
+  return [
+    { label: 'Home', to: href.home(), icon: matchesSvg, on: on('home'), top: false },
+    { label: 'Draft league', to: href.league(), icon: leagueSvg, on: on('league', 'match'), top: true },
+    { label: 'Premier League', to: href.pl(), icon: premierLeagueSvg, on: on('pl', 'pl-match'), top: true },
+    { label: 'Transfers', to: href.transfers(), icon: swapSvg, on: on('transfers'), top: true },
     mine
-      ? { label: 'My team', to: href.team(mine), icon: avatar(mine, 24), on: page === 'team' && id === mine, top: true, face: true }
-      : { label: 'Teams', to: href.teams(), icon: shirtSvg, on: page === 'teams' || page === 'team', top: true },
+      ? { label: 'My team', to: href.team(mine), icon: avatar(mine, 24), on: on('team') && id === mine, top: true, face: true }
+      : { label: 'Teams', to: href.teams(), icon: shirtSvg, on: on('teams', 'team'), top: true },
   ];
-  const link = (i: (typeof items)[number], withIcon: boolean) =>
-    `<a href="${i.to}"${i.on ? ' aria-current="page"' : ''}>${withIcon ? `<span class="nav-icon">${i.icon}</span>` : ''}<span>${i.label}</span></a>`;
+}
+
+const navLink = (i: NavItem, withIcon: boolean) =>
+  `<a href="${i.to}"${i.on ? ' aria-current="page"' : ''}>${withIcon ? `<span class="nav-icon">${i.icon}</span>` : ''}<span>${i.label}</span></a>`;
+
+function renderNav() {
+  const items = navItems(state.route);
   document.getElementById('topnav')!.innerHTML = items
     .filter((i) => i.top)
-    .map((i) => link(i, Boolean(i.face)))
+    .map((i) => navLink(i, Boolean(i.face)))
     .join('');
-  document.getElementById('bottom-bar')!.innerHTML = items.map((i) => link(i, true)).join('');
+  document.getElementById('bottom-bar')!.innerHTML = items.map((i) => navLink(i, true)).join('');
 }
 
 export function syncSettings() {

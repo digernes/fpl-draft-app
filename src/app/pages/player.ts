@@ -25,10 +25,10 @@ import {
 import { eventRow } from '../event-icons.ts';
 import { esc, fmtShortDay, ordinal, plural, sum } from '../format.ts';
 import { club, first, isArchive, liveParts, liveXp, mgr, nextParts, nextXp, opponents, partsAt, player, xpAt } from '../lookups.ts';
-import { projectedFor } from '../matches.ts';
-import { playerHistory, type History, type StoryEvent, type Week } from '../player-history.ts';
+import { projectedPill } from '../match-odds.ts';
+import { playerHistory, type History, type Spell, type StoryEvent, type Week } from '../player-history.ts';
 import { clubMatches, lineEvents, linesIn, plState } from '../pl.ts';
-import { pointsFrom, pointsRows } from '../pl-stats.ts';
+import { pointsFrom, pointsRows } from '../stats-files.ts';
 import type { PageView } from '../render.ts';
 import { href, type Route } from '../router.ts';
 import { D } from '../state.ts';
@@ -127,47 +127,63 @@ const ROLES = { xi: 'In starting XI', bench: 'Bench', on: 'Came on', off: 'Didn�
 // The latest first: gameweek by gameweek his week while he was in a squad and his moves
 // (made before its deadline), down to the draft. A spell as a free agent is one line.
 function timelineCard(pid: number, p: Player, h: History) {
-  const name = esc(p.name);
   const events = h.spells.flatMap((s) => s.events);
-  const subOf = (gw: number) => events.find((e) => e.gw === gw && (e.kind === 'subOn' || e.kind === 'subOff'));
-  const items: { gw: number; order: number; html: string }[] = [];
-  items.push({
-    gw: h.added ?? D.meta.firstGw,
-    order: -1,
-    html: h.pick
-      ? row(
-          'Draft',
-          'in',
-          `${h.pick.auto ? 'Auto-picked' : 'Drafted'} by ${teamLink(h.pick.manager)}: round ${h.pick.round}, ${ordinal(h.pick.overall)} pick overall`,
-          avatar(h.pick.manager, 24),
-        )
-      : h.added !== undefined
-        ? row(`GW ${h.added}`, '', '<span class="muted">Added to FPL after the draft</span>')
-        : row('Draft', '', '<span class="muted">Not drafted</span>'),
-  });
-  // Backwards, so a gameweek's own events come the latest first too: the sort below keeps their order.
-  for (const e of [...events].reverse()) {
-    const text = eventText(e, name);
-    if (text) items.push({ gw: e.gw, order: 0, html: row(`GW ${e.gw}`, KINDS[e.kind], text) });
-  }
-  for (const s of h.spells) {
-    if (s.owner === null) {
-      if (!s.weeks.length) continue;
-      const unclaimed = s.weeks.filter((w) => !w.claims).length;
-      const pts = sum(s.weeks.map((w) => w.pts));
-      const range = s.weeks.length > 1 ? `GW ${s.from}–${s.weeks.at(-1)!.gw}` : `GW ${s.from}`;
-      const text = `A free agent for ${plural(s.weeks.length, 'gameweek')}, ${unclaimed === s.weeks.length ? 'unclaimed throughout' : `unclaimed in ${unclaimed}`} · ${plural(pts, 'point')}`;
-      items.push({ gw: s.from, order: 1, html: row(range, 'free', `<span class="muted">${text}</span>`) });
-      continue;
-    }
-    for (const w of s.weeks) items.push({ gw: w.gw, order: 1, html: weekRow(pid, p, w, subOf(w.gw)) });
-  }
+  const items = [draftItem(h), ...eventItems(events, esc(p.name)), ...h.spells.flatMap((s) => spellItems(pid, p, s, events))];
   items.sort((a, b) => b.gw - a.gw || b.order - a.order); // the latest first
   return card({ title: 'Timeline', sub: storyLine(h), body: `<div class="tl">${items.map((i) => i.html).join('')}</div>` });
 }
 
+interface Item {
+  gw: number;
+  order: number;
+  html: string;
+}
+
+// Where his story starts: the draft, or the gameweek FPL added him.
+function draftItem(h: History): Item {
+  return { gw: h.added ?? D.meta.firstGw, order: -1, html: draftRow(h) };
+}
+
+function draftRow(h: History) {
+  if (h.pick) {
+    const { auto, manager, round, overall } = h.pick;
+    const text = `${auto ? 'Auto-picked' : 'Drafted'} by ${teamLink(manager)}: round ${round}, ${ordinal(overall)} pick overall`;
+    return row('Draft', 'in', text, avatar(manager, 24));
+  }
+  if (h.added !== undefined) return row(`GW ${h.added}`, '', '<span class="muted">Added to FPL after the draft</span>');
+  return row('Draft', '', '<span class="muted">Not drafted</span>');
+}
+
+// Backwards, so a gameweek's own events come the latest first too: the sort keeps their order.
+function eventItems(events: StoryEvent[], name: string): Item[] {
+  return [...events].reverse().flatMap((e) => {
+    const text = eventText(e, name);
+    return text ? [{ gw: e.gw, order: 0, html: row(`GW ${e.gw}`, KINDS[e.kind], text) }] : [];
+  });
+}
+
+// Each gameweek of a spell in a squad, or a spell as a free agent in one line.
+function spellItems(pid: number, p: Player, s: Spell, events: StoryEvent[]): Item[] {
+  if (s.owner !== null) return s.weeks.map((w) => ({ gw: w.gw, order: 1, html: weekRow(pid, p, w, subIn(events, w.gw)) }));
+  return s.weeks.length ? [freeItem(s)] : [];
+}
+
+const subIn = (events: StoryEvent[], gw: number) => events.find((e) => e.gw === gw && (e.kind === 'subOn' || e.kind === 'subOff'));
+
+function freeItem(s: Spell): Item {
+  const weeks = s.weeks.length;
+  const unclaimed = s.weeks.filter((w) => !w.claims).length;
+  const pts = sum(s.weeks.map((w) => w.pts));
+  const range = weeks > 1 ? `GW ${s.from}–${s.weeks.at(-1)!.gw}` : `GW ${s.from}`;
+  const text = `A free agent for ${plural(weeks, 'gameweek')}, ${unclaimed === weeks ? 'unclaimed throughout' : `unclaimed in ${unclaimed}`} · ${plural(pts, 'point')}`;
+  return { gw: s.from, order: 1, html: row(range, 'free', `<span class="muted">${text}</span>`) };
+}
+
 const row = (label: string, kind: string, text: string, side = '') =>
   `<div class="tl-row tl-event${kind ? ` ev-${kind}` : ''}"><span class="tl-gw">${label}</span><span class="tl-text">${text}</span><span class="tl-pts"></span><span class="tl-who">${side}</span></div>`;
+
+type Lines = ReturnType<typeof linesIn>;
+type Fixture = { m: PlMatch; home: boolean };
 
 // A gameweek in a squad: where he was picked, his match and what he did, his points (or,
 // before his match, his expected points) and whose squad.
@@ -176,23 +192,45 @@ function weekRow(pid: number, p: Player, w: Week, sub: StoryEvent | undefined) {
   const matches = lines.length
     ? lines.map((l) => ({ m: l.m, home: l.home }))
     : clubMatches(p.club, w.gw).map((m) => ({ m, home: m.home === p.club }));
-  const opp = matches
-    .map(({ m, home }) => {
-      const s = plState(m);
-      const [gf, ga] = home ? (s.score ?? [0, 0]) : [s.score?.[1] ?? 0, s.score?.[0] ?? 0];
-      const score = s.state === 'due' ? '' : `<span class="livep ${gf > ga ? 'W' : gf < ga ? 'L' : 'D'}">${gf}-${ga}</span>`;
-      return `<a class="ml-match" href="${href.plMatch(m.id)}">${crest(home ? m.away : m.home, 16)}<span>${esc(club(home ? m.away : m.home)?.short ?? '?')} <span class="muted">(${home ? 'H' : 'A'})</span></span>${score}</a>`;
-    })
-    .join('');
+  const role = `<span class="tl-role ${w.counted ? 'counted' : ''}">${ROLES[w.auto ?? w.role]}</span>${swapNote(sub)}`;
+  // The points open the owner's head-to-head that gameweek, the avatar his team.
+  return `<div class="tl-row tl-week${w.counted ? '' : ' benched'}">
+    <span class="tl-gw">GW ${w.gw}</span>
+    <span class="tl-main"><span class="tl-line">${role}</span><span class="tl-line">${matchLine(lines, matches)}</span></span>
+    <span class="tl-pts">${weekPoints(pid, w, lines, matches)}</span>
+    <span class="tl-who">${w.owner ? `<a href="${href.team(w.owner)}">${avatar(w.owner, 24)}</a>` : ''}</span>
+  </div>`;
+}
+
+// Who he came on for, or who came on for him.
+function swapNote(sub: StoryEvent | undefined) {
+  if (sub?.kind === 'subOn' && sub.for) return ` <span class="muted">for ${playerLink(sub.for)}</span>`;
+  if (sub?.kind === 'subOff') return ` <span class="muted">${playerLink(sub.by)} came on</span>`;
+  return '';
+}
+
+// His match (both, in a double gameweek), his minutes and what he did.
+function matchLine(lines: Lines, matches: Fixture[]) {
+  const opp = matches.map(matchLink).join('');
   const minutes = sum(lines.map((l) => l.line[1]));
   const events = addEvents(lines.map((l) => lineEvents(l.m, l.line)));
-  const swap =
-    sub?.kind === 'subOn' && sub.for
-      ? ` <span class="muted">for ${playerLink(sub.for)}</span>`
-      : sub?.kind === 'subOff'
-        ? ` <span class="muted">${playerLink(sub.by)} came on</span>`
-        : '';
-  const role = `<span class="tl-role ${w.counted ? 'counted' : ''}">${ROLES[w.auto ?? w.role]}</span>${swap}`;
+  return `${opp || '<span class="muted">No match</span>'}${minutes ? `<span class="muted">${minutes}’</span>` : ''}${eventRow(events)}`;
+}
+
+function matchLink({ m, home }: Fixture) {
+  const opp = home ? m.away : m.home;
+  return `<a class="ml-match" href="${href.plMatch(m.id)}">${crest(opp, 16)}<span>${esc(club(opp)?.short ?? '?')} <span class="muted">(${home ? 'H' : 'A'})</span></span>${matchScore(m, home)}</a>`;
+}
+
+// The score from his side, once the match has started.
+function matchScore(m: PlMatch, home: boolean) {
+  const s = plState(m);
+  if (s.state === 'due') return '';
+  const [gf, ga] = home ? (s.score ?? [0, 0]) : [s.score?.[1] ?? 0, s.score?.[0] ?? 0];
+  return `<span class="livep ${gf > ga ? 'W' : gf < ga ? 'L' : 'D'}">${gf}-${ga}</span>`;
+}
+
+function weekPoints(pid: number, w: Week, lines: Lines, matches: Fixture[]) {
   const bonus = lines.reduce((t, l) => t + (l.m.events?.[pid]?.bonus ?? 0), 0);
   const pts = pointsFor(
     pid,
@@ -200,28 +238,27 @@ function weekRow(pid: number, p: Player, w: Week, sub: StoryEvent | undefined) {
     matches.map(({ m }) => m),
     bonus,
   );
-  // The points open the owner's head-to-head that gameweek, the avatar his team.
   const h2h = D.matches.find((x) => x.gw === w.gw && (x.home === w.owner || x.away === w.owner));
-  const versus = h2h && `${mgr(h2h.home)?.first} v ${mgr(h2h.away)?.first}, gameweek ${w.gw}`;
-  return `<div class="tl-row tl-week${w.counted ? '' : ' benched'}">
-    <span class="tl-gw">GW ${w.gw}</span>
-    <span class="tl-main"><span class="tl-line">${role}</span><span class="tl-line">${opp || '<span class="muted">No match</span>'}${minutes ? `<span class="muted">${minutes}’</span>` : ''}${eventRow(events)}</span></span>
-    <span class="tl-pts">${h2h ? `<a href="${href.match(h2h)}" aria-label="${esc(versus)}">${pts}</a>` : pts}</span>
-    <span class="tl-who">${w.owner ? `<a href="${href.team(w.owner)}">${avatar(w.owner, 24)}</a>` : ''}</span>
-  </div>`;
+  if (!h2h) return pts;
+  const versus = `${mgr(h2h.home)?.first} v ${mgr(h2h.away)?.first}, gameweek ${w.gw}`;
+  return `<a href="${href.match(h2h)}" aria-label="${esc(versus)}">${pts}</a>`;
 }
 
 // A gameweek's points, or before his match the expected points (as everywhere a player
 // is still to play).
 function pointsFor(pid: number, pts: number, matches: PlMatch[], bonus: number) {
-  const due = pts === 0 && matches.length > 0 && matches.every((m) => plState(m).state === 'due') && matches[0].gw === D.meta.currentGw;
+  const due = pts === 0 && stillToPlay(matches);
   return due
     ? xpPill(liveXp(pid), liveParts(pid), opponents(player(pid).club, matches[0].gw), ' (not played yet)')
     : ptsPill(pts, bonus, {
-        projected: projectedFor(pid, matches[0]?.gw),
+        ...projectedPill(pid, matches[0]?.gw),
         from: matches.length ? pointsRows(pointsFrom(pid, matches[0].gw)) : [],
       });
 }
+
+// His matches are this gameweek's and none has kicked off.
+const stillToPlay = (matches: PlMatch[]) =>
+  matches.length > 0 && matches.every((m) => plState(m).state === 'due') && matches[0].gw === D.meta.currentGw;
 
 // A double gameweek's two matches as one: what he did in both.
 function addEvents(all: (PlayerEvents | undefined)[]): PlayerEvents {

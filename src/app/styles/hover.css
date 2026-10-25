@@ -24,6 +24,7 @@
 .sr,
 .follow,
 .mh-back .chev,
+.poll-pick,
 .bar {
   transition:
     opacity 0.15s ease,
@@ -163,5 +164,9 @@
 
   .bar-col:hover .bar {
     opacity: 0.75;
+  }
+
+  .poll-pick:hover {
+    opacity: 0.7;
   }
 }

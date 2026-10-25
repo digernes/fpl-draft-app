@@ -23,7 +23,7 @@ import path from 'node:path';
 import type { Data } from '../src/shared/data.ts';
 import { fetchLeague } from '../src/build/api.ts';
 import { buildDraft } from '../src/build/draft.ts';
-import { buildGameweeks, buildRecords } from '../src/build/gameweeks.ts';
+import { buildGameweekList, buildGameweeks, buildRecords } from '../src/build/gameweeks.ts';
 import {
   buildEvents,
   buildLineups,
@@ -35,6 +35,8 @@ import {
   patchLiveScores,
 } from '../src/build/lineups.ts';
 import { deadlineFlags } from '../src/build/expected.ts';
+import { RELAY_URL } from '../src/build/config.ts';
+import { fetchRelayed, recordInPlay } from '../src/build/in-play.ts';
 import { oddsModel, priceMatches } from '../src/build/odds.ts';
 import { readSummary, summariseSeason, writeSummary } from '../src/build/last-season.ts';
 import {
@@ -75,9 +77,9 @@ const OUT_FILE = arg('out') ?? 'public/data.json';
 const CACHE_DIR = arg('cache') ?? null;
 const SEASONS_DIR = path.join(path.dirname(OUT_FILE), 'seasons');
 
-// The last build's output: started matches keep the odds it priced them at, and the
-// gameweek being played FPL's expected points as they were at the deadline, while it
-// is FPL's that are in use.
+// The last build's output: started matches keep the odds it priced them at and the live
+// odds it recorded, and the gameweek being played FPL's expected points as they were at
+// the deadline, while it is FPL's that are in use.
 const previous = await readPrevious(OUT_FILE);
 const fetched = await fetchLeague(LEAGUE_ID, CACHE_DIR);
 // Last season's summary, which the model's shares and club ratings start from.
@@ -111,16 +113,7 @@ const data: Data = {
   meta: buildMeta(season, LEAGUE_ID, model.hasProjections),
   managers,
   clubs: buildClubs(season),
-  gameweeks: season.events.map((e) => {
-    const fixtures = season.boot.fixtures?.[e.id];
-    return {
-      id: e.id,
-      deadline: e.deadline_time,
-      finished: e.finished,
-      doubles: season.doubleClubs[e.id] ?? [],
-      ...(fixtures ? { fixtures: fixtures.map((f): [number, number, string | null] => [f.team_h, f.team_a, f.kickoff_time ?? null]) } : {}),
-    };
-  }),
+  gameweeks: buildGameweekList(season, fetched.fplBoot),
   matches,
   tables: { overall, form, xg, luck, points: buildPointsTable(seasonStats), premierLeague: plTable },
   simulation,
@@ -153,6 +146,27 @@ const data: Data = {
   ),
 };
 
+// Everyone's stats in each match and what happened in it when, a file per gameweek, which
+// the Premier League's player stats and a match's commentary load when they're opened, and
+// the season's so far, for its Players tab.
+// Moments asked for after full time stay as the last build's files had them (on the live
+// site, the deploy downloads them first).
+const STATS_DIR = path.join(path.dirname(OUT_FILE), 'stats');
+const moments = await fetchMoments(season, await readMoments(STATS_DIR), CACHE_DIR);
+const plStats = buildPlStats(season, data.plMatches ?? [], moments);
+const plSeason = buildPlSeasonStats(season, model.upcoming);
+
+// What the live odds say now in each head-to-head being played, after what earlier builds
+// recorded, with the gameweek's stats for the defensive contributions made so far, and what
+// the relay's Worker recorded every minute in between (none when it can't be reached).
+recordInPlay(
+  data,
+  previous,
+  plStats.find((s) => s.gw === data.live?.gw),
+  Date.parse(data.meta.generatedAt!),
+  await fetchRelayed(RELAY_URL, data, previous),
+);
+
 const { currentGw, game } = season;
 if (await writeIfChanged(OUT_FILE, data)) {
   console.log(
@@ -163,15 +177,6 @@ if (await writeIfChanged(OUT_FILE, data)) {
   console.log(`No changes for GW${currentGw}; ${OUT_FILE} left as is.`);
 }
 
-// Everyone's stats in each match and what happened in it when, a file per gameweek, which
-// the Premier League's player stats and a match's commentary load when they're opened, and
-// the season's so far, for its Players tab.
-// Moments asked for after full time stay as the last build's files had them (on the live
-// site, the deploy downloads them first).
-const STATS_DIR = path.join(path.dirname(OUT_FILE), 'stats');
-const moments = await fetchMoments(season, await readMoments(STATS_DIR), CACHE_DIR);
-const plStats = buildPlStats(season, data.plMatches ?? [], moments);
-const plSeason = buildPlSeasonStats(season, model.upcoming);
 const writeStats = async (dir: string) => {
   await mkdir(dir, { recursive: true });
   for (const s of plStats) await writeIfChanged(path.join(dir, `${s.gw}.json`), s);

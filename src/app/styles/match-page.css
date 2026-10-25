@@ -281,6 +281,40 @@
   stroke-width: 2;
 }
 
+/* The win chance: the same curve over a paler area, so it reads as a line about the 50%
+   mark rather than a lead piling up. */
+.momentum.chance .mo-svg path:not(.mo-edge) {
+  fill-opacity: 0.2;
+}
+
+/* The win chance's 50% and 80% lines, dotted as the match days' (.mo-day), in place of the
+   lead's solid zero. */
+.momentum.chance .mo-zero {
+  display: none;
+}
+
+.mo-level-line {
+  position: absolute;
+  right: 0;
+  left: 0;
+  height: 3px;
+  margin-top: -1.5px;
+  background: radial-gradient(circle, var(--axis-dots) 1.2px, transparent 1.6px) 0 0 / 9.6px 3px space;
+  pointer-events: none;
+}
+
+/* The win chance's levels, by their lines at the plot's right edge. */
+.mo-level {
+  position: absolute;
+  right: 0;
+  padding-bottom: 2px;
+  transform: translateY(-100%);
+  color: var(--text-2);
+  font-size: 10px;
+  line-height: 1;
+  pointer-events: none;
+}
+
 .mo-axis {
   display: flex;
 }

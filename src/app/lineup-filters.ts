@@ -2,14 +2,15 @@
 // player's points for his underlying numbers, once a gameweek is over and while it's
 // played (for those who have played). xP keeps the icons for what he did, like
 // fotmob.com's Fantasy filter; the stats show alone. Before and during a gameweek, the
-// chips choose what players still to play show.
+// chips choose what players still to play show, and those on the pitch.
 
+import type { SlimLive } from '../shared/live.ts';
 import { AS_SCORED, expectedPoints, UNDERLYING_TIPS } from '../shared/underlying.ts';
 import { bestOf, chip, pointsTier, tenths } from './components.ts';
 import { esc, plural, sum } from './format.ts';
 import { gwPoints, isLive, player } from './lookups.ts';
 import { linesIn } from './pl.ts';
-import { bpsIn, gwAsScored, gwUnderlying, statsFor } from './pl-stats.ts';
+import { bpsIn, gwAsScored, gwUnderlying, statsFor } from './stats-files.ts';
 import { D, state } from './state.ts';
 
 const STATS: [value: string, label: string, tip: string][] = [
@@ -22,16 +23,19 @@ const STATS: [value: string, label: string, tip: string][] = [
 export const hasLineupFilters = (gw: number) =>
   Boolean(D.underlying?.[gw]) || (gw === D.meta.currentGw && isLive() && typeof statsFor(gw) === 'object');
 
+/** While any of a live gameweek's matches is still to play or being played, when some players' points are still heading somewhere. */
+export const stillToCome = (feed: SlimLive | null) => Boolean(feed?.fixtures.some((f) => !f.done));
+
 /**
- * The chips over a lineup, in one row and one choice: while some still have to play
- * (`due`), Projected, then the underlying numbers of those who have played, a gap between
- * the two. None chosen is the default: the points, and for those still to play when they
- * kick off (their projections before a gameweek, when Projected starts chosen).
+ * The chips over a lineup, in one row and one choice: while some still have to play or are
+ * playing (`open`), Projected, then the underlying numbers of those who have played, a gap
+ * between the two. None chosen is the default: the points, and for those still to play when
+ * they kick off (their projections before a gameweek, when Projected starts chosen).
  */
-export function lineupFilters(gw: number, due: boolean) {
+export function lineupFilters(gw: number, open: boolean) {
   const stat = hasLineupFilters(gw) && state.lineupStat;
   const projected = !stat && dueShows(gw) === 'xp';
-  const dues = due ? [chip('Projected', 'due', projected ? 'ko' : 'xp', projected)] : [];
+  const dues = open ? [chip('Projected', 'due', projected ? 'ko' : 'xp', projected)] : [];
   const stats = hasLineupFilters(gw)
     ? STATS.map(([value, label, tip]) => chip(label, 'lineup-stat', value, state.lineupStat === value, `data-tip="${esc(tip)}"`))
     : [];
@@ -139,6 +143,7 @@ export function xpTip(pids: number[], gw: number, top = false) {
 
 // Players still to play show their projected points (the xP everywhere else on the site)
 // or when they kick off: by default the projections before a gameweek, and the kick-offs
-// once it is on. Projected, not "xP", since a finished gameweek's xP filter means what his
-// chances were worth.
+// once it is on. With the projections those on the pitch show where their points are
+// heading rather than their points so far, so a gameweek under way reads as one forecast.
+// Projected, not "xP", since a finished gameweek's xP filter means what his chances were worth.
 export const dueShows = (gw: number) => state.due || (gw > D.meta.currentGw ? 'xp' : 'ko');

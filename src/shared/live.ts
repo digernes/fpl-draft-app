@@ -2,9 +2,8 @@
 // the FPL live feed (with what each player did), provisional bonus, and provisional
 // automatic substitutions.
 
-import { PL_STATS, type Formation, type PlFormation, type PlMoment, type PlStats, type Position, type XpParts } from './data.ts';
+import type { Formation, PlFormation, PlMoment, PlStats, Position } from './data.ts';
 import type { LiveFeed } from './fpl-api.ts';
-import { normalCdf } from './odds.ts';
 
 export interface SlimFixture {
   id: number;
@@ -79,10 +78,20 @@ export function namedFrom(formations: (fixture: number) => readonly [PlFormation
   };
 }
 
-const DEFAULT_FORMATION: Formation = { DEF: 3, MID: 2, FWD: 1 };
+export const DEFAULT_FORMATION: Formation = { DEF: 3, MID: 2, FWD: 1 };
 
 const legal = (lineup: number[], info: PlayerInfo, formation: Formation) =>
   Object.entries(formation).every(([pos, min]) => lineup.filter((id) => info(id).pos === pos).length >= min);
+
+// Whether a bench player can come on for a starter: a goalkeeper only for a goalkeeper, and
+// only keeping the formation legal.
+export const canReplace = (starter: number, candidate: number, xi: number[], info: PlayerInfo, formation: Formation) =>
+  (info(candidate).pos === 'GKP') === (info(starter).pos === 'GKP') &&
+  legal(
+    xi.map((id) => (id === starter ? candidate : id)),
+    info,
+    formation,
+  );
 
 export interface Scored {
   xi: number[];
@@ -95,60 +104,88 @@ export interface Scored {
   points: (id: number) => number;
 }
 
+// A player's points (provisional bonus aside) and minutes in the feed.
+export const pointsOf = (feed: SlimLive, id: number) => Number(feed.elements[id]?.[0]) || 0;
+export const minutesOf = (feed: SlimLive, id: number) => Number(feed.elements[id]?.[1]) || 0;
+
+// A club's fixtures in the gameweek: none in a blank, two in a double.
+export const clubFixtures = (feed: SlimLive, club: number | undefined) => feed.fixtures.filter((f) => f.h === club || f.a === club);
+
+export const isOn = (f: SlimFixture) => f.started && !f.done;
+
 // The FPL live feed is ~450 KB; this keeps what live scores need (~25 KB).
 // elements: { id: [points, minutes] } for anyone with either; events for anyone who
 // did something; fixtures keep the BPS list only while their bonus has not been
 // awarded yet.
 export function slimLive(raw: Partial<LiveFeed>): SlimLive {
+  const players = Object.entries(raw.elements ?? {});
+  const over = new Set((raw.fixtures ?? []).filter(isOver).map((f) => f.id));
+  const clock = matchClock(players.map(([, el]) => el));
   const elements: SlimLive['elements'] = {};
   const events: Record<string, PlayerEvents> = {};
-  const over = new Set((raw.fixtures ?? []).filter((f) => f.finished || f.finished_provisional).map((f) => f.id));
-  // FPL's fixture minutes stay at 0 while a match is on; its players' minutes don't.
-  const clock = new Map<number, number>();
-  for (const el of Object.values(raw.elements ?? {}))
-    for (const { fixture, min } of minutesIn(el)) if (min > (clock.get(fixture) ?? 0)) clock.set(fixture, min);
   const gone = new Map<number, [number, number][]>();
-  for (const [id, el] of Object.entries(raw.elements ?? {})) {
+  for (const [id, el] of players) {
     const { total_points: points, minutes } = el.stats;
     if (points || minutes) elements[id] = [points, minutes];
     const did = playerEvents(el, over, clock);
     if (did) events[id] = did;
-    // A starter short of a match still on is off the pitch, only when he started all his
-    // matches (FPL counts starts for the gameweek, not the match); and one sent off is off
-    // at once, starter or not, rather than once his minutes fall behind.
-    const played = minutesIn(el).filter((m) => m.min > 0);
-    const started = (el.stats.starts ?? 0) >= played.length;
-    const sentOff = sentOffIn(el);
-    for (const m of played)
-      if (!over.has(m.fixture) && (sentOff.has(m.fixture) || (started && short(m, over, clock))))
-        gone.set(m.fixture, [...(gone.get(m.fixture) ?? []), [Number(id), m.min]]);
+    for (const m of offThePitch(el, over, clock)) gone.set(m.fixture, [...(gone.get(m.fixture) ?? []), [Number(id), m.min]]);
   }
-  const fixtures = (raw.fixtures ?? []).map((f): SlimFixture => {
-    const stat = (name: string) => f.stats?.find((s) => s.s === name);
-    const bonus = stat('bonus');
-    const bonusIn = Boolean(f.finished || (bonus && bonus.h.length + bonus.a.length));
-    const bps = stat('bps');
-    return {
-      id: f.id,
-      h: f.team_h,
-      a: f.team_a,
-      started: Boolean(f.started),
-      done: Boolean(f.finished || f.finished_provisional),
-      ...(f.kickoff_time ? { ko: f.kickoff_time } : {}),
-      ...(f.started && !(f.finished || f.finished_provisional)
-        ? {
-            min: Math.max(f.minutes ?? 0, clock.get(f.id) ?? 0),
-            ...(gone.has(f.id) ? { off: gone.get(f.id) } : {}),
-          }
-        : {}),
-      ...(f.started ? { score: [f.team_h_score ?? 0, f.team_a_score ?? 0] as [number, number] } : {}),
-      ...(f.started && !bonusIn && bps ? { bps: [...bps.h, ...bps.a].map((b): [number, number] => [b.element, b.value]) } : {}),
-    };
-  });
+  const fixtures = (raw.fixtures ?? []).map((f) => slimFixture(f, clock, gone.get(f.id)));
   return { elements, events, fixtures };
 }
 
 type FeedElement = LiveFeed['elements'][string];
+type FeedFixture = LiveFeed['fixtures'][number];
+
+const isOver = (f: FeedFixture) => Boolean(f.finished || f.finished_provisional);
+
+// FPL's fixture minutes stay at 0 while a match is on; its players' minutes don't.
+function matchClock(players: FeedElement[]): Map<number, number> {
+  const clock = new Map<number, number>();
+  for (const el of players) for (const { fixture, min } of minutesIn(el)) if (min > (clock.get(fixture) ?? 0)) clock.set(fixture, min);
+  return clock;
+}
+
+// The matches still on that he's no longer on the pitch in. A starter short of one is off,
+// only when he started all his matches (FPL counts starts for the gameweek, not the match);
+// and one sent off is off at once, starter or not, rather than once his minutes fall behind.
+function offThePitch(el: FeedElement, over: Set<number>, clock: Map<number, number>) {
+  const played = minutesIn(el).filter((m) => m.min > 0);
+  const started = (el.stats.starts ?? 0) >= played.length;
+  const sentOff = sentOffIn(el);
+  return played.filter((m) => !over.has(m.fixture)).filter((m) => sentOff.has(m.fixture) || (started && short(m, over, clock)));
+}
+
+function slimFixture(f: FeedFixture, clock: Map<number, number>, off: [number, number][] | undefined): SlimFixture {
+  return {
+    id: f.id,
+    h: f.team_h,
+    a: f.team_a,
+    started: Boolean(f.started),
+    done: isOver(f),
+    ...(f.kickoff_time ? { ko: f.kickoff_time } : {}),
+    ...(f.started ? kickedOff(f, clock, off) : {}),
+  };
+}
+
+// What a match has once it has kicked off: while it's on, its minute and who has gone off;
+// the score; and the BPS while the bonus is still to be awarded.
+function kickedOff(f: FeedFixture, clock: Map<number, number>, off: [number, number][] | undefined) {
+  return {
+    ...(isOver(f) ? {} : { min: Math.max(f.minutes ?? 0, clock.get(f.id) ?? 0), ...(off ? { off } : {}) }),
+    score: [f.team_h_score ?? 0, f.team_a_score ?? 0] as [number, number],
+    ...pendingBps(f),
+  };
+}
+
+function pendingBps(f: FeedFixture): Pick<SlimFixture, 'bps'> {
+  const stat = (name: string) => f.stats?.find((s) => s.s === name);
+  const bonus = stat('bonus');
+  const bps = stat('bps');
+  const awarded = f.finished || (bonus && bonus.h.length + bonus.a.length);
+  return awarded || !bps ? {} : { bps: [...bps.h, ...bps.a].map((b): [number, number] => [b.element, b.value]) };
+}
 
 const minutesIn = ({ explain = [] }: FeedElement) =>
   explain.map(([stats, fixture]) => ({ fixture, min: stats.find((x) => x.stat === 'minutes')?.value ?? 0 }));
@@ -220,41 +257,23 @@ export function provisionalBonus(fixtures: SlimFixture[]): Map<number, number> {
 // him. `info(id)` gives { pos, club }; `formation` the minimum numbers.
 export function scoreLineup(order: number[], feed: SlimLive, info: PlayerInfo, formation = DEFAULT_FORMATION, named?: Named): Scored {
   const bonus = provisionalBonus(feed.fixtures);
-  const points = (id: number) => (Number(feed.elements[id]?.[0]) || 0) + (bonus.get(id) ?? 0);
-  const played = (id: number) => (Number(feed.elements[id]?.[1]) || 0) > 0;
-  const out = (id: number) => {
-    const club = info(id).club;
-    // With no fixture at all his club has a blank, so his gameweek is over.
-    return !played(id) && feed.fixtures.every((f) => (f.h !== club && f.a !== club) || f.done || named?.(id, f.id) === 'out');
-  };
+  const points = (id: number) => pointsOf(feed, id) + (bonus.get(id) ?? 0);
+  const played = (id: number) => minutesOf(feed, id) > 0;
+  // With no fixture at all his club has a blank, so his gameweek is over.
+  const out = (id: number) => !played(id) && clubFixtures(feed, info(id).club).every((f) => f.done || named?.(id, f.id) === 'out');
 
   const xi = order.slice(0, 11);
   const bench = order.slice(11);
   const subs: number[] = [];
   const off: number[] = [];
-  for (const starter of [...xi]) {
-    if (!out(starter)) continue;
-    const goalkeeper = info(starter).pos === 'GKP';
-    for (const candidate of bench) {
-      if ((info(candidate).pos === 'GKP') !== goalkeeper) continue;
-      if (
-        !legal(
-          xi.map((id) => (id === starter ? candidate : id)),
-          info,
-          formation,
-        )
-      )
-        continue;
-      if (!played(candidate)) {
-        if (out(candidate)) continue; // won't play either: skip him
-        break; // might still play: wait, like FPL does
-      }
-      xi.splice(xi.indexOf(starter), 1, candidate);
-      bench.splice(bench.indexOf(candidate), 1, starter);
-      subs.push(candidate);
-      off.push(starter);
-      break;
-    }
+  for (const starter of xi.filter(out)) {
+    // The first bench player who fits and may play comes on once he has played.
+    const next = bench.find((candidate) => !out(candidate) && canReplace(starter, candidate, xi, info, formation));
+    if (next === undefined || !played(next)) continue;
+    xi.splice(xi.indexOf(starter), 1, next);
+    bench.splice(bench.indexOf(next), 1, starter);
+    subs.push(next);
+    off.push(starter);
   }
   return { xi, bench, subs, off, pts: xi.reduce((total, id) => total + points(id), 0), points };
 }
@@ -268,17 +287,25 @@ export type PlayerState =
   | { state: 'due'; ko?: string; opp: number; home: boolean } // still to kick off (the next one, in a double gameweek)
   | { state: 'blank' }; // his club has no match this gameweek
 
-const offIn = (f: SlimFixture, id: number) => f.off?.find(([pid]) => pid === id);
+export const offIn = (f: SlimFixture, id: number) => f.off?.find(([pid]) => pid === id);
+
+// On the pitch in a match being played: in the relay's stats for it, or without them, with
+// minutes this gameweek.
+function isOnPitch(feed: SlimLive, f: SlimFixture, id: number) {
+  const stats = feed.matches?.[f.id];
+  return stats ? id in stats : minutesOf(feed, id) > 0;
+}
+
+const nextKickOff = (fixtures: SlimFixture[]) =>
+  fixtures.filter((f) => !f.started).sort((a, b) => (a.ko ?? '').localeCompare(b.ko ?? ''))[0];
 
 export function playerState(feed: SlimLive, id: number, club: number | undefined): PlayerState {
-  const fixtures = feed.fixtures.filter((f) => f.h === club || f.a === club);
+  const fixtures = clubFixtures(feed, club);
   if (!fixtures.length) return { state: 'blank' };
-  const playing = fixtures.find((f) => f.started && !f.done);
+  const playing = fixtures.find(isOn);
   const off = playing && offIn(playing, id);
-  // On the pitch: in the relay's stats for the match, or without them, with minutes this gameweek.
-  const stats = playing && feed.matches?.[playing.id];
-  if (playing && !off) return { state: 'live', min: playing.min ?? 0, on: stats ? id in stats : (Number(feed.elements[id]?.[1]) || 0) > 0 };
-  const next = fixtures.filter((f) => !f.started).sort((a, b) => (a.ko ?? '').localeCompare(b.ko ?? ''))[0];
+  if (playing && !off) return { state: 'live', min: playing.min ?? 0, on: isOnPitch(feed, playing, id) };
+  const next = nextKickOff(fixtures);
   if (next) return { state: 'due', ko: next.ko, opp: next.h === club ? next.a : next.h, home: next.h === club };
   return off ? { state: 'off', min: off[1] } : { state: 'done' };
 }
@@ -286,295 +313,8 @@ export function playerState(feed: SlimLive, id: number, club: number | undefined
 // How much of a player's gameweek is still to come: 1 before kick-off, falling to 0 at
 // full time (or once he's off), split evenly over a double gameweek's two matches.
 export function shareToCome(feed: SlimLive, id: number, club: number | undefined): number {
-  const fixtures = feed.fixtures.filter((f) => f.h === club || f.a === club);
+  const fixtures = clubFixtures(feed, club);
   if (!fixtures.length) return 0;
   const left = (f: SlimFixture) => (f.done || offIn(f, id) ? 0 : f.started ? Math.max(0, 1 - (f.min ?? 0) / 90) : 1);
   return fixtures.reduce((total, f) => total + left(f), 0) / fixtures.length;
-}
-
-/** Spread of one player's points over a full gameweek, for the live odds. */
-export const PLAYER_POINTS_SD = 3;
-
-const RULED_OUT = new Set(['i', 's', 'u', 'n']);
-
-/** What a projection knows of each player's gameweek. */
-export interface Expected {
-  /** His expected points for the whole gameweek. */
-  points: (id: number) => number;
-  /** Those taken apart, when the site's model gave them: his minutes, and his appearance, clean-sheet and bonus points among them. */
-  parts?: (id: number) => XpParts | undefined;
-  /** Points for a clean sheet, by position. */
-  cleanSheet?: Partial<Record<Position, number>>;
-  /** Who each club has named for its fixtures, once the Premier League has the teams. */
-  named?: Named;
-}
-
-// A substitute comes on in about two matches in three, for a point or so, and the later it
-// gets the less likely: from half an hour before the end the chance fades. (From the clubs'
-// named substitutes this season, those expected to score at all.)
-const SUB_ON = 0.65;
-const SUB_POINTS = 1.3;
-const stillToCome = (minute: number) => Math.min(1, Math.max(0, (90 - minute) / 30)) ** 0.7;
-
-// The chance he plays at all, from his expected appearance points (2 for a regular). As
-// this season's players have: one expected to earn 1.5 plays about 86% of the time, and
-// even the surest only about 95%.
-const playsGiven = (appearance: number) => Math.min(0.95, Math.max(0, appearance / 2) ** 0.6);
-
-// Goals come more often as a match goes on, about 56% of them after half-time: the share
-// of a match's goals (and of all that comes of them) still to come at a minute.
-const stillToScore = (minute: number) => {
-  const gone = Math.min(1, Math.max(0, minute / 90));
-  return (1 - gone) * (1 + gone / 4);
-};
-
-/** Where a player's gameweek is heading. */
-interface Outlook {
-  /** What he can still add to his points. */
-  add: number;
-  /** The chance he doesn't play at all, when the bench player next in line comes on for him. */
-  absent: number;
-  /** How much of his gameweek is still to come, for the spread. */
-  share: number;
-  /** His clean sheets at stake in matches on. */
-  stakes?: Stake[];
-}
-
-/** A match's bonus while it's on: each player's as it stands, and as the BPS race would leave it by full time. */
-interface BonusRace {
-  now: Map<number, number>;
-  end: Map<number, number>;
-}
-
-// The BPS as they stand in a match being played: FPL's list while its bonus is still to
-// come, or once FPL has put a live bonus in its points, the relay's stats for the match.
-function bonusRace(f: SlimFixture, feed: SlimLive): BonusRace | undefined {
-  if (f.bps?.length) return { now: provisionalBonus([f]), end: raceEnd(f, f.bps) };
-  const rows = Object.entries(feed.matches?.[f.id] ?? {});
-  const at = (name: (typeof PL_STATS)[number]) => PL_STATS.indexOf(name);
-  const bps = rows.flatMap(([pid, r]): [number, number][] => (r[at('bps')] == null ? [] : [[Number(pid), r[at('bps')]!]]));
-  if (!bps.length) return undefined;
-  return { now: new Map(rows.map(([pid, r]) => [Number(pid), r[at('bonus')] ?? 0])), end: raceEnd(f, bps) };
-}
-
-// Each player's bonus by full time, from his chance of finishing first, second or third in
-// the BPS: from his gap to each of the others and how far theirs and his can still move. One
-// player's BPS varies by about 12 from one full match to the next (this season's, for those
-// who played them through), so that much over a whole match, less as it runs down (as goals
-// do); one who has gone off has his for good. BPS come in whole points, and those level at
-// the end share the place, so another has to finish at least one ahead.
-const BPS_SWING = 12;
-
-function raceEnd(f: SlimFixture, bps: [number, number][]): Map<number, number> {
-  const share = stillToScore(f.min ?? 0);
-  const swing = (id: number) => (offIn(f, id) ? 0 : BPS_SWING ** 2 * share);
-  const end = new Map<number, number>();
-  for (const [id, his] of bps) {
-    // The chances that none, one or two of the others finish ahead of him.
-    let [none, one, two] = [1, 0, 0];
-    for (const [other, theirs] of bps) {
-      if (other === id) continue;
-      const sd = Math.sqrt(swing(id) + swing(other));
-      const ahead = sd > 0 ? normalCdf((theirs - his - 0.5) / sd) : theirs > his ? 1 : 0;
-      [none, one, two] = [none * (1 - ahead), one * (1 - ahead) + none * ahead, two * (1 - ahead) + one * ahead];
-    }
-    end.set(id, 3 * none + 2 * one + two);
-  }
-  return end;
-}
-
-/** What a player on the pitch would lose should his club concede before the end, and the chance it does. */
-interface Stake {
-  /** The match and the club, whose players on the pitch all lose it to the same goal. */
-  key: string;
-  points: number;
-  concede: number;
-}
-
-// One fixture's outlook for a player with `played` minutes so far, from his expected
-// points and their parts for it. Before kick-off: those, or once his club has named its
-// team, what a starter can expect (his expected points given he plays) or a substitute.
-// Once it's on, if he's on the pitch: his goals, assists and the rest at his rate a minute
-// for the time he's likely to stay on, the appearance point still to come at 60 minutes,
-// the chance of keeping (or still getting) a clean sheet, and his bonus as the BPS race
-// would leave it. All of it starts at kick-off where a starter's expected points left it.
-// If he isn't on the pitch, the chance he still comes on; once he's gone off, only the race
-// can change his points. FPL's own expected points come whole, so without the parts a
-// player on the pitch has a share of them.
-function fixtureOutlook(
-  id: number,
-  f: SlimFixture,
-  played: number,
-  [ep, parts]: [number, XpParts | undefined],
-  info: PlayerInfo,
-  expected: Expected,
-  ctx: { bonus: Map<number, number>; cameOn: boolean; races: Map<number, BonusRace>; events?: SlimLive['events'] },
-): Outlook {
-  if (f.done) return { add: 0, absent: played > 0 ? 0 : 1, share: 0 };
-  const race = ctx.races.get(f.id);
-  // His bonus in this match as it stands: FPL's live bonus or the top three BPS.
-  const bonusNow = race?.now.get(id) ?? (f.bps ? ctx.bonus.get(id) : ctx.events?.[id]?.bonus) ?? 0;
-  if (offIn(f, id)) return { add: race ? (race.end.get(id) ?? bonusNow) - bonusNow : 0, absent: 0, share: 0 };
-  const minute = f.started ? (f.min ?? 0) : 0;
-  const left = Math.max(0, 90 - minute);
-  const plays = parts ? playsGiven(parts[1]) : 1;
-  const named = expected.named?.(id, f.id);
-  const onPitch = f.started && (played > 0 || (named === 'xi' && minute < 3)); // the feed's minutes lag at kick-off
-  if (!f.started || (minute < 3 && !onPitch)) {
-    if (named === 'out') return { add: 0, absent: 1, share: 0 };
-    if (named === 'bench') return { add: SUB_ON * SUB_POINTS, absent: 1 - SUB_ON, share: SUB_ON };
-    if (named === 'xi') return { add: plays > 0 ? ep / plays : ep, absent: 0, share: 1 };
-    // Until then a manager has picked him knowing the news, so only FPL's doubt counts.
-    return { add: ep, absent: info(id).status === 'd' ? 1 - plays : 0, share: 1 };
-  }
-  if (!onPitch) {
-    if (named === 'out') return { add: 0, absent: 1, share: 0 };
-    const comesOn = SUB_ON * stillToCome(minute);
-    return { add: comesOn * SUB_POINTS, absent: 1 - comesOn, share: (comesOn * left) / 90 };
-  }
-  if (!parts) return { add: ep * stillToScore(minute), absent: 0, share: stillToScore(minute) };
-  const [minutes, appearance, , , , cleanSheet, , , , bonus] = parts;
-  const inMatch = Math.min(played, minute); // a double gameweek's other match aside
-  const stays = ctx.cameOn ? 1 : Math.min(1, minutes / Math.max(plays, 0.01) / 90);
-  const from = 90 * stays; // the minutes he's likely on from kick-off, weighted by when goals come
-  const onFor = from * stillToScore(minute); // and from now
-  let add = minutes > 0 ? ((ep - appearance - cleanSheet - bonus) / minutes) * onFor : 0;
-  // A point for playing, one the feed may not have given him yet, and another at 60 minutes:
-  // by his expected points his chance of the hour if he plays, rising to 1 as he gets there.
-  if (!played) add += 1;
-  const hour = Math.min(1, Math.max(0.1, appearance / Math.max(plays, 0.01) - 1));
-  const need = 60 - inMatch;
-  const sixty = need <= 0 ? 1 : need > left ? 0 : hour ** (need / 60);
-  if (need > 0) add += sixty;
-  const perCleanSheet = expected.cleanSheet?.[info(id).pos ?? 'FWD'] ?? 0;
-  const against = f.score?.[f.h === info(id).club ? 1 : 0] ?? 0;
-  const stakes: Stake[] = [];
-  if (perCleanSheet > 0 && cleanSheet > 0 && !against) {
-    // His chance of no goal against while he's on, as his expected clean sheet has it (that
-    // needs the hour too), for the time he's still on.
-    const unbeaten = Math.min(0.95, cleanSheet / perCleanSheet / Math.max(0.3, plays) / hour);
-    const keepsIt = unbeaten ** (onFor / Math.max(from, 1));
-    add += need <= 0 ? perCleanSheet * (keepsIt - 1) : perCleanSheet * sixty * keepsIt; // FPL shows it from 60 minutes
-    // A goal against takes the clean sheet, and with it a keeper's or defender's bonus as it stands.
-    const atRisk = info(id).pos === 'GKP' || info(id).pos === 'DEF' ? bonusNow : 0;
-    stakes.push({ key: `${f.id}:${info(id).club}`, points: perCleanSheet * sixty + atRisk, concede: 1 - keepsIt });
-  }
-  // Bonus: where the BPS race would leave him, and for the time left a nudge towards his
-  // usual bonus from a fair share of the match's 6 among those in it. Without the race, his
-  // bonus as it stands drawn towards his usual by the share of the match still to come.
-  const usual = bonus / Math.max(plays, 0.01);
-  const fair = 6 / Math.max(race?.end.size ?? 0, 22);
-  const end = race?.end.get(id) ?? (race ? fair : undefined);
-  const still = stillToScore(minute);
-  add += end === undefined ? still * (usual - bonusNow) : end + still * (usual - fair) - bonusNow;
-  return { add, absent: 0, share: still, stakes };
-}
-
-// His outlook over the gameweek: each of his club's fixtures, two in a double gameweek with
-// his expected points split between them, and he's absent only if he misses them all.
-function outlook(
-  id: number,
-  feed: SlimLive,
-  info: PlayerInfo,
-  expected: Expected,
-  { bonus, races }: { bonus: Map<number, number>; races: Map<number, BonusRace> },
-): Outlook {
-  const fixtures = feed.fixtures.filter((f) => f.h === info(id).club || f.a === info(id).club);
-  if (!fixtures.length) return { add: 0, absent: 1, share: 0 }; // a blank
-  const played = Number(feed.elements[id]?.[1]) || 0;
-  const n = fixtures.length;
-  const parts = expected.parts?.(id)?.map((v) => v / n) as XpParts | undefined;
-  const ctx = { bonus, races, events: feed.events, cameOn: (feed.events?.[id]?.on ?? 0) > 0 };
-  const each = fixtures.map((f) => fixtureOutlook(id, f, played, [expected.points(id) / n, parts], info, expected, ctx));
-  return {
-    add: each.reduce((t, o) => t + o.add, 0),
-    absent: played > 0 ? 0 : each.reduce((t, o) => t * o.absent, 1),
-    share: each.reduce((t, o) => t + o.share, 0) / n,
-    stakes: each.flatMap((o) => o.stakes ?? []),
-  };
-}
-
-// A feed's provisional bonus and bonus races, worked out once for all who ask of it.
-const contexts = new WeakMap<SlimLive, { bonus: Map<number, number>; races: Map<number, BonusRace> }>();
-function contextOf(feed: SlimLive) {
-  const known = contexts.get(feed);
-  if (known) return known;
-  const races = new Map(
-    feed.fixtures.flatMap((f) => {
-      const race = f.started && !f.done ? bonusRace(f, feed) : undefined;
-      return race ? [[f.id, race] as const] : [];
-    }),
-  );
-  const ctx = { bonus: provisionalBonus(feed.fixtures), races };
-  contexts.set(feed, ctx);
-  return ctx;
-}
-
-/** Where one player's gameweek is heading, as liveProjection sees it: his points so far and what he can still add. */
-export function playerProjection(id: number, feed: SlimLive, info: PlayerInfo, expected: Expected) {
-  const ctx = contextOf(feed);
-  return (Number(feed.elements[id]?.[0]) || 0) + (ctx.bonus.get(id) ?? 0) + outlook(id, feed, info, expected, ctx).add;
-}
-
-// Where a lineup's score is heading: the points so far plus what each of the XI can still
-// add (fixtureOutlook). A starter sure not to play, with no minutes once his matches are
-// over or ruled out by FPL, has the bench player who'd come on for him by scoreLineup's
-// rules counted instead, ahead of the auto-sub itself (which waits until that player has
-// played); one who may not play has that player counted by the chance he won't. The spread
-// is each player's for the share of his gameweek still to come, and a clean sheet at stake
-// on top: all or nothing, and one goal against costs every one of the club's players on
-// the pitch at once, so their stakes add up before they're squared.
-export function liveProjection(scored: Scored, feed: SlimLive, info: PlayerInfo, expected: Expected, formation = DEFAULT_FORMATION) {
-  const ctx = contextOf(feed);
-  const minutes = (id: number) => Number(feed.elements[id]?.[1]) || 0;
-  const outlooks = new Map<number, Outlook>();
-  const outlookOf = (id: number) => outlooks.get(id) ?? outlooks.set(id, outlook(id, feed, info, expected, ctx)).get(id)!;
-  const out = (id: number) => minutes(id) === 0 && (outlookOf(id).share === 0 || RULED_OUT.has(info(id).status ?? ''));
-  const xi = [...scored.xi];
-  const free = new Map(scored.bench.map((id) => [id, 1])); // how much of each bench player is still to be called on
-  const standIn = (starter: number) => {
-    const goalkeeper = info(starter).pos === 'GKP';
-    return scored.bench.find(
-      (c) =>
-        (info(c).pos === 'GKP') === goalkeeper &&
-        (free.get(c) ?? 0) > 0 &&
-        !out(c) &&
-        legal(
-          xi.map((x) => (x === starter ? c : x)),
-          info,
-          formation,
-        ),
-    );
-  };
-  // A bench player, should he come on: his points so far and what he can still add.
-  const worth = (id: number) => scored.points(id) + outlookOf(id).add;
-  const atStake = new Map<string, { points: number; concede: number }>();
-  const stake = (o: Outlook, weight: number) => {
-    for (const { key, points, concede } of o.stakes ?? []) {
-      const was = atStake.get(key);
-      atStake.set(key, { points: (was?.points ?? 0) + weight * points, concede: Math.max(was?.concede ?? 0, concede) });
-    }
-  };
-  let mean = scored.pts;
-  let variance = 0;
-  for (const starter of scored.xi) {
-    const sure = out(starter);
-    const o = outlookOf(starter);
-    if (!sure) {
-      mean += o.add;
-      variance += o.share * PLAYER_POINTS_SD ** 2;
-      stake(o, 1);
-    }
-    const chance = sure ? 1 : minutes(starter) > 0 ? 0 : o.absent;
-    const sub = chance > 0 ? standIn(starter) : undefined;
-    if (sub === undefined) continue;
-    const called = chance * free.get(sub)!;
-    free.set(sub, free.get(sub)! - called);
-    if (sure) xi.splice(xi.indexOf(starter), 1, sub);
-    mean += called * (worth(sub) - (sure ? scored.points(starter) : 0));
-    variance += called * outlookOf(sub).share * PLAYER_POINTS_SD ** 2;
-    stake(outlookOf(sub), called);
-  }
-  for (const { points, concede } of atStake.values()) variance += concede * (1 - concede) * points ** 2;
-  return { mean, variance };
 }

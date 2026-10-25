@@ -83,14 +83,18 @@ export function momentsOf(events: PlEvents, idOf: (code: string | null | undefin
 
 /**
  * A match's moments with FPL's assister given to a goal the match centre names none for:
- * where a side has one such goal and its players one FPL assist no goal accounts for, it's
- * his. FPL hands assists out more freely, as for a rebound off a save.
+ * where a side has one such goal (an own goal for it too) and its players one FPL assist no
+ * goal accounts for, it's his. FPL hands assists out more freely, as for a rebound off a
+ * save or a cross turned in by a defender.
  */
 export function withFplAssists(moments: PlMoment[], sides: [number[], number[]], assists: (pid: number) => number): PlMoment[] {
   const out = [...moments];
-  for (const side of sides) {
+  for (const [s, side] of sides.entries()) {
     const ours = new Set(side);
-    const goals = out.flatMap((mo, i) => ((mo[2] === 'goal' || mo[2] === 'pen') && ours.has(mo[3]) ? [i] : []));
+    const theirs = new Set(sides[1 - s]);
+    const forUs = ([, , kind, pid]: PlMoment) =>
+      ((kind === 'goal' || kind === 'pen') && ours.has(pid)) || (kind === 'own' && theirs.has(pid));
+    const goals = out.flatMap((mo, i) => (forUs(mo) ? [i] : []));
     const bare = goals.filter((i) => out[i][4] === undefined);
     if (bare.length !== 1) continue;
     const named = new Map<number, number>();

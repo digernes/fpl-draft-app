@@ -351,6 +351,12 @@
   white-space: nowrap;
 }
 
+/* A substitute who never came on, faded as on the pitch (.pp.faded). */
+.mp-sub.faded .photo,
+.mp-sub.faded .mp-sub-name {
+  opacity: 0.6;
+}
+
 /* Bench points don't count. */
 .mp-sub .ptsp {
   min-width: 28px;

@@ -1,7 +1,8 @@
 // Starts the GitHub job that rebuilds data.json, on Cloudflare's timer: GitHub's own
 // schedule runs late, skips runs, and stops altogether after 60 days without commits.
 // Every 10 minutes while Premier League matches are usually on, hourly otherwise, and
-// within 10 minutes of a transfer.
+// within 10 minutes of a transfer. The timer fires every minute, for the win chance's
+// records (in-play.ts); only every tenth minute's firing is the build's.
 
 import { ElementStatus } from '../src/shared/fpl-api.ts';
 
@@ -14,9 +15,12 @@ export interface TimerEnv {
   SITE_URL?: string;
 }
 
+/** The firings that may start a build: every 10 minutes, on the minute (0, 10, 20 …). */
+export const buildFiring = (at: Date) => at.getUTCMinutes() % 10 === 0;
+
 // UTC, in both BST and GMT: Saturday, Sunday, and weekday evenings (Friday and Monday
-// games and midweek rounds). The timer fires every 10 minutes; outside these windows
-// only the first firing of each hour starts a build.
+// games and midweek rounds). Of the build's firings (every 10 minutes), outside these
+// windows only the first of each hour starts a build.
 export function buildDue(at: Date): boolean {
   const day = at.getUTCDay();
   const hour = at.getUTCHours();

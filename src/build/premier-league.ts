@@ -124,18 +124,29 @@ export function buildPlMatches(season: Season, formations: Formations = new Map(
 
 const STARTERS = 11;
 
-export function fromFeed(f: FeedFixture, gw: number, feed: LiveFeed, clubOf: (pid: number) => number | undefined): PlMatch {
+type ClubOf = (pid: number) => number | undefined;
+type MatchPlayer = ReturnType<typeof playersIn>[number];
+
+export function fromFeed(f: FeedFixture, gw: number, feed: LiveFeed, clubOf: ClubOf): PlMatch {
   const match: PlMatch = { id: f.id, gw, home: f.team_h, away: f.team_a, ko: f.kickoff_time ?? null };
   if (!f.started) return match;
   const done = f.finished || f.finished_provisional;
-  // A player's side: the one the match's BPS list has him on (everyone who plays gets
-  // some), or else his club's, which is now's and could be another since a move.
-  const side = new Map<number, 0 | 1>();
-  for (const s of f.stats ?? []) {
-    for (const x of s.h) side.set(x.element, 0);
-    for (const x of s.a) side.set(x.element, 1);
-  }
-  const players = Object.entries(feed.elements).flatMap(([id, el]) => {
+  const { lineups, events } = lineupsOf(playersIn(f, feed, clubOf), f.id);
+  return {
+    ...match,
+    score: [f.team_h_score ?? 0, f.team_a_score ?? 0],
+    ...(done ? { done: true as const } : {}),
+    lineups,
+    ...(Object.keys(events).length ? { events } : {}),
+  };
+}
+
+// Everyone who played in the match. A player's side: the one the match's BPS list has him
+// on (everyone who plays gets some), or else his club's, which is now's and could be
+// another since a move.
+function playersIn(f: FeedFixture, feed: LiveFeed, clubOf: ClubOf) {
+  const side = bpsSides(f);
+  return Object.entries(feed.elements).flatMap(([id, el]) => {
     const stats = (el.explain ?? []).filter(([, fixture]) => fixture === f.id).flatMap(([s]) => s);
     const value = (stat: string) => sum(stats.filter((s) => s.stat === stat).map((s) => s.value));
     const scored = (stat: string) => stats.some((s) => s.stat === stat && (s.points ?? 0) > 0);
@@ -154,40 +165,56 @@ export function fromFeed(f: FeedFixture, gw: number, feed: LiveFeed, clubOf: (pi
       },
     ];
   });
+}
+
+function bpsSides(f: FeedFixture): Map<number, 0 | 1> {
+  const side = new Map<number, 0 | 1>();
+  for (const s of f.stats ?? []) {
+    for (const x of s.h) side.set(x.element, 0);
+    for (const x of s.a) side.set(x.element, 1);
+  }
+  return side;
+}
+
+// Each side's players, starters first and then by minutes, and what each of them did.
+function lineupsOf(players: MatchPlayer[], fixture: number) {
   const lineups: [PlLine[], PlLine[]] = [[], []];
   const events: ById<PlayerEvents> = {};
   for (const team of [0, 1] as const) {
     const mine = players.filter((p) => p.side === team).sort((a, b) => b.minutes - a.minutes);
-    // FPL counts starts for the gameweek, not the match, which only matters in a double.
-    // Should that not give eleven, the eleven with the most minutes started.
-    let starters = new Set(mine.filter((p) => startedIn(p.el, f.id)).map((p) => p.pid));
-    if (starters.size !== STARTERS) starters = new Set(mine.slice(0, STARTERS).map((p) => p.pid));
+    const starters = startersOf(mine, fixture);
     for (const p of [...mine.filter((x) => starters.has(x.pid)), ...mine.filter((x) => !starters.has(x.pid))]) {
       lineups[team].push([p.pid, p.minutes, p.points, starters.has(p.pid) ? 1 : 0]);
-      // Not the substitutions, which the page works out from the minutes.
-      const did = Object.entries({
-        goals: p.value('goals_scored'),
-        assists: p.value('assists'),
-        ownGoals: p.value('own_goals'),
-        yellow: p.value('yellow_cards'),
-        red: p.value('red_cards'),
-        pensSaved: p.value('penalties_saved'),
-        pensMissed: p.value('penalties_missed'),
-        bonus: p.value('bonus'),
-        cleanSheet: p.value('clean_sheets'),
-        saves: p.value('saves'),
-        defcon: p.scored('defensive_contribution') ? 1 : 0,
-      } satisfies PlayerEvents).filter(([, n]) => n);
-      if (did.length) events[p.pid] = Object.fromEntries(did);
+      const did = eventsOf(p);
+      if (did) events[p.pid] = did;
     }
   }
-  return {
-    ...match,
-    score: [f.team_h_score ?? 0, f.team_a_score ?? 0],
-    ...(done ? { done: true as const } : {}),
-    lineups,
-    ...(Object.keys(events).length ? { events } : {}),
-  };
+  return { lineups, events };
+}
+
+// FPL counts starts for the gameweek, not the match, which only matters in a double.
+// Should that not give eleven, the eleven with the most minutes started.
+function startersOf(mine: MatchPlayer[], fixture: number): Set<number> {
+  const starters = new Set(mine.filter((p) => startedIn(p.el, fixture)).map((p) => p.pid));
+  return starters.size === STARTERS ? starters : new Set(mine.slice(0, STARTERS).map((p) => p.pid));
+}
+
+// Not the substitutions, which the page works out from the minutes.
+function eventsOf(p: MatchPlayer): PlayerEvents | null {
+  const did = Object.entries({
+    goals: p.value('goals_scored'),
+    assists: p.value('assists'),
+    ownGoals: p.value('own_goals'),
+    yellow: p.value('yellow_cards'),
+    red: p.value('red_cards'),
+    pensSaved: p.value('penalties_saved'),
+    pensMissed: p.value('penalties_missed'),
+    bonus: p.value('bonus'),
+    cleanSheet: p.value('clean_sheets'),
+    saves: p.value('saves'),
+    defcon: p.scored('defensive_contribution') ? 1 : 0,
+  } satisfies PlayerEvents).filter(([, n]) => n);
+  return did.length ? Object.fromEntries(did) : null;
 }
 
 // Whether he started this match: his gameweek's starts go to his matches with the most minutes.

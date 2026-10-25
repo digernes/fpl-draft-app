@@ -13,13 +13,16 @@ import { avatar, bestOf, card, crest, empty, listRow, ptsPill, roundCard, xpPill
 import { esc, fmtShortDay, fmtTime, fmtWeekday, plural, sum } from '../format.ts';
 import { ballSvg, cardSvg, chevronSvg, missSvg, premierLeagueSvg } from '../icons.ts';
 import { club, first, gwInfo, lineupFor, nextParts, nextXp, player } from '../lookups.ts';
-import { projectedFor, statusDot } from '../matches.ts';
+import { projectedPill } from '../match-odds.ts';
+import { statusDot } from '../matches.ts';
 import { matchPitch, playerColumns, type PitchPlayer, type PitchSide } from '../pitch.ts';
 import { lineEvents, plMatch, plRound, plState } from '../pl.ts';
-import { bpsIn, playerLeadsCard, playerStatsCard, pointsFrom, pointsRows, statsFor, type StatsRow } from '../pl-stats.ts';
+import { playerLeadsCard, playerStatsCard } from '../pl-stats.ts';
 import type { PageView } from '../render.ts';
 import { href, PL_MATCH_TABS, type Route } from '../router.ts';
 import { D, live, state } from '../state.ts';
+import { bpsIn, pointsFrom, pointsRows, statsFor } from '../stats-files.ts';
+import type { StatsRow } from '../stats-table.ts';
 
 interface Line {
   pid: number;
@@ -131,7 +134,7 @@ function poster(m: PlMatch, sides: [Line[], Line[]] | null) {
       ? withFplAssists(found, [sides[0].map((l) => l.pid), sides[1].map((l) => l.pid)], (pid) => m.events?.[pid]?.assists ?? 0)
       : (found ?? null);
   return `<div class="mh">
-    <div class="mh-top"><a class="mh-back" href="${href.pl('fixtures', m.gw)}">${chevronSvg('left')}<span>Round ${m.gw}</span></a><span class="mh-league">Premier League</span></div>
+    <div class="mh-top"><a class="mh-back" href="${href.pl('fixtures', m.gw)}">${chevronSvg('left')}<span>Round ${m.gw}</span></a><a class="mh-league" href="${href.pl()}">Premier League</a></div>
     <div class="mh-date">${when}</div>
     <div class="mh-main">${side(m.home, 'home')}<div class="mh-mid">${mid}<span class="mh-status">${status}</span></div>${side(m.away, 'away')}</div>
     ${sides ? `<div class="mh-scorers"><div class="home">${incidents(sides, 0, s.score?.[0] ?? 0, moments)}</div><div class="away">${incidents(sides, 1, s.score?.[1] ?? 0, moments)}</div></div>` : ''}
@@ -208,7 +211,7 @@ function lineupCard(m: PlMatch, sides: [Line[], Line[]] | null) {
       badge: l
         ? ptsPill(l.pts, l.events?.bonus ?? 0, {
             top: top.has(pid),
-            projected: once(pid) ? projectedFor(pid, m.gw) : undefined,
+            ...(once(pid) ? projectedPill(pid, m.gw) : {}),
             from: pointsRows(pointsFrom(pid, m.gw, m.id)),
           })
         : ahead
@@ -279,7 +282,7 @@ function draftCard(m: PlMatch, [home, away]: [Line[], Line[]]) {
         listRow({
           lead: avatar(r.id, 32),
           title: `<a href="${href.team(r.id)}">${first(r.id)}</a>`,
-          meta: [r.xi.length ? names(r.xi) : '', r.bench.length ? `bench: ${names(r.bench)}` : ''].filter(Boolean).join(' · '),
+          meta: `<span>${[r.xi.length ? names(r.xi) : '', r.bench.length ? `bench: ${names(r.bench)}` : ''].filter(Boolean).join(' · ')}</span>`,
           value: r.pts,
           mine: r.id === state.myTeam,
         }),
@@ -291,7 +294,8 @@ function draftCard(m: PlMatch, [home, away]: [Line[], Line[]]) {
 
 // Every draft team's players at the two clubs (in its squad that week, or now for a match
 // to come), the teams with nobody in it too, with their expected points when the match is
-// in the next gameweek.
+// in the next gameweek. Those on the team's bench that week come after the rest, as the
+// points card has them, and their expected points don't count in its total.
 function squadsCard(m: PlMatch) {
   const next = m.gw === D.meta.nextGw;
   const rows = D.managers
@@ -300,18 +304,20 @@ function squadsCard(m: PlMatch) {
         .map(Number)
         .filter((pid) => (player(pid).club === m.home || player(pid).club === m.away) && ownerOf(pid, m.gw) === mg.id)
         .sort((a, b) => player(b).total - player(a).total);
-      return { id: mg.id, players };
+      const bench = lineupFor(mg.id, m.gw)?.bench ?? [];
+      return { id: mg.id, players, xi: players.filter((pid) => !bench.includes(pid)), bench: players.filter((pid) => bench.includes(pid)) };
     })
-    .sort((a, b) => b.players.length - a.players.length);
+    .sort((a, b) => b.players.length - a.players.length || b.xi.length - a.xi.length); // level, those with more in their XI first
   const names = (ids: number[]) =>
-    ids.length
-      ? ids
-          .map(
-            (pid) =>
-              `<a href="${href.player(pid)}">${esc(player(pid).name)}</a>${next ? ` <span class="muted">${nextXp(pid).toFixed(1)}</span>` : ''}`,
-          )
-          .join(', ')
-      : 'No players in this match';
+    ids
+      .map(
+        (pid) =>
+          `<a href="${href.player(pid)}">${esc(player(pid).name)}</a>${next ? ` <span class="muted">${nextXp(pid).toFixed(1)}</span>` : ''}`,
+      )
+      .join(', ');
+  const who = (r: { xi: number[]; bench: number[] }) =>
+    [r.xi.length ? names(r.xi) : '', r.bench.length ? `bench: ${names(r.bench)}` : ''].filter(Boolean).join(' · ') ||
+    'No players in this match';
   return card({
     title: 'Draft players',
     sub: `Each team’s players in it${next ? ', with their expected points' : ''}`,
@@ -320,8 +326,8 @@ function squadsCard(m: PlMatch) {
         listRow({
           lead: avatar(r.id, 32),
           title: `<a href="${href.team(r.id)}">${first(r.id)}</a>`,
-          meta: names(r.players),
-          value: next && r.players.length ? sum(r.players.map(nextXp)).toFixed(1) : r.players.length,
+          meta: `<span>${who(r)}</span>`, // one run of text, not the row meta's flex items with their gaps
+          value: next && r.players.length ? sum(r.xi.map(nextXp)).toFixed(1) : r.players.length,
           mine: r.id === state.myTeam,
         }),
       )

@@ -114,6 +114,8 @@ export interface Gameweek {
   finished: boolean;
   /** Clubs playing twice. */
   doubles: number[];
+  /** Whether FPL has checked its stats: until it has, a gameweek's matches being over doesn't settle its points (bonus, defensive contributions and contentious goals can still change). Missing when unknown. */
+  checked?: boolean;
   /** Its Premier League fixtures, [home, away, kick-off], while it is still to come. */
   fixtures?: [number, number, string | null][];
 }
@@ -249,7 +251,17 @@ export interface Match {
   odds?: Odds;
   /** Once finished: the xG table's numbers for this match (home, away). */
   xg?: MatchXg;
+  /**
+   * The live odds as the data builds had them while it was played (src/build/in-play.ts),
+   * oldest first, kept from build to build and once it's over. A build whose chances moved
+   * by less than half a percentage point either way since the last record kept for a move
+   * takes the place of the last record instead, so the first and the latest are always there.
+   */
+  inPlay?: InPlayRecord[];
 }
+
+/** When, in whole minutes since the gameweek's deadline; home's and away's chance of winning, in thousandths (the draw has the rest); and the live score then. */
+export type InPlayRecord = [minutes: number, home: number, away: number, homePts: number, awayPts: number];
 
 /** xG, xA and expected points; then, where a clean sheet scores for his position, expected clean sheets and the xG his club conceded while he played. */
 export type Underlying = [xg: number, xa: number, xp: number, xcs?: number, xgc?: number];
@@ -402,7 +414,7 @@ export interface LiveData extends SlimLive {
   gw: number;
   /** Expected points for this gameweek, for everyone in a lineup. */
   ep: ById<number>;
-  /** Those taken apart (from the site's model only): the live odds take the appearance and clean-sheet points from them, which FPL hands out at 1 and 60 minutes. */
+  /** Those taken apart (from the site's model only): the live odds take the appearance and clean-sheet points from them, which FPL hands out at 1 and 60 minutes, and the defensive contributions', which it hands out at a threshold. */
   parts?: ById<XpParts>;
   /** Points for a clean sheet, by position. */
   cleanSheet?: Partial<Record<Position, number>>;

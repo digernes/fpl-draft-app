@@ -22,6 +22,12 @@
   opacity: 1;
 }
 
+/* One led by a manager's avatar, as a club's crest leads fotmob.com's. */
+.chip:has(> .av) {
+  gap: 6px;
+  padding-left: 6px;
+}
+
 .filter-bar {
   display: flex;
   align-items: center;

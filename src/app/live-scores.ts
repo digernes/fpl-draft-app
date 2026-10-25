@@ -1,9 +1,11 @@
 // Loading data.json, refreshing it, and live scores and new transfers from the relay.
 
 import type { Data, SeasonEntry } from '../shared/data.ts';
-import { provisionalBonus, scoreLineup, type SlimLive } from '../shared/live.ts';
+import { scoreLive } from '../shared/in-play.ts';
+import { provisionalBonus, type SlimLive } from '../shared/live.ts';
 import { mergeTransfers, type SlimTransfers } from '../shared/transfers.ts';
-import { gwInfo, isArchive, isLive, namedIn, player, seasonEntry, seasonSlug } from './lookups.ts';
+import { refreshInPlay } from './in-play-records.ts';
+import { gwInfo, isArchive, isLive, player, seasonEntry, seasonSlug } from './lookups.ts';
 import { renderAll, renderView } from './render.ts';
 import {
   D,
@@ -58,12 +60,11 @@ function applyLive(feed: SlimLive) {
   const gw = D.meta.currentGw;
   const doubles = new Set(gwInfo(gw)?.doubles ?? []);
   const lineups: Record<number, LiveLineup> = {};
-  const named = namedIn(gw);
   let points: (id: number) => number = () => 0;
   for (const m of D.managers) {
-    const l = D.lineups[m.id]?.[gw];
-    if (!l?.picks) continue;
-    const scored = scoreLineup(l.picks, feed, (pid) => player(pid) ?? { pos: undefined, club: undefined }, D.meta.formation, named);
+    const scored = scoreLive(D, m.id, gw, feed);
+    if (!scored) continue;
+    const l = D.lineups[m.id][gw];
     const dgw = scored.xi.filter((pid) => doubles.has(player(pid)?.club)).length;
     points = scored.points;
     lineups[m.id] = {
@@ -113,6 +114,7 @@ export async function pollLive() {
     } catch {
       // Keep the last scores; data.json still refreshes on its own.
     }
+    await refreshInPlay();
   }
   const playing = live?.feed.fixtures.some((f) => f.started && !f.done);
   liveTimer = setTimeout(pollLive, playing ? LIVE_POLL_MS : LIVE_IDLE_MS);

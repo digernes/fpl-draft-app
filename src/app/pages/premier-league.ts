@@ -10,7 +10,7 @@ import { seasonStatsCard } from '../pl-stats.ts';
 import type { PageView } from '../render.ts';
 import { href, PL_TABS, type Route } from '../router.ts';
 import { D } from '../state.ts';
-import { premierLeagueTable } from '../table.ts';
+import { premierLeagueTable } from '../premier-league-table.ts';
 
 const LABELS: Record<(typeof PL_TABS)[number], string> = {
   overview: 'Overview',

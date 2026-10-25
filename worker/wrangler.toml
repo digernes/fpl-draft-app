@@ -8,9 +8,30 @@ LEAGUE_ID = "23793"
 # The repo whose data build the timer starts. Its token is a secret:
 #   npx wrangler secret put GITHUB_TOKEN
 GITHUB_REPO = "digernes/fpl-draft-app"
-# The deployed site: a transfer its data.json hasn't caught up with starts a build.
+# The deployed site: a transfer its data.json hasn't caught up with starts a build, and the
+# win chance's records are worked out from its lineups and expected points.
 SITE_URL = "https://digernes.github.io/fpl-draft-app"
 
-# Every 10 minutes; timer.ts decides which firings start a build.
+# Who will win?'s votes: one Durable Object per head-to-head (poll.ts), SQLite-backed, as
+# the free plan has them.
+[[durable_objects.bindings]]
+name = "POLLS"
+class_name = "Poll"
+
+# The live win chance's records: one Durable Object per gameweek (in-play.ts), SQLite-backed too.
+[[durable_objects.bindings]]
+name = "IN_PLAY"
+class_name = "InPlay"
+
+[[migrations]]
+tag = "v1"
+new_sqlite_classes = ["Poll"]
+
+[[migrations]]
+tag = "v2"
+new_sqlite_classes = ["InPlay"]
+
+# Every minute: in-play.ts records the win chance when a match is on, and timer.ts decides
+# which of every tenth minute's firings start a build.
 [triggers]
-crons = ["*/10 * * * *"]
+crons = ["* * * * *"]

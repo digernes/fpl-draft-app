@@ -5,7 +5,7 @@ import { esc, ordinal, plural, signed } from '../format.ts';
 import { club, first } from '../lookups.ts';
 import { href } from '../router.ts';
 import { D, state } from '../state.ts';
-import { standingsTable, TABLE_VIEWS, tableModeToggle } from '../table.ts';
+import { standingsTable, TABLE_VIEWS, tableModeToggle } from '../league-tables.ts';
 
 export function viewTable() {
   const chips = Object.entries(TABLE_VIEWS)

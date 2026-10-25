@@ -2,60 +2,82 @@
 // lost, the most contested players, and each manager's summary.
 
 import type { Claim, Move, ScoredMove, TransferSummary, Transfers } from '../shared/data.ts';
+import type { Trade, Transaction } from '../shared/fpl-api.ts';
+import { slimTransfers } from '../shared/transfers.ts';
 import type { lineupOf } from './lineups.ts';
 import type { Season } from './season.ts';
 import { countBy, groupBy, maxBy, range, sum } from './util.ts';
 
 type LineupOf = ReturnType<typeof lineupOf>;
+type PointsSince = (id: number, gw: number) => number;
 
 export function buildTransfers(season: Season, managerIds: number[], waiverOrder: number[], lineup: LineupOf): Transfers {
-  const { transactions, trades, events, finishedGws, lastFinishedGw, pointsIn, ownerNow, elements, gws, league, currentGw, game } = season;
-  const pointsSince = (id: number, gw: number) => sum(finishedGws.filter((g) => g >= gw).map((g) => pointsIn(id, g)));
+  const { transactions, trades, finishedGws, pointsIn } = season;
+  const pointsSince: PointsSince = (id, gw) => sum(finishedGws.filter((g) => g >= gw).map((g) => pointsIn(id, g)));
+
+  const moves = [...signings(season), ...tradeMoves(trades)];
+  scoreMoves(moves, season, lineup, pointsSince);
+  moves.sort((a, b) => b.at.localeCompare(a.at) || (b.order ?? 0) - (a.order ?? 0));
+  const claims = waiverClaims(transactions);
+
+  const scoredMoves = moves.filter(isScored).filter((mv) => mv.type !== 'trade');
+  return {
+    moves,
+    claims,
+    summary: managerIds.map((id) => managerSummary(id, moves, claims, trades)),
+    contested: mostContested(claims, season.lastFinishedGw, pointsSince),
+    hotPotatoes: hotPotatoes(season, managerIds, lineup, moves),
+    mostDropped: mostDropped(moves, season.elements),
+    bestPickups: [...scoredMoves].sort((a, b) => b.net - a.net || b.banked - a.banked).slice(0, 6),
+    regrets: [...scoredMoves].sort((a, b) => b.outPts - a.outPts || a.net - b.net).slice(0, 6),
+    byGw: movesByGw(season, moves),
+    // The relay sends the trade log in the same shape, so the page can swap one for the other.
+    trades: slimTransfers([], trades, []).trades,
+    waiverOrder,
+  };
+}
+
+const isScored = (mv: Move): mv is ScoredMove => mv.net != null;
+
+// Accepted waivers and free-agent signings; a waiver is dated by its waiver run.
+function signings({ transactions, events }: Season): Move[] {
+  return transactions
+    .filter((t) => t.result === 'a')
+    .map((t) => {
+      const waiver = t.kind === 'w';
+      const at = (waiver && events.find((e) => e.id === t.event)?.waivers_time) || t.added;
+      return {
+        type: waiver ? 'waiver' : 'free',
+        manager: t.entry,
+        in: t.element_in,
+        out: t.element_out,
+        gw: t.event,
+        at,
+        order: t.index ?? 0,
+      };
+    });
+}
+
+// An accepted trade is a move for each side, per player swapped.
+function tradeMoves(trades: Trade[]): Move[] {
+  return trades
+    .filter((tr) => tr.state === 'p')
+    .flatMap((tr) => {
+      const at = tr.response_time ?? tr.offer_time;
+      const [a, b] = [tr.offered_entry, tr.received_entry];
+      return tr.tradeitem_set.flatMap((item): Move[] => [
+        { type: 'trade', manager: a, partner: b, in: item.element_in, out: item.element_out, gw: tr.event, at },
+        { type: 'trade', manager: b, partner: a, in: item.element_out, out: item.element_in, gw: tr.event, at },
+      ]);
+    });
+}
+
+// What each move has been worth since: the points of the player in and the player out, and
+// those the player in scored in the manager's XI.
+function scoreMoves(moves: Move[], season: Season, lineup: LineupOf, pointsSince: PointsSince) {
+  const { finishedGws, lastFinishedGw, pointsIn } = season;
   const bankedSince = (entry: number, id: number, gw: number) =>
     sum(finishedGws.filter((g) => g >= gw && lineup(entry, g)?.xi.includes(id)).map((g) => pointsIn(id, g)));
-  const squadAt = (entry: number, gw: number) => {
-    const l = lineup(entry, gw);
-    return l ? new Set([...l.xi, ...l.bench]) : null;
-  };
-
-  const moves: Move[] = [];
-  for (const t of transactions) {
-    if (t.result !== 'a') continue;
-    const waiver = t.kind === 'w';
-    const at = (waiver && events.find((e) => e.id === t.event)?.waivers_time) || t.added;
-    moves.push({
-      type: waiver ? 'waiver' : 'free',
-      manager: t.entry,
-      in: t.element_in,
-      out: t.element_out,
-      gw: t.event,
-      at,
-      order: t.index ?? 0,
-    });
-  }
-  for (const tr of trades.filter((x) => x.state === 'p')) {
-    const at = tr.response_time ?? tr.offer_time;
-    for (const item of tr.tradeitem_set) {
-      moves.push({
-        type: 'trade',
-        manager: tr.offered_entry,
-        partner: tr.received_entry,
-        in: item.element_in,
-        out: item.element_out,
-        gw: tr.event,
-        at,
-      });
-      moves.push({
-        type: 'trade',
-        manager: tr.received_entry,
-        partner: tr.offered_entry,
-        in: item.element_out,
-        out: item.element_in,
-        gw: tr.event,
-        at,
-      });
-    }
-  }
   for (const mv of moves) {
     if (mv.gw > lastFinishedGw) continue; // nothing scored yet
     mv.inPts = pointsSince(mv.in, mv.gw);
@@ -63,19 +85,34 @@ export function buildTransfers(season: Season, managerIds: number[], waiverOrder
     mv.net = mv.inPts - mv.outPts;
     mv.banked = bankedSince(mv.manager, mv.in, mv.gw);
   }
-  moves.sort((a, b) => b.at.localeCompare(a.at) || (b.order ?? 0) - (a.order ?? 0));
+}
 
-  // Waiver result codes: "a" won, "di" the player in was already gone (claimed by a
-  // higher priority, or by your own earlier claim), "do" the player out was already gone.
-  const waiverClaims = transactions.filter((t) => t.kind === 'w');
-  const wonBy = new Map(waiverClaims.filter((t) => t.result === 'a').map((t) => [`${t.event}:${t.element_in}`, t.entry]));
-  const claims: Claim[] = waiverClaims.map((t) => {
+function waiverClaims(transactions: Transaction[]): Claim[] {
+  const claims = transactions.filter((t) => t.kind === 'w');
+  const wonBy = new Map(claims.filter((t) => t.result === 'a').map((t) => [`${t.event}:${t.element_in}`, t.entry]));
+  return claims.map((t) => {
     const winner = wonBy.get(`${t.event}:${t.element_in}`) ?? null;
-    const outcome = t.result === 'a' ? 'won' : t.result === 'di' && winner && winner !== t.entry ? 'lost' : 'void';
-    return { manager: t.entry, in: t.element_in, out: t.element_out, gw: t.event, priority: t.priority, outcome, winner };
+    return {
+      manager: t.entry,
+      in: t.element_in,
+      out: t.element_out,
+      gw: t.event,
+      priority: t.priority,
+      outcome: claimOutcome(t, winner),
+      winner,
+    };
   });
+}
 
-  const contested = Object.values(groupBy(claims, (c) => `${c.gw}:${c.in}`))
+// Waiver result codes: "a" won, "di" the player in was already gone (claimed by a
+// higher priority, or by your own earlier claim), "do" the player out was already gone.
+function claimOutcome(t: Transaction, winner: number | null): Claim['outcome'] {
+  if (t.result === 'a') return 'won';
+  return t.result === 'di' && winner && winner !== t.entry ? 'lost' : 'void';
+}
+
+function mostContested(claims: Claim[], lastFinishedGw: number, pointsSince: PointsSince): Transfers['contested'] {
+  return Object.values(groupBy(claims, (c) => `${c.gw}:${c.in}`))
     .map((group) => ({
       gw: group[0].gw,
       player: group[0].in,
@@ -86,14 +123,17 @@ export function buildTransfers(season: Season, managerIds: number[], waiverOrder
     .filter((g) => g.claimants.length > 1)
     .sort((a, b) => b.claimants.length - a.claimants.length || b.gw - a.gw)
     .slice(0, 8);
+}
 
+// Players who have been in more than one squad this season.
+function hotPotatoes({ gws, ownerNow }: Season, managerIds: number[], lineup: LineupOf, moves: Move[]): Transfers['hotPotatoes'] {
   const ownersOf = new Map<number, Set<number>>();
   const addOwner = (pid: number, owner: number) => (ownersOf.get(pid) ?? ownersOf.set(pid, new Set()).get(pid)!).add(owner);
   for (const id of managerIds) {
-    for (const gw of gws) for (const pid of squadAt(id, gw) ?? []) addOwner(pid, id);
+    for (const gw of gws) for (const pid of squadAt(lineup, id, gw)) addOwner(pid, id);
   }
   for (const [pid, owner] of ownerNow) addOwner(pid, owner);
-  const hotPotatoes = [...ownersOf]
+  return [...ownersOf]
     .filter(([, owners]) => owners.size > 1)
     .map(([player, owners]) => ({
       player,
@@ -102,70 +142,52 @@ export function buildTransfers(season: Season, managerIds: number[], waiverOrder
     }))
     .sort((a, b) => b.owners.length - a.owners.length || b.moves - a.moves)
     .slice(0, 6);
+}
 
+function squadAt(lineup: LineupOf, entry: number, gw: number): number[] {
+  const l = lineup(entry, gw);
+  return l ? [...l.xi, ...l.bench] : [];
+}
+
+function mostDropped(moves: Move[], elements: Season['elements']): Transfers['mostDropped'] {
+  const pointsOf = (player: number) => elements.get(player)?.total_points ?? 0;
   const dropCounts = countBy(
     moves.filter((mv) => mv.type !== 'trade'),
     (mv) => mv.out,
   );
-  const mostDropped = Object.entries(dropCounts)
+  return Object.entries(dropCounts)
     .map(([player, times]) => ({ player: Number(player), times }))
-    .sort((a, b) => b.times - a.times || (elements.get(b.player)?.total_points ?? 0) - (elements.get(a.player)?.total_points ?? 0))
+    .sort((a, b) => b.times - a.times || pointsOf(b.player) - pointsOf(a.player))
     .slice(0, 5);
+}
 
-  const isScored = (mv: Move): mv is ScoredMove => mv.net != null;
-  const scoredMoves = moves.filter(isScored).filter((mv) => mv.type !== 'trade');
-  const bestPickups = [...scoredMoves].sort((a, b) => b.net - a.net || b.banked - a.banked).slice(0, 6);
-  const regrets = [...scoredMoves].sort((a, b) => b.outPts - a.outPts || a.net - b.net).slice(0, 6);
-
-  const byGw = range(league.start_event, Math.max(currentGw, game.next_event ?? 0, 1)).map((gw) => ({
+function movesByGw({ league, currentGw, game, trades }: Season, moves: Move[]): Transfers['byGw'] {
+  const countIn = (gw: number, type: Move['type']) => moves.filter((mv) => mv.gw === gw && mv.type === type).length;
+  return range(league.start_event, Math.max(currentGw, game.next_event ?? 0, 1)).map((gw) => ({
     gw,
-    waiver: moves.filter((mv) => mv.gw === gw && mv.type === 'waiver').length,
-    free: moves.filter((mv) => mv.gw === gw && mv.type === 'free').length,
+    waiver: countIn(gw, 'waiver'),
+    free: countIn(gw, 'free'),
     trade: trades.filter((tr) => tr.state === 'p' && tr.event === gw).length,
   }));
+}
 
-  const summary: TransferSummary[] = managerIds.map((id) => {
-    const mine = moves.filter((mv) => mv.manager === id);
-    const myClaims = claims.filter((c) => c.manager === id);
-    const scored = mine.filter(isScored);
-    return {
-      id,
-      moves: mine.length,
-      waivers: mine.filter((mv) => mv.type === 'waiver').length,
-      free: mine.filter((mv) => mv.type === 'free').length,
-      trades: trades.filter((tr) => tr.state === 'p' && (tr.offered_entry === id || tr.received_entry === id)).length,
-      claims: myClaims.length,
-      lost: myClaims.filter((c) => c.outcome === 'lost').length,
-      void: myClaims.filter((c) => c.outcome === 'void').length,
-      net: sum(scored.map((mv) => mv.net)),
-      banked: sum(scored.map((mv) => mv.banked)),
-      best: maxBy(scored, (mv) => mv.net),
-      worst: maxBy(scored, (mv) => -mv.net),
-    };
-  });
-
-  const tradeLog = trades
-    .map((tr) => ({
-      gw: tr.event,
-      offeredBy: tr.offered_entry,
-      offeredTo: tr.received_entry,
-      state: tr.state,
-      at: tr.response_time ?? tr.offer_time,
-      items: tr.tradeitem_set.map((it) => ({ gives: it.element_out, gets: it.element_in })),
-    }))
-    .sort((a, b) => b.at.localeCompare(a.at));
-
+function managerSummary(id: number, moves: Move[], claims: Claim[], trades: Trade[]): TransferSummary {
+  const mine = moves.filter((mv) => mv.manager === id);
+  const myClaims = claims.filter((c) => c.manager === id);
+  const scored = mine.filter(isScored);
+  const isMine = (tr: Trade) => tr.offered_entry === id || tr.received_entry === id;
   return {
-    moves,
-    claims,
-    summary,
-    contested,
-    hotPotatoes,
-    mostDropped,
-    bestPickups,
-    regrets,
-    byGw,
-    trades: tradeLog,
-    waiverOrder,
+    id,
+    moves: mine.length,
+    waivers: mine.filter((mv) => mv.type === 'waiver').length,
+    free: mine.filter((mv) => mv.type === 'free').length,
+    trades: trades.filter((tr) => tr.state === 'p' && isMine(tr)).length,
+    claims: myClaims.length,
+    lost: myClaims.filter((c) => c.outcome === 'lost').length,
+    void: myClaims.filter((c) => c.outcome === 'void').length,
+    net: sum(scored.map((mv) => mv.net)),
+    banked: sum(scored.map((mv) => mv.banked)),
+    best: maxBy(scored, (mv) => mv.net),
+    worst: maxBy(scored, (mv) => -mv.net),
   };
 }

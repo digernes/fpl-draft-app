@@ -31,9 +31,16 @@
   white-space: nowrap;
 }
 
-.tip-rows span:nth-child(even) {
+.tip-rows .tip-value {
   text-align: right;
   font-variant-numeric: tabular-nums;
+}
+
+/* A heading among the rows, over those under it (what's still to come of a player's points). */
+.tip-rows .tip-sub {
+  grid-column: 1 / -1;
+  margin-top: 4px;
+  font-weight: 600;
 }
 
 .tooltip.below {
@@ -61,7 +68,7 @@
   display: none;
 }
 
-/* On a touch screen a press shows the tip (chrome.ts), so holding it shouldn't also start
+/* On a touch screen a press shows the tip (tooltips.ts), so holding it shouldn't also start
    the phone's text selection or its callout. */
 @media (hover: none) {
   [data-tip] {

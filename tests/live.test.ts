@@ -5,17 +5,8 @@ import { describe, it } from 'node:test';
 import { buildLiveData } from '../src/build/lineups.ts';
 import type { Season } from '../src/build/season.ts';
 import { PL_STATS, type Data, type Position, type XpParts } from '../src/shared/data.ts';
-import {
-  liveProjection,
-  playerProjection,
-  provisionalBonus,
-  scoreLineup,
-  playerState,
-  shareToCome,
-  slimLive,
-  type SlimFixture,
-  type SlimLive,
-} from '../src/shared/live.ts';
+import { liveProjection, playerProjection, type Expected } from '../src/shared/live-projection.ts';
+import { provisionalBonus, scoreLineup, playerState, shareToCome, slimLive, type SlimFixture, type SlimLive } from '../src/shared/live.ts';
 
 interface Replay {
   players: Record<string, { pos: Position; club: number }>;
@@ -571,17 +562,17 @@ describe('who is still to play', () => {
 
   it('counts the bench player by the chance a starter doesn’t come on', () => {
     // Club 5 has named 5 among its substitutes and club 6 has named 8 to start; 4 has no
-    // minutes an hour into his match. A substitute comes on two times in three for 1.3
-    // points; the bench player next in line comes on for him the other time.
+    // minutes an hour into his match, without the teams. A midfielder on his club's bench
+    // comes on three times in five, any substitute two in three, for 1.3 points; the bench
+    // player next in line comes on for him the other time.
     const info = (id: number) => ({ pos: 'MID' as const, club: id === 8 ? 6 : id === 4 ? 3 : id });
     const named = (id: number) => (id === 5 ? 'bench' : id === 8 ? 'xi' : undefined);
     const expected = { points: () => 6, named };
     const free = { DEF: 0, MID: 0, FWD: 0 };
-    const sub = 0.65 * 1.3;
     const before = liveProjection({ xi: [5], bench: [8], subs: [], off: [], pts: 0, points: () => 0 }, feed, info, expected, free);
-    assert.ok(Math.abs(before.mean - (sub + 0.35 * 6)) < 1e-9);
+    assert.ok(Math.abs(before.mean - (0.6 * 1.3 + 0.4 * 6)) < 1e-9);
     const during = liveProjection({ xi: [4], bench: [8], subs: [], off: [], pts: 0, points: () => 0 }, feed, info, expected, free);
-    assert.ok(Math.abs(during.mean - (sub + 0.35 * 6)) < 1e-9);
+    assert.ok(Math.abs(during.mean - (0.65 * 1.3 + 0.35 * 6)) < 1e-9);
     // Left out of his club's squad, he won't play: the bench player counts in full.
     const out = liveProjection(
       { xi: [5], bench: [8], subs: [], off: [], pts: 0, points: () => 0 },
@@ -591,6 +582,47 @@ describe('who is still to play', () => {
       free,
     );
     assert.ok(Math.abs(out.mean - 6) < 1e-9);
+    assert.equal(playerProjection(5, feed, info, { ...expected, named: () => 'out' }), 0);
+  });
+
+  it('counts a keeper on his club’s bench as all but sure not to play', () => {
+    // 5 is a keeper his club has named among its substitutes, and 8 the bench keeper his
+    // club has named to start, with FPL's expected points (no parts to take apart).
+    const info = (id: number) => ({ pos: 'GKP' as const, club: id === 8 ? 6 : 5 });
+    const named = (id: number) => (id === 5 ? 'bench' : 'xi');
+    const scored = { xi: [5], bench: [8], subs: [], off: [], pts: 0, points: () => 0 };
+    const { mean } = liveProjection(scored, feed, info, { points: () => 3, named }, { DEF: 0, MID: 0, FWD: 0 });
+    assert.ok(Math.abs(mean - (0.02 * 1.3 + 0.98 * 3)) < 1e-9);
+  });
+
+  it('plays a named starter as a starter, whatever his expected minutes', () => {
+    // A midfielder in and out of the side: 33 expected minutes and 1.0 for playing, so he
+    // plays about two times in three, often from the bench. Named to start, he plays 75
+    // minutes, reaches the hour 86% of the time, and keeps a clean sheet as often over it.
+    const parts: XpParts = [33, 1, 0.5, 0, 0.3, 0.2, 0, 0.1, 0, 0.2, -0.1];
+    const info = () => ({ pos: 'MID' as const, club: 9 });
+    const plays = 0.5 ** 0.6;
+    const hour = 1 / plays - 1;
+    const longer = 75 / (33 / plays);
+    const starter = (longer * (2.2 - 1 - 0.2)) / plays + 1.86 + (0.2 / plays) * (0.86 / hour);
+    const at = (named: 'xi' | undefined, min: number, played: number, pts: number, started = true) =>
+      liveProjection(
+        alone(pts),
+        {
+          elements: played ? { 9: [pts, played] } : {},
+          fixtures: [{ id: 1, h: 9, a: 10, started, done: false, min, score: [0, 0] }],
+        },
+        info,
+        { points: () => 2.2, parts: () => parts, cleanSheet: { MID: 1 }, named: () => named },
+      ).mean;
+    assert.ok(Math.abs(at(undefined, 0, 0, 0, false) - 2.2) < 1e-9); // until the teams are out, his expected points
+    const before = at('xi', 0, 0, 0, false);
+    assert.ok(Math.abs(before - starter) < 1e-9);
+    assert.ok(starter > 2.2 / plays + 1); // more than his expected points given he plays, which count his cameos
+    // And so it goes on from kick-off: no jump when it starts, or at the hour when FPL adds
+    // his second point for playing and his clean sheet.
+    assert.ok(Math.abs(at('xi', 1, 0, 0) - before) < 0.05);
+    assert.ok(Math.abs(at('xi', 60, 60, 3) - at('xi', 59, 59, 1)) < 0.05);
   });
 
   it('keeps a double gameweek’s first clean sheet', () => {
@@ -602,6 +634,69 @@ describe('who is still to play', () => {
     const expected = { points: () => 7.8, parts: () => parts, cleanSheet: { DEF: 4 } };
     const { mean } = liveProjection({ xi: [70], bench: [], subs: [], off: [], pts: 6, points: () => 6 }, on, info, expected);
     assert.ok(Math.abs(mean - (6 + 7.8 / 2)) < 1e-9);
+  });
+
+  describe('defensive contributions', () => {
+    // The defender above, named to start: 2 points once he makes 10 in a match, 0.6
+    // expected of them. A keeper has no threshold.
+    const rules = {
+      defensive_contribution_limit_GKP: 0,
+      defensive_contribution_GKP: 0,
+      defensive_contribution_limit_DEF: 10,
+      defensive_contribution_DEF: 2,
+    };
+    const info = (id: number) => ({ pos: (id === 1 ? 'GKP' : 'DEF') as Position, club: 9 });
+    const cells = (made: number | null) => PL_STATS.map((s) => (s === 'defensive_contribution' ? made : 0));
+    const feedAt = (id: number, min: number, pts: number): SlimLive => ({
+      elements: min ? { [id]: [pts, min] } : {},
+      fixtures: [{ id: 1, h: 9, a: 10, started: true, done: false, min, score: [0, 0] }],
+    });
+    const asStarter = { ...asExpected, named: () => 'xi' as const };
+    const at = (min: number, made: number | null | undefined, { id = 9, pts = 1, expected = { ...asStarter, rules } as Expected } = {}) =>
+      playerProjection(
+        id,
+        feedAt(id, min, pts),
+        info,
+        made === undefined ? expected : { ...expected, stats: () => ({ [id]: cells(made) }) },
+      );
+    // As if none were to come: the same defender without his expected part for them.
+    const without: XpParts = [...defender];
+    without[7] = 0;
+    const none = (min: number, pts = 1) =>
+      at(min, undefined, { pts, expected: { ...asStarter, rules, points: () => 4.3, parts: () => without } });
+    const toCome = (min: number, made: number, pts = 1) => at(min, made, { pts }) - none(min, pts);
+
+    it('has nothing more to come once he has reached the threshold', () => {
+      assert.ok(Math.abs(toCome(45, 10, 3)) < 1e-9); // the 2 are in his points
+      assert.ok(Math.abs(toCome(45, 13, 3)) < 1e-9);
+    });
+
+    it('gives the chance of reaching it from those he has made in the time left', () => {
+      // 9 of 10 at half-time: one more is all but sure.
+      assert.ok(toCome(45, 9) > 1.9 && toCome(45, 9) < 2);
+      // None by then: hardly any chance.
+      assert.ok(toCome(45, 0) < 0.05);
+      // More made, more likely; less time left, less likely.
+      assert.ok(toCome(30, 6) > toCome(30, 3));
+      assert.ok(toCome(80, 6) < toCome(30, 6));
+      // His expected part spread over the minutes left, as without his count, gives him far less.
+      assert.ok(at(45, undefined) - none(45) < toCome(45, 9) / 5);
+    });
+
+    it('starts at kick-off where his expected points left him', () => {
+      assert.ok(Math.abs(at(0, 0) - at(0, undefined)) < 1e-9);
+      assert.ok(Math.abs(toCome(0, 0) - 0.6 / 0.95) < 1e-9); // his expected part, as a starter who plays for sure
+    });
+
+    it('leaves a keeper, and a match without stats, as they were', () => {
+      assert.equal(at(45, 3, { id: 1 }), at(45, undefined, { id: 1 }));
+      assert.equal(at(45, undefined), at(45, undefined, { expected: asStarter }));
+      assert.equal(at(45, null), at(45, undefined)); // played twice that gameweek: FPL counts his for the week
+      // Without the page's, the relay's stats count.
+      const relay = (made: number) =>
+        playerProjection(9, { ...feedAt(9, 45, 1), matches: { 1: { 9: cells(made) } } }, info, { ...asStarter, rules });
+      assert.ok(Math.abs(relay(9) - relay(0) - (at(45, 9) - at(45, 0))) < 1e-9);
+    });
   });
 });
 

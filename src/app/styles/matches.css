@@ -231,6 +231,12 @@
   font-weight: 500;
 }
 
+/* The round under way, in green, as the top bar's Live chip. */
+.round-live {
+  color: var(--green-text);
+  font-weight: 500;
+}
+
 /* A player on the pitch, or a gameweek under way: a green dot that softly blinks, as the
    top bar's Live chip's does. */
 .live-dot {
@@ -277,8 +283,60 @@
   font-size: 18px;
 }
 
-/* The score the chances come from, its working in its tip. */
+/* With the poll (match-poll.ts): the three choices as buttons, the draw's X in a circle
+   like the avatars; once voted, each one's share with a bar, the visitor's own in green,
+   and the votes in all. */
+.poll-pick {
+  padding: 0;
+  border-radius: 8px;
+}
+
+.poll-pick .poll-x {
+  border-radius: 50%;
+  background: var(--featured);
+  color: var(--text);
+}
+
+.poll.voted .poll-side {
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.poll-side.mine {
+  color: var(--green-text);
+}
+
+.poll-bar {
+  width: 56px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--featured);
+  overflow: hidden;
+}
+
+.poll-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--featured-key);
+}
+
+.mine .poll-bar > span {
+  background: var(--brand);
+}
+
+.poll-total {
+  color: var(--text-2);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* The score the chances come from, its working in its tip; under a poll, the model's
+   chances beside it. */
 .prob-score {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  column-gap: 12px;
   color: var(--text-2);
   font-size: 13px;
   text-align: center;

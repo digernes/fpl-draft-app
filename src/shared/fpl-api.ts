@@ -271,6 +271,8 @@ export const FplBootstrap = z.object({
   elements: z.array(z.object({ code: id, ep_next: numeric.nullable(), ep_this: numeric.nullish(), penalties_order: z.number().nullish() })),
   /** The season and its months, by gameweek. */
   phases: z.array(z.object({ name: z.string(), start_event: z.number(), stop_event: z.number() })).optional(),
+  /** Whether FPL has checked each gameweek's stats (Opta's BPS, defensive contributions, contentious goals), after its matches. */
+  events: z.array(z.object({ id, data_checked: z.boolean() })).optional(),
 });
 
 // --- Main FPL game: fixtures/?future=1 (projections only) ----------------------

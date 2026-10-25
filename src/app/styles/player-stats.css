@@ -10,11 +10,27 @@
   border-bottom: 0;
 }
 
-/* The season's: a club, a position, and the free agents alone, a line under them to keep
-   them apart from the categories, which have room of their own. The club's picker keeps
-   its width in the row, which scrolls on a phone. */
+/* The season's: the club and the position on a line, whose players on one under it, a
+   line under both to keep them apart from the categories, which have room of their own.
+   Each line scrolls on its own if it runs out of room; the club's picker keeps its width. */
 .ps-filters {
-  min-height: 64px;
+  display: grid;
+  gap: 12px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--divider);
+}
+
+.ps-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 24px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ps-filter-row::-webkit-scrollbar {
+  display: none;
 }
 
 .ps-club {
@@ -26,11 +42,19 @@
   min-height: 64px;
 }
 
-/* On one column they're in a sheet instead (pl-stats.ts), the Transfer center's. */
+/* On one column they're in a sheet instead (pl-stats.ts), the Transfer center's, whose
+   players in chips that wrap. */
 @media (max-width: 768px) {
   .ps-filters {
     display: none;
   }
+}
+
+.ps-owners {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 4px;
 }
 
 .ps-scroll {
@@ -57,6 +81,14 @@
   white-space: nowrap;
 }
 
+/* A figure is never cut short: a pair (xG + xA) too wide for its column goes onto two lines
+   at its plus rather than ending in an ellipsis. */
+.ps-table td:not(.ps-player) {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+}
+
 .ps-table th:last-child,
 .ps-table td:last-child {
   border-right: 0;
@@ -79,7 +111,7 @@
   width: var(--player);
 }
 
-/* The headings in a table of their own over the rows (pl-stats.ts), stuck under the top
+/* The headings in a table of their own over the rows (stats-table.ts), stuck under the top
    bar as the page scrolls, as a spreadsheet's (the card clips instead of hiding, which
    would keep them to it); and following the rows sideways, tied to their scroll where the
    browser can (else moved along by alignHeads, components.ts), the player's staying put. */

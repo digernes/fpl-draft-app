@@ -6,6 +6,7 @@ import { avatar, card, crest, empty, listRow, playerName, playerPhoto, tag, team
 import { ago, esc, plural, signed, sum } from '../format.ts';
 import { swapSvg } from '../icons.ts';
 import { first, mgr, player } from '../lookups.ts';
+import { href } from '../router.ts';
 import { D } from '../state.ts';
 import { dataTable, managerCol, posCol, type Column } from '../table.ts';
 
@@ -26,7 +27,13 @@ export function transferStats() {
         `<div class="tile"><div class="tile-label">${label}</div><div class="tile-value">${value}</div><div class="tile-meta">${meta}</div></div>`,
     )
     .join('');
-  return `${card({ title: 'Transfer market', body: `<div class="tiles">${tileHtml}</div>` })}
+  // Every move itself is in the Transfer center.
+  const market = card({
+    title: 'Transfer market',
+    body: `<div class="tiles">${tileHtml}</div>`,
+    footer: { href: href.transfers(), label: 'All transfers' },
+  });
+  return `${market}
   <div class="cols">
     <div class="col">${transferTableCard()}${movesByGwCard()}${bestPickupsCard()}${regretsCard()}</div>
     <div class="col">${awardsCard()}${contestedCard()}${hotPotatoesCard()}</div>

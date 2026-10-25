@@ -336,7 +336,7 @@ describe('momentum and the match report', () => {
     );
   });
 
-  it('gives the automatic substitutes a step of their own after the last match', () => {
+  it('brings an automatic substitute in with the match his substitution is made in, once it’s over too', () => {
     // Ola's Palmer came on for Haaland, who didn't play.
     const subbed = { ...lineups[20], xi: [4], bench: [3], subs: [4], off: [3] };
     const steps = momentum(d, m, [lineups[10], subbed]);
@@ -344,8 +344,7 @@ describe('momentum and the match report', () => {
       steps.map((s) => [s.match?.id ?? 'subs', s.gained]),
       [
         [1, [0, 0]],
-        [2, [14, 0]],
-        ['subs', [0, 6]],
+        [2, [14, 6]],
       ],
     );
     // Not while a match is still to be played.

@@ -50,16 +50,17 @@ export const state = {
   moves: 'all', // a team's moves, on its Transfers tab and in the Transfer center: 'all', 'in' or 'out'
   lineupView: 'last', // a team's pitch: 'last' (the latest lineup) or 'all' (the season's best XI)
   lineupStat: '', // the pitches' lineup filter: '' (points), 'xp', 'xg', 'xa' or 'xcs'
-  due: '', // what the pitches' players still to play show: 'xp' (projected points), 'ko' (kick-off) or '' (projections before a gameweek, kick-offs once it's on)
+  due: '', // what the pitches' players still to play show: 'xp' (projected points, and those on the pitch theirs too), 'ko' (kick-off) or '' (projections before a gameweek, kick-offs once it's on)
   squadScope: 'now', // a team's squad: 'now' (the squad) or 'all' (everyone ever owned)
   squadSort: 'lineup', // a team's squad's column: 'lineup' (XI, bench, new signings), 'gw', 'xp' or 'total'
   statsCategory: 'top', // the Premier League's player stats: 'top', 'expected', 'projected' (the season's alone), 'attack', 'defence', 'goalkeeping' or 'fpl'
   statsSort: '', // and the column they're sorted by (none: the category's first), highest first unless statsAsc
   statsAsc: false,
   playersPos: 'all', // the Premier League's season of player stats: a position, or 'all'
-  playersFree: false, // only the free agents
+  playersOwner: 'all', // and whose: 'all', 'free' (the free agents) or a manager's id
   playersAll: false, // all of them, rather than the first 50
   commentaryBench: false, // a head-to-head's commentary: the benches' players too
+  momentumView: 'lead', // a head-to-head's momentum: 'lead' or 'chance' (each side's chance of winning)
   season: null as string | null, // slug of an archived season being viewed, e.g. "2025-26"; null = current
 };
 

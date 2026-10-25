@@ -1,49 +1,56 @@
 // Cloudflare Worker that relays the FPL Draft API's live parts to the page. Browsers
 // can't call the FPL API directly (no CORS), so this fetches it, slims it down and adds
-// CORS headers. It answers only two things, so it can't be used as a general proxy:
+// CORS headers. It answers only these, so it can't be used as a general proxy:
 //
-//   /live/<gameweek>   live scores, slimmed from ~450 KB to a few KB, with everyone's
-//                      stats in the matches being played and their moments from the
-//                      Premier League's match centre, so the page needn't wait for a build
-//   /transfers         this league's moves, trades and owners, between builds
+//   /live/<gameweek>         live scores, slimmed from ~450 KB to a few KB, with everyone's
+//                            stats in the matches being played and their moments from the
+//                            Premier League's match centre, so the page needn't wait for a build
+//   /transfers               this league's moves, trades and owners, between builds
+//   /poll/…                  a head-to-head's Who will win? votes, and a vote (poll.ts)
+//   /in-play/<season>/<gw>   each head-to-head's live win chance, recorded every minute while
+//                            the gameweek's matches are on (in-play.ts)
 //
-// It also starts the data build on a timer and after transfers (timer.ts). Deploy with
+// Its timer fires every minute: it records the win chance when a match is on (in-play.ts)
+// and starts the data build on its own cadence and after transfers (timer.ts). Deploy with
 // `npx wrangler deploy` from this folder.
 
 import type { z } from 'zod';
 
 import type { PlMoment } from '../src/shared/data.ts';
 import { ElementStatus, LiveFeed, PlEvents, Trades, Transactions } from '../src/shared/fpl-api.ts';
-import { slimLive } from '../src/shared/live.ts';
-import { matchRows, momentsOf, playedIn } from '../src/shared/match-stats.ts';
+import { momentsOf } from '../src/shared/match-stats.ts';
 import { slimTransfers } from '../src/shared/transfers.ts';
-import { buildDue, ownersMoved, startBuild, type TimerEnv } from './timer.ts';
+import { fplGet, LIVE_SECONDS, recentFixtures, slimFeed, Upstream } from './feed.ts';
+import { parseInPlayPath, recordMinute, type InPlayEnv } from './in-play.ts';
+import { pollRoute, type PollEnv } from './poll.ts';
+import { buildDue, buildFiring, ownersMoved, startBuild, type TimerEnv } from './timer.ts';
 
-const API = 'https://draft.premierleague.com/api';
 const MATCH_CENTRE = 'https://sdp-prem-prod.premier-league-prod.pulselive.com/api/v1/matches';
-const LIVE_SECONDS = 20; // everyone watching shares one fetch per 20 seconds
-// A match is passed on from kick-off to full time, and on until this long after kick-off,
-// time enough for a build after full time to have it in the gameweek's stats file. (The
-// Draft feed's `finished` waits for the whole gameweek.)
-const RECENT_MS = 150 * 60 * 1000;
 const TRANSFER_SECONDS = 60;
+const IN_PLAY_SECONDS = 30; // a minute's record, give or take
 const HEADERS = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Methods': 'GET, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Content-Type',
 };
 
-interface Env extends TimerEnv {
+// The Durable Object classes, which Cloudflare finds among the main module's exports.
+export { Poll } from './poll.ts';
+export { InPlay } from './in-play.ts';
+
+interface Env extends TimerEnv, PollEnv, InPlayEnv {
   /** The one league /transfers answers for (wrangler.toml). */
   LEAGUE_ID?: string;
 }
 
 const league = (env: Env) => Number(env.LEAGUE_ID ?? 23793);
 
-class Upstream extends Error {}
-
 export default {
   async scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): Promise<void> {
-    const due = buildDue(new Date(controller.scheduledTime));
+    const at = new Date(controller.scheduledTime);
+    ctx.waitUntil(recordMinute(env, at.getTime()));
+    if (!buildFiring(at)) return;
+    const due = buildDue(at);
     ctx.waitUntil(
       (async () => {
         if (!due && !(await ownersMoved(env, league(env)))) return;
@@ -56,8 +63,10 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     if (request.method === 'OPTIONS') return new Response(null, { headers: HEADERS });
     const url = new URL(request.url);
+    if (url.pathname.startsWith('/poll/')) return pollRoute(request, env, url.pathname, HEADERS);
     const gw = url.pathname.match(/^\/live\/([1-9]|[12]\d|3[0-8])$/)?.[1];
-    const route = gw ? 'live' : url.pathname === '/transfers' ? 'transfers' : null;
+    const inPlay = parseInPlayPath(url.pathname);
+    const route = gw ? 'live' : url.pathname === '/transfers' ? 'transfers' : inPlay && env.IN_PLAY ? 'in-play' : null;
     if (request.method !== 'GET' || !route) return new Response('Not found', { status: 404, headers: HEADERS });
 
     const cache = globalThis.caches?.default;
@@ -65,35 +74,34 @@ export default {
     const cached = await cache?.match(key);
     if (cached) return cached;
 
-    const seconds = route === 'live' ? LIVE_SECONDS : TRANSFER_SECONDS;
-    const get = async <S extends z.ZodType>(path: string, schema: S): Promise<z.infer<S>> => {
-      const res = await fetch(`${API}/${path}`, { cf: { cacheTtl: seconds, cacheEverything: true } });
-      if (!res.ok) throw new Upstream(`FPL answered ${res.status}`);
-      const parsed = schema.safeParse(await res.json());
-      if (!parsed.success) throw new Upstream('FPL answered with an unexpected shape');
-      return parsed.data;
-    };
-
+    const seconds = route === 'live' ? LIVE_SECONDS : route === 'transfers' ? TRANSFER_SECONDS : IN_PLAY_SECONDS;
     let body: object;
     try {
       if (route === 'live') {
-        const feed = await get(`event/${gw}/live`, LiveFeed);
-        body = { gw: Number(gw), ...slimLive(feed), ...(await matchesNow(feed)) };
-      } else {
+        const now = Date.now();
+        const feed = await fplGet(`event/${gw}/live`, LiveFeed, seconds);
+        body = { at: new Date(now).toISOString(), gw: Number(gw), ...slimFeed(feed, now), moments: await momentsNow(feed, now) };
+      } else if (route === 'transfers') {
         const id = league(env);
         const [tx, trades, status] = await Promise.all([
-          get(`draft/league/${id}/transactions`, Transactions),
-          get(`draft/league/${id}/trades`, Trades),
-          get(`league/${id}/element-status`, ElementStatus),
+          fplGet(`draft/league/${id}/transactions`, Transactions, seconds),
+          fplGet(`draft/league/${id}/trades`, Trades, seconds),
+          fplGet(`league/${id}/element-status`, ElementStatus, seconds),
         ]);
-        body = slimTransfers(tx.transactions, trades.trades, status.element_status);
+        body = { at: new Date().toISOString(), ...slimTransfers(tx.transactions, trades.trades, status.element_status) };
+      } else {
+        // The records alone, by head-to-head, as the gameweek's object keeps them.
+        const stub = env.IN_PLAY!.get(env.IN_PLAY!.idFromName(`${inPlay!.season}:${inPlay!.gw}`));
+        const res = await stub.fetch(`https://in-play/records`);
+        if (!res.ok) return new Response('The records can’t be read just now', { status: 503, headers: HEADERS });
+        body = (await res.json()) as object;
       }
     } catch (err) {
       if (!(err instanceof Upstream)) throw err;
       return new Response(err.message, { status: 502, headers: HEADERS });
     }
 
-    const response = new Response(JSON.stringify({ at: new Date().toISOString(), ...body }), {
+    const response = new Response(JSON.stringify(body), {
       headers: { ...HEADERS, 'Content-Type': 'application/json', 'Cache-Control': `public, max-age=${seconds}` },
     });
     if (cache) ctx.waitUntil(cache.put(key, response.clone()));
@@ -101,13 +109,11 @@ export default {
   },
 };
 
-// The matches being played or just over: everyone's stats in each, and its moments. A
-// match whose moments won't come goes without them rather than holding up the scores.
-async function matchesNow(feed: z.infer<typeof LiveFeed>, now = Date.now()) {
-  const recent = feed.fixtures.filter((f) => f.started && (!f.finished_provisional || now - Date.parse(f.kickoff_time ?? '') < RECENT_MS));
-  const matches = Object.fromEntries(recent.map((f) => [f.id, matchRows(feed, f.id, playedIn(feed, f.id))]));
-  const moments = await Promise.all(recent.map(async (f) => [f.id, f.code ? await momentsAt(f.code) : null] as const));
-  return { matches, moments: Object.fromEntries(moments.filter(([, list]) => list)) };
+// The moments of the matches being played or just over. A match whose moments won't come
+// goes without them rather than holding up the scores.
+async function momentsNow(feed: z.infer<typeof LiveFeed>, now: number) {
+  const moments = await Promise.all(recentFixtures(feed, now).map(async (f) => [f.id, f.code ? await momentsAt(f.code) : null] as const));
+  return Object.fromEntries(moments.filter(([, list]) => list));
 }
 
 // Its players by their codes, as the match centre has them: the page knows their ids.

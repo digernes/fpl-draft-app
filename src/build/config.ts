@@ -27,6 +27,9 @@ export const MIN_SCORE_SPREAD = 13;
 export const SIM_RUNS = 10000;
 export const SIM_SKILL_SPREAD = 3;
 export const SIM_SEED = 20262027;
+// The live relay (worker/), the page's too: its Worker records each head-to-head's live odds
+// every minute while a gameweek is played, and each build copies them into data.json.
+export const RELAY_URL = 'https://fpl-draft-live.digernes.workers.dev';
 
 export const POSITIONS: Record<number, Position> = { 1: 'GKP', 2: 'DEF', 3: 'MID', 4: 'FWD' };
 // Home shirt and trim colours by the Premier League's club code, for the placeholder

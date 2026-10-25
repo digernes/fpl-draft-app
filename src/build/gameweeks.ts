@@ -1,12 +1,31 @@
-// The best and worst gameweeks, and the season's records.
+// The season's gameweeks as data.json lists them, the best and worst gameweeks, and the
+// season's records.
 
-import type { Decided, GameweekScore, Match, Records, SeasonStat, TopGameweek } from '../shared/data.ts';
+import type { Decided, Gameweek, GameweekScore, Match, Records, SeasonStat, TopGameweek } from '../shared/data.ts';
+import type { FplBootstrap } from '../shared/fpl-api.ts';
 import { TOP_GAMEWEEKS } from './config.ts';
 import type { lineupOf } from './lineups.ts';
 import type { Season } from './season.ts';
 import { maxBy } from './util.ts';
 
 type LineupOf = ReturnType<typeof lineupOf>;
+
+// Each gameweek: its deadline, whether it's over and FPL has checked its stats (from the
+// main game's bootstrap, when it's there), its doubles, and a gameweek to come's fixtures.
+export function buildGameweekList(season: Season, fplBoot: FplBootstrap | null): Gameweek[] {
+  return season.events.map((e) => {
+    const fixtures = season.boot.fixtures?.[e.id];
+    const checked = fplBoot?.events?.find((fe) => fe.id === e.id)?.data_checked;
+    return {
+      id: e.id,
+      deadline: e.deadline_time,
+      finished: e.finished,
+      doubles: season.doubleClubs[e.id] ?? [],
+      ...(checked === undefined ? {} : { checked }),
+      ...(fixtures ? { fixtures: fixtures.map((f): [number, number, string | null] => [f.team_h, f.team_a, f.kickoff_time ?? null]) } : {}),
+    };
+  });
+}
 
 // Top gameweeks (DGW-adjusted, at least one per manager). This is also the
 // highest-gameweek prize: on a tie the earlier week wins, and two managers on the same

@@ -8,11 +8,12 @@ import { dgwRule, gameweekReviewCard, resultText, squadStrip } from '../cards.ts
 import { avatar, card, empty, infoButton, listRow, teamName } from '../components.ts';
 import { esc, plural } from '../format.ts';
 import { first, isLive, lineupFor } from '../lookups.ts';
-import { featuredGw, matchList, oddsToggle, roundSubtitle } from '../matches.ts';
+import { oddsToggle } from '../match-odds.ts';
+import { featuredGw, matchList, roundSubtitle } from '../matches.ts';
 import { recentTransfersCard } from '../pages/transfers.ts';
 import { href } from '../router.ts';
 import { D, state } from '../state.ts';
-import { standingsTable, tableModeToggle } from '../table.ts';
+import { standingsTable, tableModeToggle } from '../league-tables.ts';
 
 export function viewOverview() {
   const reviewGw = D.meta.lastFinishedGw;
@@ -29,7 +30,7 @@ export function roundCard(gw = featuredGw()) {
   const list = D.matches.filter((m) => m.gw === gw);
   return card({
     title: `Gameweek ${gw}`,
-    sub: roundSubtitle(gw),
+    sub: roundSubtitle(gw, { short: true }),
     action: list.some((m) => m.odds) ? oddsToggle() : '',
     body: matchList(list),
     footer: { href: href.league('fixtures', gw), label: 'All fixtures' },
@@ -37,13 +38,14 @@ export function roundCard(gw = featuredGw()) {
 }
 
 /** The table; the home page's sidebar has it without the switch and the legend. */
-// `compact` on the front page: there, while a gameweek is played, the live table with a dot
-// for how each team's match stands rather than its score.
+// `compact` on the front page: there, in its narrow column, the Short columns whatever the
+// phones' table mode, and while a gameweek is played the live table with a dot for how each
+// team's match stands rather than its score.
 export function tableCard({ compact = false } = {}) {
   return card({
     title: compact && isLive() ? 'Live table' : 'Table',
     action: compact ? '' : tableModeToggle('overall'),
-    body: standingsTable('overall', { legend: !compact, live: compact ? 'dot' : 'score' }),
+    body: standingsTable('overall', { compact }),
     footer: { href: href.league('table'), label: 'Full table' },
   });
 }

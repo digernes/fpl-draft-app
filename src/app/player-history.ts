@@ -5,7 +5,7 @@
 // added him, for one added after the draft). Split into spells, a stretch with one owner
 // or none, each with what happened in it.
 
-import type { Claim, Data, DraftPick, MoveType } from '../shared/data.ts';
+import type { Claim, Data, DraftPick, Lineup, Move, MoveType, Trade, Transfers } from '../shared/data.ts';
 
 export type Role = 'xi' | 'bench' | 'free';
 
@@ -92,93 +92,160 @@ const PHASE: Record<StoryEvent['kind'], number> = {
 };
 
 export function playerHistory(data: Data, pid: number): History {
-  const { meta, transfers } = data;
-  const fromMatches = (gw: number) =>
-    (data.plMatches ?? [])
-      .filter((m) => m.gw === gw)
-      .flatMap((m) => (m.lineups ?? []).flat())
-      .filter(([id]) => id === pid)
-      .reduce((total, [, , pts]) => total + pts, 0);
-  const pointsIn = (gw: number) => data.players[pid]?.pts?.[gw - meta.firstGw] ?? fromMatches(gw);
-
+  const { transfers } = data;
   const added = data.players[pid]?.added;
+  const { weeks, subs } = weeksOf(data, pid, added);
+  const events = [...subs, ...moveEvents(transfers.moves, pid), ...tradeEvents(transfers.trades, pid), ...claimEvents(transfers, pid)];
+  events.sort((a, b) => a.gw - b.gw || PHASE[a.kind] - PHASE[b.kind]);
+  return {
+    pick: data.draft.picks.find((p) => p.player === pid),
+    ...(added === undefined ? {} : { added }),
+    claims: transfers.claims.filter((c) => c.in === pid),
+    weeks,
+    spells: spellsOf(data, pid, weeks, events),
+    owners: ownerTotals(weeks),
+    free: freeTotals(weeks),
+  };
+}
+
+// --- His gameweeks -----------------------------------------------------------------------
+
+// Each gameweek from the first he was in the game: whose squad he was in, and the automatic
+// substitutions that brought him on or took him off.
+function weeksOf(data: Data, pid: number, added: number | undefined) {
+  const { meta } = data;
   const weeks: Week[] = [];
-  const events: StoryEvent[] = [];
+  const subs: StoryEvent[] = [];
   for (let gw = Math.max(meta.firstGw, added ?? meta.firstGw); gw <= meta.currentGw; gw++) {
-    const claims = transfers.claims.filter((c) => c.in === pid && c.gw === gw).length;
-    const week: Week = { gw, owner: null, role: 'free', counted: false, pts: pointsIn(gw), claims };
+    const claims = data.transfers.claims.filter((c) => c.in === pid && c.gw === gw).length;
+    const week: Week = { gw, owner: null, role: 'free', counted: false, pts: pointsIn(data, pid, gw), claims };
     for (const mg of data.managers) {
       const l = data.lineups[mg.id]?.[gw];
       if (!l) continue;
-      // Lineups come with the automatic substitutions made, so a substitute is in the XI
-      // and the starter he replaced on the bench.
-      const on = l.subs.indexOf(pid);
-      const off = l.off?.indexOf(pid) ?? -1;
-      const picked = (role: Role, counted: boolean, auto?: Week['auto']) =>
-        Object.assign(week, { owner: mg.id, role, counted }, auto && { auto });
-      if (l.xi.includes(pid)) picked(on >= 0 ? 'bench' : 'xi', true, on >= 0 ? 'on' : undefined);
-      else if (l.bench.includes(pid)) picked(off >= 0 ? 'xi' : 'bench', false, off >= 0 ? 'off' : undefined);
-      if (on >= 0) events.push({ gw, kind: 'subOn', manager: mg.id, for: l.off?.[on], pts: week.pts });
-      if (off >= 0) events.push({ gw, kind: 'subOff', manager: mg.id, by: l.subs[off] });
+      const spot = placeIn(l, pid);
+      if (spot) Object.assign(week, { owner: mg.id }, spot);
+      subs.push(...subEvents(week, mg.id, l, pid));
     }
     weeks.push(week);
   }
+  return { weeks, subs };
+}
 
-  for (const mv of transfers.moves) {
+function pointsIn(data: Data, pid: number, gw: number) {
+  return data.players[pid]?.pts?.[gw - data.meta.firstGw] ?? fromMatches(data, pid, gw);
+}
+
+function fromMatches(data: Data, pid: number, gw: number) {
+  return (data.plMatches ?? [])
+    .filter((m) => m.gw === gw)
+    .flatMap((m) => (m.lineups ?? []).flat())
+    .filter(([id]) => id === pid)
+    .reduce((total, [, , pts]) => total + pts, 0);
+}
+
+// Where the manager picked him. Lineups come with the automatic substitutions made, so a
+// substitute is in the XI and the starter he replaced on the bench.
+function placeIn(l: Lineup, pid: number): Pick<Week, 'role' | 'counted' | 'auto'> | undefined {
+  if (l.xi.includes(pid)) return l.subs.includes(pid) ? { role: 'bench', counted: true, auto: 'on' } : { role: 'xi', counted: true };
+  if (l.bench.includes(pid)) return l.off?.includes(pid) ? { role: 'xi', counted: false, auto: 'off' } : { role: 'bench', counted: false };
+  return undefined;
+}
+
+function subEvents({ gw, pts }: Week, manager: number, l: Lineup, pid: number): StoryEvent[] {
+  const on = l.subs.indexOf(pid);
+  const off = l.off?.indexOf(pid) ?? -1;
+  const events: StoryEvent[] = [];
+  if (on >= 0) events.push({ gw, kind: 'subOn', manager, for: l.off?.[on], pts });
+  if (off >= 0) events.push({ gw, kind: 'subOff', manager, by: l.subs[off] });
+  return events;
+}
+
+// --- His moves, trades and claims --------------------------------------------------------
+
+function moveEvents(moves: Move[], pid: number) {
+  const events: StoryEvent[] = [];
+  for (const mv of moves) {
     if (mv.type === 'trade') continue;
     if (mv.in === pid) events.push({ gw: mv.gw, kind: 'signed', manager: mv.manager, type: mv.type, out: mv.out });
     if (mv.out === pid) events.push({ gw: mv.gw, kind: 'dropped', manager: mv.manager, type: mv.type, in: mv.in });
   }
-  for (const t of transfers.trades) {
-    const gives = t.items.map((i) => i.gives);
-    const gets = t.items.map((i) => i.gets);
-    // The side that gives him up, and the players going the other way.
-    const [from, to, back] = gives.includes(pid)
-      ? [t.offeredBy, t.offeredTo, gets]
-      : gets.includes(pid)
-        ? [t.offeredTo, t.offeredBy, gives]
-        : [];
-    if (from === undefined) continue;
-    if (t.state === 'p') events.push({ gw: t.gw, kind: 'traded', from, to: to!, for: back! });
-    else events.push({ gw: t.gw, kind: 'offer', by: t.offeredBy, to: t.offeredTo, state: t.state, for: back!, wanted: gets.includes(pid) });
+  return events;
+}
+
+function tradeEvents(trades: Trade[], pid: number) {
+  const events: StoryEvent[] = [];
+  for (const t of trades) {
+    const side = tradeSide(t, pid);
+    if (!side) continue;
+    const { from, to, back, wanted } = side;
+    if (t.state === 'p') events.push({ gw: t.gw, kind: 'traded', from, to, for: back });
+    else events.push({ gw: t.gw, kind: 'offer', by: t.offeredBy, to: t.offeredTo, state: t.state, for: back, wanted });
   }
-  // The manager's claim dropping the same player that went through ahead of `c`: ranked above
-  // it, so FPL tried it first (or either is from before FPL kept a priority, and there's no telling).
-  const wonFirst = (c: Claim) =>
-    transfers.claims.find(
-      (w) =>
-        w.outcome === 'won' &&
-        w.manager === c.manager &&
-        w.gw === c.gw &&
-        w.out === c.out &&
-        (w.priority === null || c.priority === null || w.priority < c.priority),
-    );
+  return events;
+}
+
+// The side of a trade that gives him up, and the players going the other way.
+function tradeSide(t: Trade, pid: number) {
+  const gives = t.items.map((i) => i.gives);
+  const gets = t.items.map((i) => i.gets);
+  const wanted = gets.includes(pid);
+  if (gives.includes(pid)) return { from: t.offeredBy, to: t.offeredTo, back: gets, wanted };
+  if (wanted) return { from: t.offeredTo, to: t.offeredBy, back: gives, wanted };
+  return undefined;
+}
+
+function claimEvents(transfers: Transfers, pid: number) {
+  const events: StoryEvent[] = [];
   for (const c of transfers.claims) {
     if (c.outcome === 'won') continue;
-    if (c.in === pid) {
-      const instead = wonFirst(c)?.in;
-      events.push({
-        gw: c.gw,
-        kind: 'claim',
-        manager: c.manager,
-        out: c.out,
-        outcome: c.outcome,
-        winner: c.winner,
-        ...(instead && { instead }),
-      });
-    }
-    // A claim to drop him that didn't go through, unless one of the manager's that did had
-    // dropped him already. When he went all the same that gameweek (on a claim ranked below,
-    // as a free agent or in a trade), only one lost to another manager is told: a void one
-    // may have fallen through because he had gone already.
-    if (c.out !== pid || wonFirst(c)) continue;
-    const went = transfers.moves.some((mv) => mv.out === pid && mv.manager === c.manager && mv.gw === c.gw);
-    if (!went || c.outcome === 'lost')
-      events.push({ gw: c.gw, kind: went ? 'tried' : 'kept', manager: c.manager, instead: c.in, winner: c.winner });
+    if (c.in === pid) events.push(missedClaim(transfers.claims, c, c.outcome));
+    const drop = claimToDrop(transfers, c, pid);
+    if (drop) events.push(drop);
   }
-  events.sort((a, b) => a.gw - b.gw || PHASE[a.kind] - PHASE[b.kind]);
+  return events;
+}
 
-  // Spells of one owner (or none), and one more for a move into the gameweek to come.
+// A claim for him that didn't go through.
+function missedClaim(claims: Claim[], c: Claim, outcome: Exclude<Claim['outcome'], 'won'>): StoryEvent {
+  const instead = wonFirst(claims, c)?.in;
+  return { gw: c.gw, kind: 'claim', manager: c.manager, out: c.out, outcome, winner: c.winner, ...(instead && { instead }) };
+}
+
+// A claim to drop him that didn't go through, unless one of the manager's that did had
+// dropped him already. When he went all the same that gameweek (on a claim ranked below,
+// as a free agent or in a trade), only one lost to another manager is told: a void one
+// may have fallen through because he had gone already.
+function claimToDrop(transfers: Transfers, c: Claim, pid: number): StoryEvent | undefined {
+  if (c.out !== pid || wonFirst(transfers.claims, c)) return undefined;
+  const went = transfers.moves.some((mv) => mv.out === pid && mv.manager === c.manager && mv.gw === c.gw);
+  if (went && c.outcome !== 'lost') return undefined;
+  return { gw: c.gw, kind: went ? 'tried' : 'kept', manager: c.manager, instead: c.in, winner: c.winner };
+}
+
+// The manager's claim dropping the same player that went through ahead of `c`: ranked above
+// it, so FPL tried it first (or either is from before FPL kept a priority, and there's no telling).
+const wonFirst = (claims: Claim[], c: Claim) => claims.find((w) => w.outcome === 'won' && sameDrop(w, c) && rankedAbove(w, c));
+
+const sameDrop = (w: Claim, c: Claim) => w.manager === c.manager && w.gw === c.gw && w.out === c.out;
+
+const rankedAbove = (w: Claim, c: Claim) => w.priority === null || c.priority === null || w.priority < c.priority;
+
+// --- Spells and totals -------------------------------------------------------------------
+
+// Spells of one owner (or none), and one more for a move into the gameweek to come.
+function spellsOf(data: Data, pid: number, weeks: Week[], events: StoryEvent[]) {
+  const { meta } = data;
+  const spells = ownerSpells(weeks);
+  const owner = data.players[pid]?.owner ?? null;
+  const later = events.some((e) => e.gw > meta.currentGw);
+  if (!spells.length || later || spells.at(-1)!.owner !== owner)
+    spells.push({ owner, from: Math.max(meta.currentGw + 1, meta.firstGw), to: null, weeks: [], events: [] });
+  else spells.at(-1)!.to = null;
+  for (const e of events) spellAt(spells, e.gw).events.push(e);
+  return spells;
+}
+
+function ownerSpells(weeks: Week[]) {
   const spells: Spell[] = [];
   for (const week of weeks) {
     const last = spells.at(-1);
@@ -187,38 +254,34 @@ export function playerHistory(data: Data, pid: number): History {
       last.to = week.gw;
     } else spells.push({ owner: week.owner, from: week.gw, to: week.gw, weeks: [week], events: [] });
   }
-  const owner = data.players[pid]?.owner ?? null;
-  const later = events.some((e) => e.gw > meta.currentGw);
-  if (!spells.length || later || spells.at(-1)!.owner !== owner)
-    spells.push({ owner, from: Math.max(meta.currentGw + 1, meta.firstGw), to: null, weeks: [], events: [] });
-  else spells.at(-1)!.to = null;
-  for (const e of events) {
-    const spell = [...spells].reverse().find((s) => s.from <= e.gw) ?? spells[0];
-    spell.events.push(e);
-  }
+  return spells;
+}
 
+const spellAt = (spells: Spell[], gw: number) => [...spells].reverse().find((s) => s.from <= gw) ?? spells[0];
+
+function ownerTotals(weeks: Week[]) {
   const owners = new Map<number, OwnerTotals>();
   for (const w of weeks) {
     if (w.owner === null) continue;
     const t =
       owners.get(w.owner) ?? owners.set(w.owner, { owner: w.owner, weeks: 0, starts: 0, benched: 0, xiPts: 0, benchPts: 0 }).get(w.owner)!;
-    t.weeks++;
-    if (w.counted) {
-      t.starts++;
-      t.xiPts += w.pts;
-    } else if (w.role === 'bench') {
-      t.benched++;
-      t.benchPts += w.pts;
-    }
+    addWeek(t, w);
   }
+  return [...owners.values()].sort((a, b) => b.xiPts - a.xiPts || b.weeks - a.weeks);
+}
+
+function addWeek(t: OwnerTotals, w: Week) {
+  t.weeks++;
+  if (w.counted) {
+    t.starts++;
+    t.xiPts += w.pts;
+  } else if (w.role === 'bench') {
+    t.benched++;
+    t.benchPts += w.pts;
+  }
+}
+
+function freeTotals(weeks: Week[]): History['free'] {
   const free = weeks.filter((w) => w.role === 'free');
-  return {
-    pick: data.draft.picks.find((p) => p.player === pid),
-    ...(added === undefined ? {} : { added }),
-    claims: transfers.claims.filter((c) => c.in === pid),
-    weeks,
-    spells,
-    owners: [...owners.values()].sort((a, b) => b.xiPts - a.xiPts || b.weeks - a.weeks),
-    free: { weeks: free.length, unclaimed: free.filter((w) => !w.claims).length, pts: free.reduce((t, w) => t + w.pts, 0) },
-  };
+  return { weeks: free.length, unclaimed: free.filter((w) => !w.claims).length, pts: free.reduce((t, w) => t + w.pts, 0) };
 }

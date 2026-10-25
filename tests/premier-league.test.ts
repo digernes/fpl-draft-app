@@ -277,6 +277,19 @@ describe('withFplAssists', () => {
     assert.deepEqual(withFplAssists(moments, sides, (pid) => assists.get(pid) ?? 0)[1], [50, 2, 'goal', 3, 2]);
   });
 
+  it('gives an own goal for a side the one FPL assist its side has left over', () => {
+    // 5, of the away side, puts it in his own net; FPL gives 2 the assist for it.
+    const own: PlMoment[] = [
+      [10, 1, 'goal', 1, 3],
+      [17, 1, 'own', 5],
+    ];
+    const assists = new Map([
+      [3, 1],
+      [2, 1],
+    ]);
+    assert.deepEqual(withFplAssists(own, sides, (pid) => assists.get(pid) ?? 0)[1], [17, 1, 'own', 5, 2]);
+  });
+
   it('leaves it when it isn’t clear whose it is, or no assist is left over', () => {
     const twoLeft = new Map([
       [2, 2],

@@ -102,24 +102,36 @@ export function bestOf(ids: number[], value: (id: number) => number | undefined,
 }
 
 // With bonus points, the way FPL shows them: 10+3 rather than 13. The tip takes them apart
-// by where they came from (`from`, pl-stats.ts' pointsRows), and while his gameweek is
+// by where they came from (`from`, stats-files.ts' pointsRows), and while his gameweek is
 // played says where they're heading (`projected`).
+// The points in a pill's tip: so far and where they're heading while his gameweek is
+// played, else just the points, when they're taken apart below.
+const pointsSaid = (pts: number, projected: number | undefined, parts: boolean) =>
+  projected === undefined ? [parts && plural(pts, 'point')] : [`${plural(pts, 'point')} so far`, `${tenths(projected)} projected`];
+
 export function ptsPill(
   pts: number,
   bonus = 0,
-  { top = false, projected, from = [] }: { top?: boolean; projected?: number; from?: [string, number][] } = {},
+  {
+    top = false,
+    projected,
+    from = [],
+    toCome = [],
+  }: { top?: boolean; projected?: number; from?: [string, number][]; toCome?: [string, number][] } = {},
 ) {
-  const tip = [
-    projected === undefined && from.length > 0 && plural(pts, 'point'),
-    projected !== undefined && `${plural(pts, 'point')} so far`,
-    projected !== undefined && `${tenths(projected)} projected`,
-    top && 'the match’s best',
-  ]
-    .filter(Boolean)
-    .join(' · ');
-  const rows = from.map(([label, n]) => `${label}\t${figure(n)}`).join('\n');
+  const tip = [...pointsSaid(pts, projected, from.length > 0), top && 'the match’s best'].filter(Boolean).join(' · ');
+  const rows = pointsTipRows(from, toCome);
   const attr = tip ? ` data-tip="${tip[0].toUpperCase()}${tip.slice(1)}"${rows ? ` data-tip-rows="${esc(rows)}"` : ''}` : '';
   return `<span class="ptsp ${top ? 'top' : pointsTier(pts)}"${attr}>${bonus ? `${figure(pts - bonus)}+${bonus}` : figure(pts)}</span>`;
+}
+
+// A points tip's rows: what he has, by where it came from, then while his gameweek is played
+// what's still to come (`toCome`, in tenths) under a heading of its own, a row without a
+// value (tooltips.ts).
+export function pointsTipRows(from: [string, number][], toCome: [string, number][] = []) {
+  const rows = from.map(([label, n]) => `${label}\t${figure(n)}`);
+  if (toCome.length) rows.push('Still to come', ...toCome.map(([label, x]) => `${label}\t${tenths(x)}`));
+  return rows.join('\n');
 }
 
 const XP_PARTS = ['Playing', 'Goals', 'Penalties', 'Assists', 'Clean sheet', 'Conceded', 'Defcon', 'Saves', 'Bonus', 'Cards'];
@@ -127,15 +139,20 @@ export const tenths = (x: number) => (x < 0 ? `−${(-x).toFixed(1)}` : x.toFixe
 
 // Expected points, with a tip that takes them apart when the site's model gave the parts
 // (FPL's form has none): his expected minutes, who against on the line below, then every
-// part worth a tenth or more, as rows the tooltip lines up (chrome.ts).
+// part worth a tenth or more, as rows the tooltip lines up (tooltips.ts).
 export function xpPill(xp: number, parts?: XpParts, against = '', note = '') {
   if (!parts) return `<span class="ptsp xp" data-tip="${esc(`${tenths(xp)} expected points${note}`)}">${xp.toFixed(1)}</span>`;
+  return `<span class="ptsp xp"${xpTip(xp, parts, against)}>${xp.toFixed(1)}</span>`;
+}
+
+// The pill's tip alone, as attributes, for numbers shown without the pill (the Projected columns).
+export function xpTip(xp: number, parts: XpParts, against = '') {
   const rows = parts
     .slice(1)
     .flatMap((x, i) => (Math.abs(x) >= 0.05 ? [`${XP_PARTS[i]}\t${tenths(x)}`] : []))
     .join('\n');
   const head = `${tenths(xp)} xP · ${Math.round(parts[0])} avg mins${against ? `\n${against}` : ''}`;
-  return `<span class="ptsp xp" data-tip="${esc(head)}" data-tip-rows="${esc(rows)}">${xp.toFixed(1)}</span>`;
+  return ` data-tip="${esc(head)}" data-tip-rows="${esc(rows)}"`;
 }
 
 export function tag(text: string, tip = '', cls = '') {

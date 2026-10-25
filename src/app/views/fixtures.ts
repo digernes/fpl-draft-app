@@ -4,7 +4,8 @@ import { gameweekReviewCard } from '../cards.ts';
 import { avatar, card, gwNav, listRow } from '../components.ts';
 import { esc, fmtDay } from '../format.ts';
 import { club, first, gwInfo } from '../lookups.ts';
-import { deadlineNote, featuredGw, matchList, oddsToggle } from '../matches.ts';
+import { oddsToggle } from '../match-odds.ts';
+import { deadlineNote, featuredGw, matchList } from '../matches.ts';
 import { href } from '../router.ts';
 import { D } from '../state.ts';
 

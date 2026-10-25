@@ -1,0 +1,59 @@
+name: Deploy the Worker
+
+# The live relay on Cloudflare (worker/) goes live with main, as the site does: on every
+# push that changes it or the shared code it bundles, once the checks pass. It needs two
+# repository secrets: CLOUDFLARE_API_TOKEN (a token from Cloudflare's "Edit Cloudflare
+# Workers" template) and CLOUDFLARE_ACCOUNT_ID. Without them the job says so and stops.
+# The Worker's own secret (GITHUB_TOKEN, for its timer) stays on Cloudflare: a deploy keeps it.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'worker/**'
+      - 'src/shared/**'
+      - 'package-lock.json'
+      - '.github/workflows/worker.yml'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: worker
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+    steps:
+      - name: Without the Cloudflare secrets, nothing to deploy with
+        if: env.HAS_TOKEN != 'true'
+        run: echo "::notice::Add CLOUDFLARE_API_TOKEN and CLOUDFLARE_ACCOUNT_ID as repository secrets to deploy the Worker from here."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+
+      - uses: actions/setup-node@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          node-version: 24
+          cache: npm
+
+      - run: npm ci
+        if: env.HAS_TOKEN == 'true'
+
+      - name: Type-check, lint and test
+        if: env.HAS_TOKEN == 'true'
+        run: npm run check
+
+      - name: Deploy
+        if: env.HAS_TOKEN == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          workingDirectory: worker
+          wranglerVersion: '4.152.0'
