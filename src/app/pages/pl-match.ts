@@ -8,6 +8,7 @@
 
 import type { PlLine, PlMatch, PlMoment } from '../../shared/data.ts';
 import type { PlayerEvents } from '../../shared/live.ts';
+import { withFplAssists } from '../../shared/match-stats.ts';
 import { avatar, bestOf, card, crest, empty, listRow, ptsPill, roundCard, xpPill, type RoundRow } from '../components.ts';
 import { esc, fmtShortDay, fmtTime, fmtWeekday, plural, sum } from '../format.ts';
 import { ballSvg, cardSvg, chevronSvg, missSvg, premierLeagueSvg } from '../icons.ts';
@@ -15,7 +16,7 @@ import { club, first, gwInfo, lineupFor, nextParts, nextXp, player } from '../lo
 import { projectedFor, statusDot } from '../matches.ts';
 import { matchPitch, playerColumns, type PitchPlayer, type PitchSide } from '../pitch.ts';
 import { lineEvents, plMatch, plRound, plState } from '../pl.ts';
-import { bpsIn, playerLeadsCard, playerStatsCard, statsFor, type StatsRow } from '../pl-stats.ts';
+import { bpsIn, playerLeadsCard, playerStatsCard, pointsFrom, pointsRows, statsFor, type StatsRow } from '../pl-stats.ts';
 import type { PageView } from '../render.ts';
 import { href, PL_MATCH_TABS, type Route } from '../router.ts';
 import { D, live, state } from '../state.ts';
@@ -124,7 +125,11 @@ function poster(m: PlMatch, sides: [Line[], Line[]] | null) {
   const side = (id: number, cls: string) =>
     `<a class="mh-team ${cls}" href="${href.pl('players', id)}">${crest(id, 48)}<span class="mh-team-text"><span class="mh-name">${esc(club(id)?.name ?? '?')}</span></span></a>`;
   const file = statsFor(m.gw);
-  const moments = typeof file === 'object' ? (file.moments?.[m.id] ?? null) : null;
+  const found = typeof file === 'object' ? file.moments?.[m.id] : undefined;
+  const moments =
+    found && sides
+      ? withFplAssists(found, [sides[0].map((l) => l.pid), sides[1].map((l) => l.pid)], (pid) => m.events?.[pid]?.assists ?? 0)
+      : (found ?? null);
   return `<div class="mh">
     <div class="mh-top"><a class="mh-back" href="${href.pl('fixtures', m.gw)}">${chevronSvg('left')}<span>Round ${m.gw}</span></a><span class="mh-league">Premier League</span></div>
     <div class="mh-date">${when}</div>
@@ -181,13 +186,16 @@ function incidents(sides: [Line[], Line[]], i: 0 | 1, score: number, moments: Pl
 function lineupCard(m: PlMatch, sides: [Line[], Line[]] | null) {
   const lineOf = new Map((sides ?? [[], []]).flat().map((l) => [l.pid, l]));
   const ahead = !sides && m.gw === D.meta.nextGw;
-  // The match's best of those who played is blue after full time (on a tie, by BPS).
+  // The match's best of those who played is blue after full time (on a tie, the more goals,
+  // then the higher BPS, then the more assists).
   const over = sides && plState(m).state === 'done';
   const top = over
     ? bestOf(
         [...lineOf.keys()],
         (pid) => lineOf.get(pid)?.pts,
+        (pid) => lineOf.get(pid)?.events?.goals ?? 0,
         (pid) => bpsIn(pid, m.gw, m.id),
+        (pid) => lineOf.get(pid)?.events?.assists ?? 0,
       )
     : new Set<number>();
   // A player's points here are this match's, so only one with no other match this gameweek has his projection in their tip.
@@ -198,7 +206,11 @@ function lineupCard(m: PlMatch, sides: [Line[], Line[]] | null) {
     return {
       pid,
       badge: l
-        ? ptsPill(l.pts, l.events?.bonus ?? 0, { top: top.has(pid), projected: once(pid) ? projectedFor(pid, m.gw) : undefined })
+        ? ptsPill(l.pts, l.events?.bonus ?? 0, {
+            top: top.has(pid),
+            projected: once(pid) ? projectedFor(pid, m.gw) : undefined,
+            from: pointsRows(pointsFrom(pid, m.gw, m.id)),
+          })
         : ahead
           ? xpPill(nextXp(pid), nextParts(pid))
           : '',

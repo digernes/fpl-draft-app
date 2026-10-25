@@ -173,33 +173,37 @@
   opacity: 0.5;
 }
 
-/* A finished match's expected points, like a fotmob.com match's top stats. */
+/* fotmob.com's stat rows, as on a match's Stats tab: the label in the middle of a 48px row
+   and each side's figure at its end, the better of the two in a pill of that side's colour. */
 .xg-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 2fr 1fr;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-  min-height: 32px;
+  min-height: 48px;
 }
 
 .xg-label {
-  color: var(--text-2);
-  font-size: 13px;
+  font-size: 14px;
+  line-height: 18px;
   text-align: center;
 }
 
 .xg-value {
-  flex: none;
-  min-width: 44px;
+  justify-self: start;
   padding: 4px 8px;
   border-radius: 17px;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 500;
+  line-height: 16px;
   font-variant-numeric: tabular-nums;
-  text-align: center;
+  white-space: nowrap;
 }
 
-.xg-value.higher {
+.xg-value:last-child {
+  justify-self: end;
+}
+
+.xg-value.better {
   color: var(--av-ink, #fff);
 }
 

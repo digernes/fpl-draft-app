@@ -80,3 +80,27 @@ export function momentsOf(events: PlEvents, idOf: (code: string | null | undefin
   }
   return list.sort((a, b) => a[1] - b[1] || a[0] - b[0]);
 }
+
+/**
+ * A match's moments with FPL's assister given to a goal the match centre names none for:
+ * where a side has one such goal and its players one FPL assist no goal accounts for, it's
+ * his. FPL hands assists out more freely, as for a rebound off a save.
+ */
+export function withFplAssists(moments: PlMoment[], sides: [number[], number[]], assists: (pid: number) => number): PlMoment[] {
+  const out = [...moments];
+  for (const side of sides) {
+    const ours = new Set(side);
+    const goals = out.flatMap((mo, i) => ((mo[2] === 'goal' || mo[2] === 'pen') && ours.has(mo[3]) ? [i] : []));
+    const bare = goals.filter((i) => out[i][4] === undefined);
+    if (bare.length !== 1) continue;
+    const named = new Map<number, number>();
+    for (const i of goals) {
+      const by = out[i][4];
+      if (by !== undefined) named.set(by, (named.get(by) ?? 0) + 1);
+    }
+    const spare = side.map((pid) => [pid, assists(pid) - (named.get(pid) ?? 0)] as const).filter(([, n]) => n > 0);
+    const [min, half, kind, scorer] = out[bare[0]];
+    if (spare.length === 1 && spare[0][1] === 1 && spare[0][0] !== scorer) out[bare[0]] = [min, half, kind, scorer, spare[0][0]];
+  }
+  return out;
+}

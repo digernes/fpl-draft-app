@@ -28,6 +28,7 @@ import { club, first, isArchive, liveParts, liveXp, mgr, nextParts, nextXp, oppo
 import { projectedFor } from '../matches.ts';
 import { playerHistory, type History, type StoryEvent, type Week } from '../player-history.ts';
 import { clubMatches, lineEvents, linesIn, plState } from '../pl.ts';
+import { pointsFrom, pointsRows } from '../pl-stats.ts';
 import type { PageView } from '../render.ts';
 import { href, type Route } from '../router.ts';
 import { D } from '../state.ts';
@@ -92,6 +93,7 @@ function eventText(e: StoryEvent, name: string) {
     case 'claim':
       return `${teamLink(e.manager)} tried to swap ${playerLink(e.out)} for ${name} on waivers, ${e.instead ? `but he signed ${playerLink(e.instead)} instead` : missedOut(e.winner, e.manager, 'he')}`;
     case 'kept':
+    case 'tried':
       return `${teamLink(e.manager)} tried to swap ${name} for ${playerLink(e.instead)} on waivers, ${missedOut(e.winner, e.manager, playerLink(e.instead))}`;
     case 'signed':
       return `${teamLink(e.manager)} signed ${name} ${e.type === 'waiver' ? 'on waivers' : 'as a free agent'}, dropping ${playerLink(e.out)}`;
@@ -111,6 +113,7 @@ function eventText(e: StoryEvent, name: string) {
 const KINDS: Record<StoryEvent['kind'], string> = {
   claim: 'claim',
   kept: 'kept',
+  tried: 'kept',
   signed: 'in',
   dropped: 'out',
   traded: 'trade',
@@ -142,7 +145,8 @@ function timelineCard(pid: number, p: Player, h: History) {
         ? row(`GW ${h.added}`, '', '<span class="muted">Added to FPL after the draft</span>')
         : row('Draft', '', '<span class="muted">Not drafted</span>'),
   });
-  for (const e of events) {
+  // Backwards, so a gameweek's own events come the latest first too: the sort below keeps their order.
+  for (const e of [...events].reverse()) {
     const text = eventText(e, name);
     if (text) items.push({ gw: e.gw, order: 0, html: row(`GW ${e.gw}`, KINDS[e.kind], text) });
   }
@@ -213,7 +217,10 @@ function pointsFor(pid: number, pts: number, matches: PlMatch[], bonus: number) 
   const due = pts === 0 && matches.length > 0 && matches.every((m) => plState(m).state === 'due') && matches[0].gw === D.meta.currentGw;
   return due
     ? xpPill(liveXp(pid), liveParts(pid), opponents(player(pid).club, matches[0].gw), ' (not played yet)')
-    : ptsPill(pts, bonus, { projected: projectedFor(pid, matches[0]?.gw) });
+    : ptsPill(pts, bonus, {
+        projected: projectedFor(pid, matches[0]?.gw),
+        from: matches.length ? pointsRows(pointsFrom(pid, matches[0].gw)) : [],
+      });
 }
 
 // A double gameweek's two matches as one: what he did in both.

@@ -99,12 +99,20 @@ const move = (type: Move['type'], manager: number, inId: number, out: number, gw
   gw,
   at: `2026-0${gw}-01T00:00:00Z`,
 });
-const claim = (manager: number, inId: number, out: number, gw: number, outcome: Claim['outcome'], winner: number | null): Claim => ({
+const claim = (
+  manager: number,
+  inId: number,
+  out: number,
+  gw: number,
+  outcome: Claim['outcome'],
+  winner: number | null,
+  priority = 1,
+): Claim => ({
   manager,
   in: inId,
   out,
   gw,
-  priority: 1,
+  priority,
   outcome,
   winner,
 });
@@ -126,7 +134,7 @@ describe('playerHistory', () => {
       draft: { picks: [{ overall: 3, round: 1, pick: 3, manager: 10, player: 7, auto: false }], retention: [] },
       transfers: {
         moves: [move('waiver', 10, 9, 7, 4), move('free', 30, 7, 12, 6)],
-        claims: [claim(10, 8, 7, 3, 'lost', 20), claim(20, 7, 13, 5, 'void', null), claim(30, 7, 14, 5, 'void', null)],
+        claims: [claim(10, 8, 7, 3, 'lost', 20), claim(20, 7, 13, 5, 'void', null, 2), claim(30, 7, 14, 5, 'void', null)],
         trades: [],
       },
     } as unknown as Data;
@@ -185,6 +193,34 @@ describe('playerHistory', () => {
       [20, 15],
       [30, undefined],
     ]);
+    // Not one ranked below it, which FPL only tried after this one had failed.
+    d.transfers.claims.at(-1)!.priority = 3;
+    assert.equal(playerHistory(d, 7).spells[1].events.find((e) => e.kind === 'claim')?.instead, undefined);
+  });
+
+  it('tells a claim that would have dropped him in a gameweek he went all the same, but not one ranked below the claim that did', () => {
+    const d = data();
+    // 10 wanted 11 for him first and lost 11 to 20, then got 9; 12, ranked below 9, never came into it.
+    d.transfers.claims.push(claim(10, 11, 7, 4, 'lost', 20, 1), claim(10, 9, 7, 4, 'won', 10, 2), claim(10, 12, 7, 4, 'lost', 30, 3));
+    const events = playerHistory(d, 7).spells[1].events;
+    assert.deepEqual(
+      events.map((e) => `${e.kind}@${e.gw}`),
+      ['tried@4', 'dropped@4', 'claim@5', 'claim@5'],
+    );
+    assert.deepEqual(
+      events.flatMap((e) => (e.kind === 'tried' ? [[e.manager, e.instead, e.winner]] : [])),
+      [[10, 11, 20]],
+    );
+  });
+
+  it('tells a claim that would have dropped him before he went as a free agent, when another manager got the player wanted', () => {
+    const d = data();
+    d.transfers.moves[0] = move('free', 10, 9, 7, 4);
+    d.transfers.claims.push(claim(10, 11, 7, 4, 'lost', 20), claim(10, 12, 7, 4, 'void', null, 2));
+    assert.deepEqual(
+      playerHistory(d, 7).spells[1].events.map((e) => `${e.kind}@${e.gw}`),
+      ['tried@4', 'dropped@4', 'claim@5', 'claim@5'],
+    );
   });
 
   it('starts one FPL added after the draft in the gameweek he was added', () => {

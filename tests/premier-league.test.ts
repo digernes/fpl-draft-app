@@ -4,8 +4,9 @@ import { describe, it } from 'node:test';
 import { buildMonths } from '../src/build/output.ts';
 import { buildPlSeasonStats, buildPlStats, fetchFormations, fromFeed } from '../src/build/premier-league.ts';
 import type { Season } from '../src/build/season.ts';
-import { PL_STATS, type PlMatch, type XpParts } from '../src/shared/data.ts';
+import { PL_STATS, type PlMatch, type PlMoment, type XpParts } from '../src/shared/data.ts';
 import type { LiveFeed } from '../src/shared/fpl-api.ts';
+import { withFplAssists } from '../src/shared/match-stats.ts';
 
 type Element = LiveFeed['elements'][string];
 type Explain = NonNullable<Element['explain']>[number];
@@ -256,5 +257,42 @@ describe('buildPlSeasonStats', () => {
     const { projected } = buildPlSeasonStats(season, upcoming);
     assert.deepEqual(projected?.gws, [9, 10]);
     assert.deepEqual(projected?.players[7], [7.7, 7.7, 160, 2, 0.6, 0, 0.8, 1]);
+  });
+});
+
+describe('withFplAssists', () => {
+  // Home 1-3, away 4-6: 1 scored with 2 assisting, then 3 with no assister; 5 scored for the away side.
+  const moments: PlMoment[] = [
+    [10, 1, 'goal', 1, 2],
+    [50, 2, 'goal', 3],
+    [70, 2, 'goal', 5],
+  ];
+  const sides: [number[], number[]] = [
+    [1, 2, 3],
+    [4, 5, 6],
+  ];
+
+  it('gives a goal without an assister the one FPL assist its side has left over', () => {
+    const assists = new Map([[2, 2]]);
+    assert.deepEqual(withFplAssists(moments, sides, (pid) => assists.get(pid) ?? 0)[1], [50, 2, 'goal', 3, 2]);
+  });
+
+  it('leaves it when it isn’t clear whose it is, or no assist is left over', () => {
+    const twoLeft = new Map([
+      [2, 2],
+      [1, 1],
+    ]);
+    assert.deepEqual(
+      withFplAssists(moments, sides, (pid) => twoLeft.get(pid) ?? 0),
+      moments,
+    );
+    const own = new Map([
+      [2, 1],
+      [5, 1],
+    ]);
+    assert.deepEqual(
+      withFplAssists(moments, sides, (pid) => own.get(pid) ?? 0),
+      moments,
+    );
   });
 });

@@ -88,29 +88,37 @@ export const pointsTier = (pts: number) => (pts >= 6 ? 'p2' : pts >= 1 ? 'p1' : 
 
 /**
  * The best in a match by `value`, for the blue, and none when the best is nothing. Of those
- * level, the one ahead by `tiebreak` (all of them while it can't tell them apart).
+ * level, the one ahead by each tiebreak in turn (all of them still level after the last).
  */
-export function bestOf(ids: number[], value: (id: number) => number | undefined, tiebreak?: (id: number) => number | undefined) {
+export function bestOf(ids: number[], value: (id: number) => number | undefined, ...tiebreaks: ((id: number) => number | undefined)[]) {
   const top = (list: number[], by: (id: number) => number | undefined) => {
     const best = Math.max(...list.map((id) => by(id) ?? -Infinity));
     return best === -Infinity ? list : list.filter((id) => by(id) === best);
   };
   if (!ids.some((id) => (value(id) ?? 0) > 0)) return new Set<number>();
-  const level = top(ids, value);
-  return new Set(tiebreak && level.length > 1 ? top(level, tiebreak) : level);
+  let level = top(ids, value);
+  for (const by of tiebreaks) if (level.length > 1) level = top(level, by);
+  return new Set(level);
 }
 
-// With bonus points, the way FPL shows them: 10+3 rather than 13. While his gameweek is
-// played, the tip has where it's heading (`projected`).
-export function ptsPill(pts: number, bonus = 0, { top = false, projected }: { top?: boolean; projected?: number } = {}) {
+// With bonus points, the way FPL shows them: 10+3 rather than 13. The tip takes them apart
+// by where they came from (`from`, pl-stats.ts' pointsRows), and while his gameweek is
+// played says where they're heading (`projected`).
+export function ptsPill(
+  pts: number,
+  bonus = 0,
+  { top = false, projected, from = [] }: { top?: boolean; projected?: number; from?: [string, number][] } = {},
+) {
   const tip = [
+    projected === undefined && from.length > 0 && plural(pts, 'point'),
     projected !== undefined && `${plural(pts, 'point')} so far`,
     projected !== undefined && `${tenths(projected)} projected`,
     top && 'the match’s best',
   ]
     .filter(Boolean)
     .join(' · ');
-  const attr = tip ? ` data-tip="${tip[0].toUpperCase()}${tip.slice(1)}"` : '';
+  const rows = from.map(([label, n]) => `${label}\t${figure(n)}`).join('\n');
+  const attr = tip ? ` data-tip="${tip[0].toUpperCase()}${tip.slice(1)}"${rows ? ` data-tip-rows="${esc(rows)}"` : ''}` : '';
   return `<span class="ptsp ${top ? 'top' : pointsTier(pts)}"${attr}>${bonus ? `${figure(pts - bonus)}+${bonus}` : figure(pts)}</span>`;
 }
 

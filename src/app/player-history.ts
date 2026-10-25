@@ -32,8 +32,11 @@ export type StoryEvent = { gw: number } & (
    * signing): `instead` when the manager's claim for another, dropping the same, went first.
    */
   | { kind: 'claim'; manager: number; out: number; outcome: Exclude<Claim['outcome'], 'won'>; winner: number | null; instead?: number }
-  /** A claim that would have dropped him for `instead`, which didn't go through. */
-  | { kind: 'kept'; manager: number; instead: number; winner: number | null }
+  /**
+   * A claim that would have dropped him for `instead`, which didn't go through: `kept` when he
+   * stayed, `tried` when the manager let him go that gameweek all the same.
+   */
+  | { kind: 'kept' | 'tried'; manager: number; instead: number; winner: number | null }
   | { kind: 'traded'; from: number; to: number; for: number[] }
   /** A trade for him, or of him, that didn't happen. */
   | { kind: 'offer'; by: number; to: number; state: string; for: number[]; wanted: boolean }
@@ -76,7 +79,17 @@ export interface History {
 }
 
 // Within a gameweek: its waivers and moves come before what happened in its matches.
-const PHASE: Record<StoryEvent['kind'], number> = { claim: 0, kept: 0, signed: 1, dropped: 1, traded: 1, offer: 1, subOn: 2, subOff: 2 };
+const PHASE: Record<StoryEvent['kind'], number> = {
+  claim: 0,
+  kept: 0,
+  tried: 0,
+  signed: 1,
+  dropped: 1,
+  traded: 1,
+  offer: 1,
+  subOn: 2,
+  subOff: 2,
+};
 
 export function playerHistory(data: Data, pid: number): History {
   const { meta, transfers } = data;
@@ -129,9 +142,21 @@ export function playerHistory(data: Data, pid: number): History {
     if (t.state === 'p') events.push({ gw: t.gw, kind: 'traded', from, to: to!, for: back! });
     else events.push({ gw: t.gw, kind: 'offer', by: t.offeredBy, to: t.offeredTo, state: t.state, for: back!, wanted: gets.includes(pid) });
   }
+  // The manager's claim dropping the same player that went through ahead of `c`: ranked above
+  // it, so FPL tried it first (or either is from before FPL kept a priority, and there's no telling).
+  const wonFirst = (c: Claim) =>
+    transfers.claims.find(
+      (w) =>
+        w.outcome === 'won' &&
+        w.manager === c.manager &&
+        w.gw === c.gw &&
+        w.out === c.out &&
+        (w.priority === null || c.priority === null || w.priority < c.priority),
+    );
   for (const c of transfers.claims) {
-    if (c.in === pid && c.outcome !== 'won') {
-      const instead = transfers.claims.find((w) => w.outcome === 'won' && w.manager === c.manager && w.gw === c.gw && w.out === c.out)?.in;
+    if (c.outcome === 'won') continue;
+    if (c.in === pid) {
+      const instead = wonFirst(c)?.in;
       events.push({
         gw: c.gw,
         kind: 'claim',
@@ -142,10 +167,14 @@ export function playerHistory(data: Data, pid: number): History {
         ...(instead && { instead }),
       });
     }
-    // A claim to drop him that didn't go through, unless another of the manager's did.
-    const dropped = transfers.moves.some((mv) => mv.out === pid && mv.manager === c.manager && mv.gw === c.gw);
-    if (c.out === pid && c.outcome !== 'won' && !dropped)
-      events.push({ gw: c.gw, kind: 'kept', manager: c.manager, instead: c.in, winner: c.winner });
+    // A claim to drop him that didn't go through, unless one of the manager's that did had
+    // dropped him already. When he went all the same that gameweek (on a claim ranked below,
+    // as a free agent or in a trade), only one lost to another manager is told: a void one
+    // may have fallen through because he had gone already.
+    if (c.out !== pid || wonFirst(c)) continue;
+    const went = transfers.moves.some((mv) => mv.out === pid && mv.manager === c.manager && mv.gw === c.gw);
+    if (!went || c.outcome === 'lost')
+      events.push({ gw: c.gw, kind: went ? 'tried' : 'kept', manager: c.manager, instead: c.in, winner: c.winner });
   }
   events.sort((a, b) => a.gw - b.gw || PHASE[a.kind] - PHASE[b.kind]);
 

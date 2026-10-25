@@ -3,20 +3,20 @@
 // header and every tab the same right column (on one column, under the Facts tab alone):
 // the odds, the round's other matches, the match report (or preview), the top players and
 // the benches. Facts: the momentum, both lineups on one pitch (the projected ones before
-// the deadline) and each side's form. Stats: what both XIs did, side by side, as fotmob.com's.
+// the deadline) and each side's form. Stats: what both XIs did and where their points came
+// from, side by side, as fotmob.com's.
 // Head-to-head: every meeting this season, played or to come. And the table.
 
-import type { Lineup, Match, PlMatch } from '../../shared/data.ts';
+import { PL_STATS, type Lineup, type Match, type OverallRow, type PlMatch, type PlStats } from '../../shared/data.ts';
 import { playerState, type PlayerEvents } from '../../shared/live.ts';
 import { avatar, card, crest, empty, listRow, photo, roundCard, tile, type RoundRow } from '../components.ts';
-import { esc, fmtDate, fmtShortDay, fmtTime, fmtWeekday, pct, signed, sum } from '../format.ts';
+import { esc, figure, fmtDate, fmtShortDay, fmtTime, fmtWeekday, ordinal, pct, signed, sum } from '../format.ts';
 import { ballSvg, bootSvg, cardSvg, chevronSvg, leagueSvg, ownGoalSvg, subSvg } from '../icons.ts';
-import { club, first, gwEvents, gwInfo, gwPoints, lineupFor, mgr, player, slotOf } from '../lookups.ts';
+import { club, first, gwBonus, gwEvents, gwInfo, gwPoints, lineupFor, mgr, player, slotOf } from '../lookups.ts';
 import { onAction } from '../actions.ts';
 import { commentary, type Entry } from '../commentary.ts';
 import { matchReport, type ReportLine } from '../match-report.ts';
 import {
-  expectedStats,
   inPlayOdds,
   matchLineups,
   matchStatus,
@@ -28,8 +28,9 @@ import {
   winChances,
 } from '../matches.ts';
 import { momentum, type Step } from '../momentum.ts';
+import { gwTiebreaks } from '../lineup-filters.ts';
 import { linesIn, plRound, plState } from '../pl.ts';
-import { gwUnderlying, statsFor } from '../pl-stats.ts';
+import { gwUnderlying, pointsFrom, statsFor } from '../pl-stats.ts';
 import { renderView, type PageView } from '../render.ts';
 import { href, MATCH_TABS, type Route } from '../router.ts';
 import { D, live, state } from '../state.ts';
@@ -173,10 +174,11 @@ function sideColumn(m: Match, chances: Chances, steps: Step[]) {
     odds,
     roundMatches(m),
     reportCard(m, chances, steps),
-    m.finished && m.xg
+    m.started && l
       ? card({
           title: 'Top stats',
-          body: `<div class="match-detail">${expectedStats(m)}</div>`,
+          cls: 'st-card st-side',
+          body: sideStats(m, l),
           footer: { href: href.match(m, 'stats'), label: 'All stats' },
         })
       : '',
@@ -204,12 +206,12 @@ function lineupCard(m: Match) {
 // each kick-off slot (the matches starting together) takes 90 minutes, over which its
 // matches' points come in evenly, with a dotted line between match days as fotmob.com's
 // at half-time, and the automatic substitutions half a slot of their own after the last.
-// Under the pointer, every few minutes, a line down the plot and a dot on the lead, as
-// fotmob.com marks the minute under it, with the tip of the slot it's in: the score after
-// it, its matches and who scored what in them. While a match is being played a dot pulses
-// at the lead as it stands.
+// The pointer takes the nearest slot's point on the curve (where a match being played has
+// got to, or a slot's end before it starts): a line down the plot and a dot on the lead
+// there, as fotmob.com marks the minute, with the slot's tip: the score after it, its
+// matches and who scored what in them. While a match is being played a dot pulses at the
+// lead as it stands.
 const SUBS = 45;
-const STEP = 5; // minutes between the marks
 
 function momentumCard(m: Match, steps: Step[]) {
   if (!steps.length) return '';
@@ -225,6 +227,7 @@ function momentumCard(m: Match, steps: Step[]) {
   const score: [number, number] = [0, 0];
   const points: [number, number][] = [[0, 0]];
   const tips: string[] = [];
+  const marks: number[] = []; // each slot's point, or its end before it starts
   const count = (s: Step) => {
     lead += s.gained[0] - s.gained[1];
     score[0] += s.gained[0];
@@ -239,11 +242,13 @@ function momentumCard(m: Match, steps: Step[]) {
     };
     const minute = Math.max(0, ...slot.matches.map(minuteOf));
     if (played.length && minute) points.push([i * 90 + minute, lead]);
+    marks.push(played.length && minute ? i * 90 + minute : i * 90 + 90);
     tips.push(slotTip(m, slot.matches, played, score));
   });
   if (subs) {
     count(subs);
     points.push([slots.length * 90 + SUBS, lead]);
+    marks.push(slots.length * 90 + SUBS);
     tips.push(subsTip(m, subs));
   }
   const width = slots.length * 90 + (subs ? SUBS : 0);
@@ -276,25 +281,17 @@ function momentumCard(m: Match, steps: Step[]) {
     })
     .join('');
   const narrow = `style="flex:${SUBS / 90}"`;
-  // Each slot (and the substitutions) with its tip, over the marks in it: one every STEP
-  // minutes, each the middle of its own stretch, and with a dot once the area has got there.
+  // Each slot's mark with its tip, over the stretch of the plot nearer it than the next.
   const share = (x: number, of: number) => `${((x / of) * 100).toFixed(2)}%`;
   const reach = points.at(-1)![0];
-  const stretch = (x: number) => [Math.max(0, x - STEP / 2), Math.min(width, x + STEP / 2)];
-  const regions = [...slots.map((_, i) => [i * 90, i * 90 + 90]), ...(subs ? [[slots.length * 90, width]] : [])];
-  const hits = regions
-    .map(([start, end], r) => {
-      const marks: number[] = [];
-      for (let x = r ? start + STEP : 0; x <= end; x += STEP) marks.push(x);
-      const [from, to] = [stretch(marks[0])[0], stretch(marks.at(-1)!)[1]];
-      const cells = marks.map((x) => {
-        const [left, right] = stretch(x);
-        const on = x <= reach ? curveAt(x) : undefined;
-        const ahead = on === undefined || Math.abs(on - height / 2) < 0.5 ? undefined : on < height / 2 ? m.home : m.away;
-        const dot = on === undefined ? '' : `;--y:${share(on, height)}${ahead ? `;--dot:var(--m${slotOf(ahead)})` : ''}`;
-        return `<span class="mo-cell" style="left:${share(left - from, to - from)};width:${share(right - left, to - from)}"><i class="mo-mark tip-at${on === undefined ? '' : ' lead'}" style="left:${share(x - left, right - left)}${dot}"></i></span>`;
-      });
-      return `<span class="mo-slot" tabindex="0" style="left:${at(from)};width:${at(to - from)}" ${tips[r]}>${cells.join('')}</span>`;
+  const hits = marks
+    .map((x, r) => {
+      const from = r ? (marks[r - 1] + x) / 2 : 0;
+      const to = r < marks.length - 1 ? (x + marks[r + 1]) / 2 : width;
+      const on = x <= reach ? curveAt(x) : undefined;
+      const ahead = on === undefined || Math.abs(on - height / 2) < 0.5 ? undefined : on < height / 2 ? m.home : m.away;
+      const dot = on === undefined ? '' : `;--y:${share(on, height)}${ahead ? `;--dot:var(--m${slotOf(ahead)})` : ''}`;
+      return `<span class="mo-slot" tabindex="0" style="left:${at(from)};width:${at(to - from)}" ${tips[r]}><i class="mo-mark tip-at${on === undefined ? '' : ' lead'}" style="left:${share(x - from, to - from)}${dot}"></i></span>`;
     })
     .join('');
   const legend = `<div class="legend"><span class="legend-item"><i class="m${slotOf(m.home)}" style="background:var(--av-bg)"></i>${first(m.home)} ahead</span><span class="legend-item"><i class="m${slotOf(m.away)}" style="background:var(--av-bg)"></i>${first(m.away)} ahead</span></div>`;
@@ -383,9 +380,10 @@ function smoothCurve(points: [number, number][]) {
 
 // Each side's best scorers in its XI.
 function topPlayersCard(m: Match, [home, away]: [Lineup, Lineup]) {
+  const ties = gwTiebreaks(m.gw);
   const rows = (id: number, l: Lineup) =>
     [...l.xi]
-      .sort((a, b) => gwPoints(b, m.gw) - gwPoints(a, m.gw))
+      .sort((a, b) => [(pid: number) => gwPoints(pid, m.gw), ...ties].reduce((d, by) => d || (by(b) ?? 0) - (by(a) ?? 0), 0))
       .slice(0, 3)
       .map((pid) =>
         listRow({
@@ -412,12 +410,15 @@ function benchCard(m: Match, [home, away]: [Lineup, Lineup]) {
 
 type Totals = Record<string, number>;
 
-const COUNTED = ['goals', 'assists', 'bonus', 'cleanSheet', 'saves', 'defcon', 'pensSaved', 'pensMissed', 'ownGoals', 'yellow', 'red'];
+const COUNTED = ['goals', 'assists', 'cleanSheet', 'defcon', 'pensSaved', 'pensMissed', 'ownGoals', 'yellow', 'red'];
+// What FPL counts of each player beyond what scores, match by match in the gameweek's stats file.
+const FILED = ['saves', 'tackles', 'clearances_blocks_interceptions', 'recoveries', 'bps', 'threat', 'creativity'] as const;
 
 // What an XI did: its players' gameweek from the real matches they played in (with the
-// live relay's minutes and counts while it's on), and their underlying numbers once it's
-// over.
-function xiTotals(m: Match, l: Lineup): Totals {
+// live relay's minutes and counts while it's on), their underlying numbers once it's
+// over, and once the gameweek's stats file is in, what FPL counts beyond the points and
+// where the points came from.
+function xiTotals(m: Match, l: Lineup, file: PlStats | null): Totals {
   const t: Totals = {};
   const add = (key: string, n = 0) => (t[key] = (t[key] ?? 0) + n);
   for (const pid of l.xi) {
@@ -427,8 +428,12 @@ function xiTotals(m: Match, l: Lineup): Totals {
       for (const [key, n] of Object.entries(pm.events?.[pid] ?? {})) fromMatches[key] = (fromMatches[key] ?? 0) + n;
     const ev: Totals = { ...fromMatches, ...((gwEvents(pid, m.gw) ?? {}) as PlayerEvents) };
     const minutes = live?.gw === m.gw ? (live.feed.elements[pid]?.[1] ?? 0) : sum(lines.map(({ line }) => line[1]));
+    const bonus = gwBonus(pid, m.gw); // provisional while it's on, as in the score
     add('minutes', minutes);
     add('played', minutes > 0 ? 1 : 0);
+    add('starts', lines.some(({ line }) => line[3]) ? 1 : 0);
+    add('hour', lines.some(({ line }) => line[1] >= 60) ? 1 : 0);
+    add('bonus', bonus);
     for (const key of COUNTED) add(key, ev[key]);
     const u = gwUnderlying(pid, m.gw);
     if (u) {
@@ -437,96 +442,240 @@ function xiTotals(m: Match, l: Lineup): Totals {
       add('xcs', u[3] ?? 0);
       if (['GKP', 'DEF'].includes(player(pid).pos)) add('xgc', u[4] ?? 0);
     }
+    if (!file) continue;
+    for (const { m: pm } of lines) {
+      const cells = file.matches[pm.id]?.[pid];
+      for (const name of FILED) add(name, Number(cells?.[PL_STATS.indexOf(name)] ?? 0));
+    }
+    for (const [source, pts] of Object.entries(pointsFrom(pid, m.gw) ?? {})) if (source !== 'bonus') add(`pts:${source}`, pts);
   }
   add('bench', l.benchPts);
   add('subs', l.subs.length);
+  add('pts:dgw', l.adj - l.pts);
   return t;
 }
 
-// fotmob.com's stat rows: each side's value either side of the label, the higher in a
-// pill of that side's colour.
-function statRow(m: Match, label: string, [home, away]: [number, number], { digits = 0, percent = false, tip = '' } = {}) {
-  const show = (v: number) => (percent ? pct(v) : v.toFixed(digits));
-  const value = (v: number, id: number, higher: boolean) =>
-    `<span class="xg-value${higher ? ` higher m${slotOf(id)}` : ''}">${show(v)}</span>`;
-  return `<div class="xg-row">${value(home, m.home, home > away)}<span class="xg-label"${tip ? ` data-tip="${esc(tip)}"` : ''}>${label}</span>${value(away, m.away, away > home)}</div>`;
+interface RowOptions {
+  digits?: number;
+  percent?: boolean;
+  /** Fewer is better, as with cards: the lower gets the pill. */
+  lower?: boolean;
+  tip?: string;
+  format?: (v: number) => string;
 }
 
-const section = (title: string, rows: (string | false | undefined)[]) => {
+// fotmob.com's stat rows: each side's value either side of the label, the better of them
+// in a pill of that side's colour.
+function statRow(m: Match, label: string, [home, away]: [number, number], { digits = 0, percent, lower, tip, format }: RowOptions = {}) {
+  const fixed = (v: number) =>
+    Math.abs(v) < 0.5 * 10 ** -digits ? (0).toFixed(digits) : `${v < 0 ? '−' : ''}${Math.abs(v).toFixed(digits)}`;
+  const show = format ?? (percent ? pct : fixed);
+  const better = (a: number, b: number) => (lower ? a < b : a > b);
+  const value = (v: number, id: number, best: boolean) => `<span class="xg-value${best ? ` better m${slotOf(id)}` : ''}">${show(v)}</span>`;
+  return `<div class="xg-row">${value(home, m.home, better(home, away))}<span class="xg-label"${tip ? ` data-tip="${esc(tip)}"` : ''}>${label}</span>${value(away, m.away, better(away, home))}</div>`;
+}
+
+// fotmob.com's possession bar, for the points: each side's share of them in its colour.
+function shareBar(m: Match, label: string, [home, away]: [number, number]) {
+  const [h, a] = [Math.max(home, 0), Math.max(away, 0)];
+  const share = h + a ? h / (h + a) : 0.5;
+  const side = (id: number, v: number, s: number) => `<span class="m${slotOf(id)}" style="--share: ${s.toFixed(3)}">${figure(v)}</span>`;
+  return `<div class="st-share"><span class="xg-label">${label}</span><div class="st-bar">${side(m.home, home, share)}${side(m.away, away, 1 - share)}</div></div>`;
+}
+
+interface StatGroup {
+  html: string;
+  /** In rows, for sharing the groups out between two columns. */
+  size: number;
+}
+
+// A heading over its rows, as fotmob.com's; none without rows.
+function group(title: string, rows: (string | false | null | undefined)[], lead = ''): StatGroup | null {
   const shown = rows.filter((r): r is string => Boolean(r));
-  return shown.length ? card({ title, body: `<div class="match-detail stat-rows">${shown.join('')}</div>` }) : '';
-};
+  if (!shown.length) return null;
+  return {
+    html: `<div class="st-group"><h3 class="st-head">${title}</h3>${lead}${shown.join('')}</div>`,
+    size: shown.length + (lead ? 3 : 1),
+  };
+}
+
+// fotmob.com's Stats tab: one card, its first two groups side by side once it's wide enough
+// and the rest in two columns under them, split where the two come out most even.
+function statsLayout(groups: (StatGroup | null)[]) {
+  const [first, second, ...rest] = groups.filter((g): g is StatGroup => g !== null);
+  const cell = (gs: (StatGroup | undefined)[]) => {
+    const html = gs.flatMap((g) => (g ? [g.html] : [])).join('');
+    return html ? `<div class="st-cell">${html}</div>` : '';
+  };
+  const sizes = rest.map((g) => g.size);
+  const gap = (k: number) => Math.abs(sum(sizes) - 2 * sum(sizes.slice(0, k)));
+  let split = 0;
+  for (let k = 1; k <= rest.length; k++) if (gap(k) <= gap(split)) split = k;
+  const top = `<div class="st-row">${cell([first])}${cell([second])}</div>`;
+  return rest.length ? `${top}<div class="st-row">${cell(rest.slice(0, split))}${cell(rest.slice(split))}</div>` : top;
+}
+
+const XP_TIP = 'Each XI with goals, assists and clean sheets swapped for what the xG, xA and xGC were worth';
+
+// The Stats tab's top stats in short, for the right column, as fotmob.com's Facts tab has them.
+function sideStats(m: Match, l: [Lineup, Lineup]) {
+  const [h, a] = [xiTotals(m, l[0], null), xiTotals(m, l[1], null)];
+  const v = (key: string): [number, number] => [h[key] ?? 0, a[key] ?? 0];
+  const rows = [
+    m.xg && statRow(m, 'Expected points (xP)', m.xg.xp, { digits: 1, tip: XP_TIP }),
+    m.finished && statRow(m, 'Expected goals (xG)', v('xg'), { digits: 2 }),
+    m.finished && statRow(m, 'Expected assists (xA)', v('xa'), { digits: 2 }),
+    statRow(m, 'Goals', v('goals')),
+    statRow(m, 'Assists', v('assists')),
+    statRow(m, 'Bonus points', v('bonus')),
+  ];
+  return `<div class="st-cell">${shareBar(m, 'Points', [m.homePts ?? 0, m.awayPts ?? 0])}${rows.filter(Boolean).join('')}</div>`;
+}
 
 function statsTab(m: Match) {
   const l = lineups(m);
-  if (!m.started || !l) {
-    const row = (id: number) => D.tables.overall.find((r) => r.id === id);
-    const avg = (id: number) => (row(id)?.played ? row(id)!.pf / row(id)!.played : 0);
-    const before = [
+  if (!m.started || !l) return card({ cls: 'st-card', body: statsLayout(beforeGroups(m)) });
+  const loaded = statsFor(m.gw);
+  const file = typeof loaded === 'object' ? loaded : null;
+  const [h, a] = [xiTotals(m, l[0], file), xiTotals(m, l[1], file)];
+  const v = (key: string): [number, number] => [h[key] ?? 0, a[key] ?? 0];
+  const any = (key: string) => v(key).some((n) => n !== 0);
+  const top = group(
+    'Top stats',
+    [
+      m.xg && statRow(m, 'Expected points (xP)', m.xg.xp, { digits: 1, tip: XP_TIP }),
+      m.odds && statRow(m, 'Projected before the deadline', m.odds.expected, { tip: 'The model’s score at the deadline' }),
+      statRow(m, 'Goals', v('goals')),
+      statRow(m, 'Assists', v('assists')),
+      statRow(m, 'Bonus points', v('bonus')),
+      file && statRow(m, 'BPS', v('bps'), { tip: 'FPL’s bonus points system, whose top three in each match get the bonus' }),
+      statRow(m, 'Points on the bench', v('bench')),
+    ],
+    shareBar(m, 'Points', [m.homePts ?? 0, m.awayPts ?? 0]),
+  );
+  const expected =
+    m.finished &&
+    group('Expected', [
+      m.xg && statRow(m, 'Expected points (xP)', m.xg.xp, { digits: 1, tip: XP_TIP }),
+      statRow(m, 'Expected goals (xG)', v('xg'), { digits: 2 }),
+      statRow(m, 'Expected assists (xA)', v('xa'), { digits: 2 }),
+      statRow(m, 'xG + xA', [v('xg')[0] + v('xa')[0], v('xg')[1] + v('xa')[1]], { digits: 2 }),
+      statRow(m, 'Expected clean sheets (xCS)', v('xcs'), { digits: 2 }),
+      statRow(m, 'xG conceded (xGC)', v('xgc'), {
+        digits: 2,
+        lower: true,
+        tip: 'By the goalkeepers and defenders in the XI, while they played',
+      }),
+    ]);
+  const points =
+    file &&
+    group('Where the points came from', [
+      statRow(m, 'Playing', v('pts:minutes'), { tip: 'A point for playing, and another for 60 minutes or more' }),
+      statRow(m, 'Goals', v('pts:goals_scored')),
+      statRow(m, 'Assists', v('pts:assists')),
+      statRow(m, 'Clean sheets', v('pts:clean_sheets')),
+      any('pts:goals_conceded') && statRow(m, 'Goals conceded', v('pts:goals_conceded')),
+      statRow(m, 'Defensive contributions', v('pts:defensive_contribution')),
+      any('pts:saves') && statRow(m, 'Saves', v('pts:saves')),
+      any('pts:penalties') && statRow(m, 'Penalties', v('pts:penalties'), { tip: 'Saved, or missed' }),
+      statRow(m, 'Bonus', v('bonus')),
+      any('pts:cards') && statRow(m, 'Cards', v('pts:cards')),
+      any('pts:own_goals') && statRow(m, 'Own goals', v('pts:own_goals')),
+      any('pts:other') &&
+        statRow(m, 'Other', v('pts:other'), {
+          tip: 'What the stats of each match don’t account for: FPL gives some for a whole double gameweek',
+        }),
+      any('pts:dgw') &&
+        statRow(m, 'Double gameweek penalty', v('pts:dgw'), {
+          tip: `${D.meta.dgwPenalty} points off for each player in the XI with two matches`,
+        }),
+    ]);
+  // FPL fills in threat and creativity only after the gameweek.
+  const attack = group('Attack', [
+    statRow(m, 'Goals', v('goals')),
+    statRow(m, 'Assists', v('assists')),
+    any('threat') && statRow(m, 'Threat', v('threat'), { digits: 1, tip: 'FPL’s measure of how likely the players were to score' }),
+    any('creativity') &&
+      statRow(m, 'Creativity', v('creativity'), { digits: 1, tip: 'FPL’s measure of the chances the players made for others' }),
+  ]);
+  const defence = group('Defence', [
+    statRow(m, 'Clean sheets', v('cleanSheet'), { tip: 'Players in the XI who kept one, where it scores' }),
+    statRow(m, 'Defensive contributions', v('defcon'), {
+      tip: 'Players who reached FPL’s threshold of tackles, clearances, blocks and interceptions',
+    }),
+    file && statRow(m, 'Tackles', v('tackles')),
+    file && statRow(m, 'Clearances, blocks and interceptions', v('clearances_blocks_interceptions')),
+    file && statRow(m, 'Recoveries', v('recoveries')),
+    file && statRow(m, 'Saves', v('saves')),
+    statRow(m, 'Penalties saved', v('pensSaved')),
+  ]);
+  const minutes = group('Minutes', [
+    statRow(m, 'Minutes played', v('minutes')),
+    statRow(m, 'Players who played', v('played'), { tip: 'Of the eleven, after the automatic substitutions' }),
+    statRow(m, 'Starts', v('starts'), { tip: 'Players who started their Premier League match' }),
+    statRow(m, '60 minutes or more', v('hour'), { tip: 'Players who played an hour or more in a match, for the second point for playing' }),
+    statRow(m, 'Automatic substitutions', v('subs'), { lower: true }),
+  ]);
+  const discipline = group('Discipline', [
+    statRow(m, 'Yellow cards', v('yellow'), { lower: true }),
+    statRow(m, 'Red cards', v('red'), { lower: true }),
+    statRow(m, 'Own goals', v('ownGoals'), { lower: true }),
+    statRow(m, 'Penalties missed', v('pensMissed'), { lower: true }),
+  ]);
+  return card({ cls: 'st-card', body: statsLayout([top, points || null, expected || null, attack, defence, minutes, discipline]) });
+}
+
+// Before kick-off: what the odds make of it, and each side's season so far.
+function beforeGroups(m: Match) {
+  const rows = [m.home, m.away].map((id) => D.tables.overall.find((r) => r.id === id));
+  const both = (f: (r: OverallRow) => number): [number, number] => [rows[0] ? f(rows[0]) : 0, rows[1] ? f(rows[1]) : 0];
+  const best = (id: number) =>
+    Math.max(
+      0,
+      ...D.matches.filter((x) => x.finished && (x.home === id || x.away === id)).map((x) => (x.home === id ? x.homePts! : x.awayPts!)),
+    );
+  const form = (r: OverallRow) => sum(r.form.map((x) => (x.res === 'W' ? 3 : x.res === 'D' ? 1 : 0)));
+  return [
+    group('Before the match', [
       m.odds && statRow(m, 'Win chance', [m.odds.p[0], m.odds.p[2]], { percent: true }),
       m.odds &&
         statRow(m, 'Projected points', m.odds.expected, {
           tip: 'The model’s score: the league average, plus how far each side’s best projected XI sits from the average one',
         }),
-      statRow(m, 'Points a match this season', [avg(m.home), avg(m.away)], { digits: 1 }),
-      statRow(m, 'Table points', [row(m.home)?.pts ?? 0, row(m.away)?.pts ?? 0]),
-    ];
-    return section('Before the match', before);
-  }
-  const [h, a] = [xiTotals(m, l[0]), xiTotals(m, l[1])];
-  const v = (key: string): [number, number] => [h[key] ?? 0, a[key] ?? 0];
-  const top = [
-    statRow(m, 'Points', [m.homePts ?? 0, m.awayPts ?? 0]),
-    m.xg &&
-      statRow(m, 'Expected points (xP)', m.xg.xp, {
-        digits: 1,
-        tip: 'Each XI with goals, assists and clean sheets swapped for what the xG, xA and xGC were worth',
-      }),
-    m.xg &&
-      statRow(m, 'Expected table points (xPTS)', m.xg.xPts, { digits: 1, tip: 'The table points both expected scores would have earned' }),
-    m.odds && statRow(m, 'Projected before the deadline', m.odds.expected, { tip: 'The model’s score at the deadline' }),
-    m.odds && statRow(m, 'Win chance at the deadline', [m.odds.p[0], m.odds.p[2]], { percent: true }),
-    statRow(m, 'Points on the bench', v('bench')),
+      statRow(
+        m,
+        'Table position',
+        both((r) => r.rank),
+        { lower: true, format: ordinal },
+      ),
+      statRow(
+        m,
+        'Table points',
+        both((r) => r.pts),
+      ),
+    ]),
+    group('This season', [
+      statRow(
+        m,
+        'Wins',
+        both((r) => r.won),
+      ),
+      statRow(
+        m,
+        'Points a match',
+        both((r) => (r.played ? r.pf / r.played : 0)),
+        { digits: 1 },
+      ),
+      statRow(
+        m,
+        'Points against a match',
+        both((r) => (r.played ? r.pa / r.played : 0)),
+        { digits: 1, lower: true },
+      ),
+      statRow(m, 'Highest score', [best(m.home), best(m.away)]),
+      statRow(m, 'Form', both(form), { tip: `Table points from the last ${D.meta.formLength} matches` }),
+    ]),
   ];
-  const attack = [
-    statRow(m, 'Goals', v('goals')),
-    statRow(m, 'Assists', v('assists')),
-    m.finished && statRow(m, 'Expected goals (xG)', v('xg'), { digits: 2 }),
-    m.finished && statRow(m, 'Expected assists (xA)', v('xa'), { digits: 2 }),
-    statRow(m, 'Bonus points', v('bonus')),
-  ];
-  const defence = [
-    statRow(m, 'Clean sheets', v('cleanSheet'), { tip: 'Players in the XI who kept one, where it scores' }),
-    m.finished && statRow(m, 'Expected clean sheets (xCS)', v('xcs'), { digits: 2 }),
-    m.finished &&
-      statRow(m, 'Expected goals conceded (xGC)', v('xgc'), {
-        digits: 2,
-        tip: 'By the goalkeepers and defenders in the XI, while they played',
-      }),
-    statRow(m, 'Saves', v('saves'), { tip: 'Counted by FPL once they score: three or more in a match' }),
-    statRow(m, 'Defensive contributions', v('defcon'), {
-      tip: 'Players who reached FPL’s threshold of tackles, clearances, blocks and interceptions',
-    }),
-    statRow(m, 'Penalties saved', v('pensSaved')),
-  ];
-  const squad = [
-    statRow(m, 'Minutes played', v('minutes')),
-    statRow(m, 'Players who played', v('played'), { tip: 'Of the eleven, after the automatic substitutions' }),
-    statRow(m, 'Automatic substitutions', v('subs')),
-  ];
-  const discipline = [
-    statRow(m, 'Yellow cards', v('yellow')),
-    statRow(m, 'Red cards', v('red')),
-    statRow(m, 'Own goals', v('ownGoals')),
-    statRow(m, 'Penalties missed', v('pensMissed')),
-  ];
-  return [
-    section('Top stats', top),
-    section('Attack', attack),
-    section('Defence', defence),
-    section('Minutes', squad),
-    section('Discipline', discipline),
-  ].join('');
 }
 
 // --- Commentary ----------------------------------------------------------------------------

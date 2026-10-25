@@ -290,16 +290,15 @@
   inset: 0;
 }
 
-.mo-slot,
-.mo-cell {
+.mo-slot {
   position: absolute;
   top: 0;
   bottom: 0;
 }
 
-/* Where a slot has got to, which its tip points at: as fotmob.com marks the minute under the
-   pointer, a line down the plot and, once the slot has a lead, a dot on it in the leading
-   side's colour, on hover (hover.css) or focus. */
+/* A slot's point on the curve, which its tip points at: as fotmob.com marks the minute, a
+   line down the plot and, once the slot has a lead, a dot on it in the leading side's
+   colour, on hover (hover.css) or focus. */
 .mo-mark {
   position: absolute;
   top: 0;
@@ -324,7 +323,7 @@
   background: var(--dot, var(--text-2));
 }
 
-.mo-slot:focus-visible .mo-cell:last-child .mo-mark {
+.mo-slot:focus-visible .mo-mark {
   opacity: 1;
 }
 
@@ -504,9 +503,101 @@
   }
 }
 
-/* The Stats tab's rows, as fotmob.com's. */
-.stat-rows {
+/* The Stats tab, as fotmob.com's: one card of groups, each a heading over its rows (16px in
+   from the edges, 32px once there's room); once it's wide enough the first two side by side
+   and the rest in two columns under them, a line between the columns. */
+.st-card {
+  container-type: inline-size;
+}
+
+.st-row {
+  display: grid;
+}
+
+.st-row + .st-row {
+  border-top: 1px solid var(--divider);
+}
+
+.st-cell {
+  padding: 0 16px 8px;
+}
+
+.st-group + .st-group,
+.st-cell + .st-cell > .st-group:first-child {
+  border-top: 1px solid var(--divider);
+}
+
+.st-head {
+  display: grid;
+  place-items: center;
+  min-height: 60px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 20px;
+  text-align: center;
+}
+
+/* fotmob.com's possession bar: the label over a 36px bar of the two sides' colours, each
+   side's share of it with its figure at its end. */
+.st-share {
+  display: grid;
+  gap: 11px;
+  padding: 11px 0 10px;
+}
+
+.st-bar {
+  display: flex;
   gap: 4px;
+  height: 36px;
+  overflow: hidden;
+  border-radius: 18px;
+}
+
+.st-bar > span {
+  display: flex;
+  flex: var(--share) 1 0;
+  align-items: center;
+  min-width: max-content;
+  padding: 0 16px;
+  color: var(--av-ink, #fff);
+  font-size: 16px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+
+.st-bar > span:last-child {
+  justify-content: flex-end;
+}
+
+/* In the right column, narrower: the label takes what the figures leave it. */
+.st-side .xg-row {
+  grid-template-columns: minmax(48px, auto) 1fr minmax(48px, auto);
+  gap: 8px;
+}
+
+@container (min-width: 600px) {
+  .st-cell {
+    padding: 0 32px 12px;
+  }
+}
+
+@container (min-width: 760px) {
+  .st-row {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .st-cell:only-child {
+    grid-column: 1 / -1;
+  }
+
+  .st-cell + .st-cell {
+    border-left: 1px solid var(--divider);
+  }
+
+  .st-cell + .st-cell > .st-group:first-child {
+    border-top: 0;
+  }
 }
 
 /* fotmob.com's matches in the round: the league and round over a 48px logo, then a match

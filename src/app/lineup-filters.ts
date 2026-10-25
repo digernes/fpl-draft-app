@@ -6,8 +6,9 @@
 
 import { AS_SCORED, expectedPoints, UNDERLYING_TIPS } from '../shared/underlying.ts';
 import { bestOf, chip, pointsTier, tenths } from './components.ts';
-import { esc, plural } from './format.ts';
+import { esc, plural, sum } from './format.ts';
 import { gwPoints, isLive, player } from './lookups.ts';
+import { linesIn } from './pl.ts';
 import { bpsIn, gwAsScored, gwUnderlying, statsFor } from './pl-stats.ts';
 import { D, state } from './state.ts';
 
@@ -42,12 +43,22 @@ export function lineupFilters(gw: number, due: boolean) {
 export const showsEvents = (gw: number) =>
   !hasLineupFilters(gw) || (state.lineupStat !== 'xg' && state.lineupStat !== 'xa' && state.lineupStat !== 'xcs');
 
-/** The best of a head-to-head's XIs, for the blue once it's over: by the xP filter's numbers while that's chosen, else by points, then BPS. */
+// A player's goals or assists in a gameweek's matches.
+const inGw = (pid: number, gw: number, what: 'goals' | 'assists') => sum(linesIn(pid, gw).map(({ m }) => m.events?.[pid]?.[what] ?? 0));
+
+/** Between players level on points in a gameweek: the more goals, then the higher BPS, then the more assists. */
+export const gwTiebreaks = (gw: number) => [
+  (pid: number) => inGw(pid, gw, 'goals'),
+  (pid: number) => bpsIn(pid, gw),
+  (pid: number) => inGw(pid, gw, 'assists'),
+];
+
+/** The best of a head-to-head's XIs, for the blue once it's over: by the xP filter's numbers while that's chosen, else by points, then as gwTiebreaks. */
 export const bestOfMatch = (xis: number[], gw: number) =>
   bestOf(
     xis,
     (pid) => (state.lineupStat === 'xp' && hasLineupFilters(gw) ? gwUnderlying(pid, gw)?.[2] : gwPoints(pid, gw)),
-    (pid) => bpsIn(pid, gw),
+    ...gwTiebreaks(gw),
   );
 
 // The badge for the chosen filter, or undefined for the usual points. `top`: the match's best.

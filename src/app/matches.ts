@@ -30,11 +30,10 @@ import {
   opponents,
   partsAt,
   player,
-  slotOf,
   versus,
   xpAt,
 } from './lookups.ts';
-import { gwUnderlying } from './pl-stats.ts';
+import { gwUnderlying, pointsFrom, pointsRows } from './pl-stats.ts';
 import { bestOfMatch, dueShows, hasLineupFilters, lineupFilters, showsEvents, statBadge, xpTip } from './lineup-filters.ts';
 import { autoSubOf, matchPitch, type PitchPlayer, type PitchSide } from './pitch.ts';
 import { href } from './router.ts';
@@ -201,22 +200,6 @@ export function preMatchOdds(m: Match) {
   return `<div class="detail-odds${m.started && !m.finished ? ' faded' : ''}"><div class="detail-label">Pre-match odds <span class="muted" data-tip="${tip}">${m.odds.afterwards ? '· worked out afterwards' : '· at the deadline'}</span></div>${oddsRow(m.odds, m, outcome)}</div>`;
 }
 
-// A finished match's numbers from the xG table, the way fotmob.com shows a match's xG:
-// the label in the middle and the higher figure in a pill of that side's colour.
-export function expectedStats(m: Match) {
-  if (!m.xg) return '';
-  const row = (label: string, tip: string, [home, away]: [number, number]) => {
-    const value = (v: number, id: number, higher: boolean) =>
-      `<span class="xg-value${higher ? ` higher m${slotOf(id)}` : ''}">${v.toFixed(1)}</span>`;
-    return `<div class="xg-row">${value(home, m.home, home > away)}<span class="xg-label" data-tip="${tip}">${label}</span>${value(away, m.away, away > home)}</div>`;
-  };
-  return `<div class="detail-xg">
-    <div class="detail-label">Underlying numbers <span class="muted">· as in the xG table</span></div>
-    ${row('Expected points (xP)', 'Each XI with goals, assists and clean sheets swapped for what the xG, xA and xGC were worth', m.xg.xp)}
-    ${row('Expected table points (xPTS)', 'The table points both expected scores would have earned', m.xg.xPts)}
-  </div>`;
-}
-
 // Both XIs on one pitch with each player's points, what they did, auto-subs, double
 // gameweeks and, in a live gameweek, the minute; the benches below. A finished
 // gameweek gets the lineup filters on top.
@@ -292,7 +275,8 @@ export function pitchPill(pid: number, gw: number, match: PlayerState | null, to
 // to play show their expected points instead.
 export function roundPill(pid: number, gw: number, match: PlayerState | null, top = false) {
   const pts = gwPoints(pid, gw);
-  if (match?.state !== 'due' || pts !== 0) return ptsPill(pts, gwBonus(pid, gw), { top, projected: projectedFor(pid, gw) });
+  if (match?.state !== 'due' || pts !== 0)
+    return ptsPill(pts, gwBonus(pid, gw), { top, projected: projectedFor(pid, gw), from: pointsRows(pointsFrom(pid, gw)) });
   return xpPill(liveXp(pid), liveParts(pid), opponents(player(pid).club, gw), ' (not played yet)');
 }
 

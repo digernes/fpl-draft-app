@@ -19,6 +19,7 @@ import {
   type Position,
 } from '../shared/data.ts';
 import { roundLines, type LiveRound } from './match-lines.ts';
+import { withFplAssists } from '../shared/match-stats.ts';
 
 export interface Entry {
   /** For the order: its match's kick-off plus its minute (and a quarter of an hour at half-time). */
@@ -80,7 +81,8 @@ export function commentary(
     if (!lines.some(([pid]) => shown(pid))) continue;
     const ko = Date.parse(pm.ko!);
     const at = (min: number, half: 1 | 2) => ko + (min + (half === 2 ? 15 : 0)) * 60_000;
-    const moments: PlMoment[] = stats.moments?.[pm.id] ?? [];
+    const ids = sides.map((side) => side.map(([pid]) => pid)) as [number[], number[]];
+    const moments = withFplAssists(stats.moments?.[pm.id] ?? [], ids, (pid) => pm.events?.[pid]?.assists ?? 0);
     const cells = stats.matches[pm.id] ?? {};
     const stat = (pid: number, name: (typeof PL_STATS)[number]) => cells[pid]?.[PL_STATS.indexOf(name)] ?? 0;
     const home = new Set(sides[0].map(([pid]) => pid));

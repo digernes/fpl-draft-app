@@ -138,7 +138,7 @@
     opacity: 0.75;
   }
 
-  .mo-cell:hover .mo-mark {
+  .mo-slot:hover .mo-mark {
     opacity: 1;
   }
 

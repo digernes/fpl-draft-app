@@ -13,7 +13,8 @@ import { onAction } from './actions.ts';
 import { card, chip, crest, empty, photo, seg, sheet } from './components.ts';
 import { esc, plural, sum } from './format.ts';
 import { slidersSvg, sortSvg } from './icons.ts';
-import { isArchive, opponents, player, seasonEntry } from './lookups.ts';
+import { gwBonus, gwPoints, isArchive, opponents, player, seasonEntry } from './lookups.ts';
+import { linesIn } from './pl.ts';
 import { ownerPill } from './pitch.ts';
 import { renderView } from './render.ts';
 import { href } from './router.ts';
@@ -240,6 +241,55 @@ export function statsFor(gw: number): PlStats | 'loading' | 'missing' {
   if (merged?.feed !== feed || merged.file !== stats) merged = { feed, file: stats, stats: withLive(gw, stats, feed, idsByCode()) };
   return merged.stats;
 }
+
+// The points FPL scores a match for (shared/underlying.ts), in the order they're told, a few put together.
+const POINT_SOURCES: [key: string, label: string][] = [
+  ['minutes', 'Playing'],
+  ['goals_scored', 'Goals'],
+  ['assists', 'Assists'],
+  ['clean_sheets', 'Clean sheet'],
+  ['goals_conceded', 'Goals conceded'],
+  ['defensive_contribution', 'Defensive contribution'],
+  ['saves', 'Saves'],
+  ['penalties', 'Penalties'],
+  ['bonus', 'Bonus'],
+  ['cards', 'Cards'],
+  ['own_goals', 'Own goals'],
+  ['other', 'Other'],
+];
+const PUT_TOGETHER: Record<string, string> = {
+  yellow_cards: 'cards',
+  red_cards: 'cards',
+  penalties_saved: 'penalties',
+  penalties_missed: 'penalties',
+};
+
+/**
+ * Where a player's points in a gameweek (or one of its matches) came from, once its stats
+ * file is in: each match as FPL scores it, the bonus as it stands (provisional while it's
+ * on), and under other what the stats don't account for, as FPL gives some of a double
+ * gameweek's only for the whole week.
+ */
+export function pointsFrom(pid: number, gw: number, match?: number): Record<string, number> | undefined {
+  const file = statsFor(gw);
+  if (typeof file !== 'object') return undefined;
+  const lines = linesIn(pid, gw).filter(({ m }) => match === undefined || m.id === match);
+  const from: Record<string, number> = { bonus: match === undefined ? gwBonus(pid, gw) : (lines[0]?.m.events?.[pid]?.bonus ?? 0) };
+  for (const { m, line } of lines) {
+    const cells = file.matches[m.id]?.[pid];
+    if (!cells) continue;
+    const stat = (name: PlStat) => Number(cells[PL_STATS.indexOf(name)] ?? 0);
+    for (const [name, pts] of Object.entries(scoredIn(stat, line[1], D.meta.rules ?? {}, player(pid)?.pos)))
+      if (name !== 'bonus') from[PUT_TOGETHER[name] ?? name] = (from[PUT_TOGETHER[name] ?? name] ?? 0) + pts;
+  }
+  const points = match === undefined ? gwPoints(pid, gw) : sum(lines.map(({ line }) => line[2]));
+  from.other = points - sum(Object.values(from));
+  return from;
+}
+
+/** The same as rows for a tip, those that scored anything. */
+export const pointsRows = (from: Record<string, number> | undefined): [string, number][] =>
+  from ? POINT_SOURCES.flatMap(([key, label]): [string, number][] => (from[key] ? [[label, from[key]]] : [])) : [];
 
 /** A player's BPS in a gameweek (or one of its matches), once its stats file is in: FPL's measure of his game, to tell apart those level on points. */
 export function bpsIn(pid: number, gw: number, match?: number): number | undefined {
