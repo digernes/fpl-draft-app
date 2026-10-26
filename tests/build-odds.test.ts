@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 
 import { MIN_SCORE_SPREAD, ODDS_OVERROUND } from '../src/build/config.ts';
-import { oddsModel, priceMatches } from '../src/build/odds.ts';
+import { oddsModel, priceMatches, projectionWeight } from '../src/build/odds.ts';
 import { readSeason } from '../src/build/season.ts';
 import type { Data, Match, Position } from '../src/shared/data.ts';
 import { build, fetched, MANAGERS, typeOf } from './fixtures/build-league.ts';
@@ -60,8 +60,19 @@ describe('the odds model', () => {
 
   it('puts the managers’ expected scores, on average, at the league’s average, in every gameweek', () => {
     for (const gw of [3, 4, 5, 6]) close(mean(MANAGERS.map((id) => model.expectedScore(id, gw))), model.leagueMean);
-    // The one being played gets each side's average over the gameweeks projected.
-    close(model.expectedScore(101, 3), mean([4, 5, 6].map((gw) => model.expectedScore(101, gw))));
+    // The one being played gets each side's average gap over the gameweeks projected, weighted as the next.
+    const gap = (gw: number) => (model.expectedScore(101, gw) - model.leagueMean) / projectionWeight(gw - 4);
+    close(model.expectedScore(101, 3) - model.leagueMean, mean([4, 5, 6].map(gap)));
+  });
+
+  it('counts less of a projected XI’s gap from the average one the further ahead, never under half', () => {
+    assert.deepEqual(
+      [0, 1, 2, 5, 6, 7, 30].map((ahead) => Math.round(projectionWeight(ahead) * 1000) / 1000),
+      [1, 0.9, 0.81, 0.59, 0.531, 0.5, 0.5],
+    );
+    const projected = model.projections[5];
+    const average = mean(MANAGERS.map((id) => projected[id].pts));
+    for (const id of MANAGERS) close(model.expectedScore(id, 5), model.leagueMean + 0.9 * (projected[id].pts - average));
   });
 
   it('works out what it would have said before a gameweek played before odds were kept', () => {

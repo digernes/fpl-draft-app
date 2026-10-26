@@ -1,10 +1,10 @@
 // The season played out SIM_RUNS times. Every unfinished match is played with the odds
-// model: each score drawn around the manager's expected score with this season's
-// spread, plus a per-run offset for how good they really are. Ties on points split on
+// model: each score drawn around the manager's expected score (its projected XI counting
+// for less the further ahead it is) with this season's spread, plus a per-run offset for how good they really are. Ties on points split on
 // points scored, as in the real table. A match still being played starts from scratch.
 
 import type { Match, OverallRow, Simulation } from '../shared/data.ts';
-import { SIM_RUNS, SIM_SEED, SIM_SKILL_SPREAD } from './config.ts';
+import { PROJECTION_DECAY, PROJECTION_MIN_WEIGHT, PROJECTION_WEIGHT, SIM_RUNS, SIM_SEED, SIM_SKILL_SPREAD } from './config.ts';
 import type { OddsModel } from './odds.ts';
 import type { Season } from './season.ts';
 import { round } from './util.ts';
@@ -45,6 +45,7 @@ export function simulate(season: Season, managerIds: number[], matches: Match[],
     model: {
       leagueAverage: round(model.leagueMean, 1),
       projected: model.hasProjections ? model.projectedGws.length : 0,
+      weight: [PROJECTION_WEIGHT, PROJECTION_DECAY, PROJECTION_MIN_WEIGHT],
       levelSpread: SIM_SKILL_SPREAD,
       spread: round(model.sigma, 1),
       laterSpread: round(spreadFor(season.nextGw + 1), 1),

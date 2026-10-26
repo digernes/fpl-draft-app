@@ -47,6 +47,7 @@ describe('the season simulation', () => {
     assert.deepEqual(simulation.model, {
       leagueAverage: Math.round(model.leagueMean * 10) / 10,
       projected: 3,
+      weight: [1, 0.9, 0.5],
       levelSpread: SIM_SKILL_SPREAD,
       spread: Math.round(model.sigma * 10) / 10,
       laterSpread: Math.round(model.sigma * 1.1 * 10) / 10,

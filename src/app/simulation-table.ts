@@ -3,7 +3,7 @@
 
 import type { Simulation } from '../shared/data.ts';
 import { markedHeader, PRIZE_MARKS, simCell } from './components.ts';
-import { ordinal } from './format.ts';
+import { ordinal, pct } from './format.ts';
 import { D } from './state.ts';
 import { managerCol, posCol, type Column } from './table.ts';
 
@@ -20,15 +20,20 @@ export function simulationFormula() {
   return [
     'Each simulated week, a manager scores:',
     `league average (${m.leagueAverage})`,
-    m.projected ? `+ how far their projected XI sits from the average one (${weeks})` : null,
+    m.projected ? `+ ${m.weight ? 'part of ' : ''}how far their projected XI sits from the average one (${weeks})` : null,
     `+ their level for this run (typically ±${m.levelSpread} a week)`,
     `+ that week’s randomness (typically ±${m.spread}, ±${m.laterSpread} after next week)`,
     '',
+    m.weight && m.projected ? weightLine(m.weight) : null,
     'A projected XI is the best one their squad can field, by the site’s expected points. Higher score wins 3 points, level scores draw. Equal points split on points scored.',
   ]
     .filter((line) => line !== null)
     .join('\n');
 }
+
+// How much of the projected XI counts, week by week.
+const weightLine = ([next, decay, floor]: [number, number, number]) =>
+  `The projected XI counts ${pct(next)} next week, ${decay} of that for each week after, and never under ${pct(floor)}, as squads change.\n`;
 
 export type SimRow = Simulation['rows'][number];
 

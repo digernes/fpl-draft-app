@@ -357,7 +357,7 @@ function similarCard(pid: number, p: Player) {
       listRow({
         lead: playerPhoto(Number(id)),
         title: `${playerName(Number(id))} ${crest(x.club, 14)}`,
-        meta: `${x.total} pts · ${x.ep.toFixed(1)} xP next · ${x.owner ? `with ${teamName(x.owner)}` : 'free agent'}`,
+        meta: `${x.total} pts · ${x.ep.toFixed(1)} projected next · ${x.owner ? `with ${teamName(x.owner)}` : 'free agent'}`,
         value: x.owner ? avatar(x.owner, 24) : tag('FA', 'A free agent'),
       }),
     );

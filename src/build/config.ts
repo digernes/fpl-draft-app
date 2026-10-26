@@ -21,6 +21,13 @@ export const PROJECTED_GAMEWEEKS = 3;
 // Projected category): about a month of fixtures, beyond which a player's barely move.
 export const STATS_GAMEWEEKS = 5;
 export const MIN_SCORE_SPREAD = 13;
+// How much of a projected XI's gap from the league's average one counts towards a manager's
+// expected score (the odds' and the season simulation's): all of it for the next gameweek,
+// 0.9 of that for each week further out, as today's squads and form move on, and never under
+// half, the projections being the best guide there is.
+export const PROJECTION_WEIGHT = 1;
+export const PROJECTION_DECAY = 0.9;
+export const PROJECTION_MIN_WEIGHT = 0.5;
 // Season simulation: runs of the remaining fixtures, and how far a manager's true
 // level may sit from their projections (points a week), drawn once per run. Seeded, so
 // the same data always gives the same percentages.

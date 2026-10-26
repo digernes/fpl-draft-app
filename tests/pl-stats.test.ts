@@ -6,7 +6,7 @@ import { before, beforeEach, describe, it } from 'node:test';
 import { runAction } from '../src/app/actions.ts';
 import { seasonRows, seasonStatsCard } from '../src/app/pl-stats.ts';
 import { setData, state } from '../src/app/state.ts';
-import { PL_STATS, type PlSeasonStats } from '../src/shared/data.ts';
+import { PL_STATS, type PlSeasonStats, type XpParts } from '../src/shared/data.ts';
 import { text } from './fixtures/html.ts';
 import { squads } from './fixtures/league.ts';
 
@@ -63,6 +63,28 @@ describe('the Premier League’s player stats', () => {
     assert.deepEqual(names(2), []);
     state.playersOwner = '2';
     assert.deepEqual(names(2), ['Palmer']);
+  });
+
+  it('reads each player’s projections from the file, with their breakdowns where it has them', () => {
+    const parts: XpParts = [46, 1.2, 0.1, 0, 0.1, 0.2, 0, 0.1, 0, 0.1, -0.1];
+    const withProjections: PlSeasonStats = {
+      ...file,
+      projected: { gws: [4, 5], players: { 19: [1.6, 1.8, 92, 0.1, 0.1, 0.4, 0.2, 0.2] }, parts: { 19: [parts, null] } },
+    };
+    const white = seasonRows(withProjections, undefined).find((r) => r.pid === 19)!;
+    assert.deepEqual(white.ahead, {
+      points: [1.6, 1.8],
+      minutes: 92,
+      goals: 0.1,
+      assists: 0.1,
+      cleanSheet: 0.4,
+      defcon: 0.2,
+      bonus: 0.2,
+      parts: [parts, null],
+    });
+    // A file from before the breakdowns has none.
+    const older: PlSeasonStats = { ...file, projected: { gws: [4, 5], players: { 19: [1.6, 1.8, 92, 0.1, 0.1, 0.4, 0.2, 0.2] } } };
+    assert.equal(seasonRows(older, undefined).find((r) => r.pid === 19)!.ahead!.parts, undefined);
   });
 
   it('goes back to everyone when the chosen chip is tapped again', () => {

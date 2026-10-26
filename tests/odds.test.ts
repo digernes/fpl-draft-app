@@ -67,6 +67,9 @@ describe('expected scores', () => {
   it('put each side as far from the league average as its projected XI is from the average one', () => {
     const score = fromProjections({ 1: 50, 2: 40, 3: 45 }, 47);
     assert.deepEqual([1, 2, 3].map(score), [52, 42, 47]);
+    // Or a part of that gap.
+    const half = fromProjections({ 1: 50, 2: 40, 3: 45 }, 47, 0.5);
+    assert.deepEqual([1, 2, 3].map(half), [49.5, 44.5, 47]);
   });
 });
 

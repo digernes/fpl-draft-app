@@ -1,7 +1,7 @@
 // The table of player stats in a match's and the season's cards (pl-stats.ts): everyone's
 // FPL numbers, a category at a time, sorted by any column.
 
-import { PL_STATS, type PlStat } from '../shared/data.ts';
+import { PL_STATS, type PlStat, type XpParts } from '../shared/data.ts';
 import { UNDERLYING_TIPS } from '../shared/underlying.ts';
 import { onAction } from './actions.ts';
 import { chip, crest, photo, tenths, xpTip } from './components.ts';
@@ -30,7 +30,17 @@ export interface StatsRow {
   xp?: number | null;
   xcs?: number | null;
   /** The site's projections for the gameweeks to come (PlSeasonStats' `projected`): each one's points, then over them all the rest. */
-  ahead?: { points: number[]; minutes: number; goals: number; assists: number; cleanSheet: number; defcon: number; bonus: number };
+  ahead?: {
+    points: number[];
+    minutes: number;
+    goals: number;
+    assists: number;
+    cleanSheet: number;
+    defcon: number;
+    bonus: number;
+    /** Each gameweek's taken apart, where the file has them. */
+    parts?: (XpParts | null)[];
+  };
 }
 
 interface Column {
@@ -141,8 +151,7 @@ export const COLUMNS: Record<string, Column> = {
 };
 
 // One of the Projected category's gameweeks: his expected points in it, the site's model's,
-// with who against in the tip, taken apart as an xP pill's where data.json has the parts
-// (players in a squad, for the first few gameweeks: modelParts).
+// with who against in the tip, taken apart as a projection pill's.
 const gwColumn = (gw: number, i: number): Column => ({
   label: `GW ${gw}`,
   tip: `Projected points in gameweek ${gw}`,
@@ -150,16 +159,17 @@ const gwColumn = (gw: number, i: number): Column => ({
   value: (r) => r.ahead?.points[i] ?? null,
   text: (r) => {
     const v = r.ahead?.points[i] ?? 0;
-    return `<span${projectedTip(r, gw, v)}>${v ? v.toFixed(1) : '0'}</span>`;
+    return `<span${projectedTip(r, gw, i, v)}>${v ? v.toFixed(1) : '0'}</span>`;
   },
 });
 
-// Without the parts, his xP heads the tip as it would theirs.
-function projectedTip(r: StatsRow, gw: number, xp: number) {
+// Taken apart, from data.json for a player in a squad or else the season's file; without the
+// parts, his projection heads the tip as it would theirs.
+function projectedTip(r: StatsRow, gw: number, i: number, xp: number) {
   const against = opponents(r.club, gw);
   if (!against) return ' data-tip="No match"';
-  const parts = modelParts(r.pid, gw);
-  return parts ? xpTip(xp, parts, against) : ` data-tip-head="${tenths(xp)} xP" data-tip="${esc(against)}"`;
+  const parts = modelParts(r.pid, gw) ?? r.ahead?.parts?.[i] ?? undefined;
+  return parts ? xpTip(xp, parts, against) : ` data-tip-head="${tenths(xp)} projected" data-tip="${esc(against)}"`;
 }
 
 // `season`: the season's columns, where they differ from a match's: one match's goals and

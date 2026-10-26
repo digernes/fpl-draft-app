@@ -157,7 +157,7 @@ function aheadOf(file: PlSeasonStats, id: string): StatsRow['ahead'] {
   const [n, row] = [file.projected?.gws.length ?? 0, file.projected?.players[id]];
   if (!row) return undefined;
   const [minutes, goals, assists, cleanSheet, defcon, bonus] = row.slice(n);
-  return { points: row.slice(0, n), minutes, goals, assists, cleanSheet, defcon, bonus };
+  return { points: row.slice(0, n), minutes, goals, assists, cleanSheet, defcon, bonus, parts: file.projected?.parts?.[id] };
 }
 
 // The Facts tab's taste of them, above the lineups: who led the way on each of a few, as

@@ -71,7 +71,7 @@ describe('a head-to-head’s lineups while its gameweek is played', () => {
     assert.match(toCome, /^Still to come\nExpected points\t\d\.\d$/);
     // The pill's live class (its green figure) and his minute under his name tell him from one still to kick off.
     assert.match(saka, /<i class="live-dot"><\/i>55'/);
-    assert.match(pill(face(html, 20)), /^<span class="ptsp xp" data-tip="4\.0 expected points \(not played yet\)">4\.0<\/span>$/);
+    assert.match(pill(face(html, 20)), /^<span class="ptsp xp" data-tip="4\.0 projected points \(not played yet\)">4\.0<\/span>$/);
     assert.doesNotMatch(face(html, 20), /live-dot/);
     assert.match(html, /data-action="due" data-value="ko" aria-pressed="true" >Projected</);
   });
@@ -190,9 +190,9 @@ describe('the projected lineups before the deadline', () => {
 
   it('shows each side’s XI with its expected points, taken apart where the model has them', () => {
     const html = projectedLineups(due());
-    assert.match(html, /data-tip="Best legal XI by expected points">12\.7 xP</); // Ann's: 3.1 + 5.4 + 4.2
-    assert.match(html, /<span class="ptsp xp" data-tip="4\.2 xP · 85 avg mins\nChelsea \(H\)" data-tip-rows="Playing\t1\.9/);
-    assert.match(html, /data-tip="5\.4 expected points">5\.4</);
+    assert.match(html, /data-tip="Best legal XI by projected points">12\.7 projected</); // Ann's: 3.1 + 5.4 + 4.2
+    assert.match(html, /<span class="ptsp xp" data-tip="4\.2 projected · 85 avg mins\nChelsea \(H\)" data-tip-rows="Playing\t1\.9/);
+    assert.match(html, /data-tip="5\.4 projected points">5\.4</);
     assert.match(html, /<span class="pp-flag" data-tip="Knock - 75% chance of playing">!<\/span>/);
     // The rest of each squad on its bench: White on Bob's.
     assert.deepEqual(faces(html).sort(), [11, 12, 13, 15, 18, 19]);
@@ -210,7 +210,7 @@ describe('the projected lineups before the deadline', () => {
   it('picks the XI again by FPL’s expected points when the cog asks for those: a squad short of eleven has none', () => {
     state.xp = 'fpl';
     const html = projectedLineups(due());
-    assert.match(html, /data-tip="Best legal XI by expected points">0\.0 xP</);
+    assert.match(html, /data-tip="Best legal XI by projected points">0\.0 projected</);
     assert.deepEqual(faces(html).sort(), [11, 12, 13, 15, 18, 19]); // all of them on the benches
   });
 

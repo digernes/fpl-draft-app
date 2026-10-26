@@ -74,9 +74,9 @@ describe('the Projected columns', () => {
     const [gw4, gw5] = cells(12, 1, [4.1, 3.1, 7]);
     assert.equal(
       gw4,
-      '<span data-tip="4.1 xP · 85 avg mins\nChelsea (H)" data-tip-rows="Playing\t2.0\nGoals\t1.5\nBonus\t0.6\nCards\t−0.1">4.1</span>',
+      '<span data-tip="4.1 projected · 85 avg mins\nChelsea (H)" data-tip-rows="Playing\t2.0\nGoals\t1.5\nBonus\t0.6\nCards\t−0.1">4.1</span>',
     );
-    assert.match(gw5, /^<span data-tip="3\.1 xP · 80 avg mins\nMan City \(A\)" data-tip-rows="Playing\t2\.0\nGoals\t0\.9\n/);
+    assert.match(gw5, /^<span data-tip="3\.1 projected · 80 avg mins\nMan City \(A\)" data-tip-rows="Playing\t2\.0\nGoals\t0\.9\n/);
   });
 
   it('take them apart as the site’s whatever the setting, the columns being the site’s alone', () => {
@@ -91,11 +91,29 @@ describe('the Projected columns', () => {
     }
   });
 
-  it('name every opponent where data.json has no parts, with his xP over them', () => {
+  it('take a free agent’s apart from the season’s file, which has everyone’s', () => {
+    state.statsCategory = 'projected';
+    const r = row(19, 1, [2.2, 2.5, 4.8]);
+    r.ahead!.parts = [parts(46, 0.1, 0.1), null, null];
+    const { html } = statsTable(
+      [r],
+      () => undefined,
+      () => '',
+      { season: true, gws: [4, 5, 6] },
+    );
+    const [gw4, gw5] = [...html.matchAll(/<td>(<span[^]*?<\/span>)<\/td>/g)].map((m) => m[1]);
+    assert.match(
+      gw4,
+      /^<span data-tip="2\.2 projected · 46 avg mins\nChelsea \(H\)" data-tip-rows="Playing\t2\.0\nGoals\t0\.1\nBonus\t0\.1\nCards\t−0\.1">/,
+    );
+    assert.equal(gw5, '<span data-tip-head="2.5 projected" data-tip="Man City (A)">2.5</span>');
+  });
+
+  it('name every opponent where neither file has the parts, with the projection over them', () => {
     const [gw4, gw5, gw6] = cells(19, 1, [2.2, 2.5, 4.8]);
-    assert.equal(gw4, '<span data-tip-head="2.2 xP" data-tip="Chelsea (H)">2.2</span>');
-    assert.equal(gw5, '<span data-tip-head="2.5 xP" data-tip="Man City (A)">2.5</span>');
-    assert.equal(gw6, '<span data-tip-head="4.8 xP" data-tip="Liverpool (H), Chelsea (A)">4.8</span>');
+    assert.equal(gw4, '<span data-tip-head="2.2 projected" data-tip="Chelsea (H)">2.2</span>');
+    assert.equal(gw5, '<span data-tip-head="2.5 projected" data-tip="Man City (A)">2.5</span>');
+    assert.equal(gw6, '<span data-tip-head="4.8 projected" data-tip="Liverpool (H), Chelsea (A)">4.8</span>');
   });
 
   it('say so in a blank gameweek', () => {

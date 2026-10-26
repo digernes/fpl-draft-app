@@ -1,7 +1,8 @@
 // The Table tab: every table view, the Premier League twins and luck.
 
 import { avatar, card, chip, crest, listRow } from '../components.ts';
-import { esc, ordinal, plural, signed } from '../format.ts';
+import type { LuckRow } from '../../shared/data.ts';
+import { esc, ordinal, pct, plural, signed } from '../format.ts';
 import { club, first } from '../lookups.ts';
 import { href } from '../router.ts';
 import { D, state } from '../state.ts';
@@ -39,16 +40,18 @@ function twinsCard() {
 
 function luckCard() {
   const rows = [...D.tables.luck].sort((a, b) => b.luck - a.luck || a.rank - b.rank);
+  const meta = (r: LuckRow) =>
+    `${r.pts} pts, ${Math.round(r.avgPts)} against everyone · beat ${pct(r.won / (r.won + r.drawn + r.lost || 1))} of the other teams`;
   return card({
     title: 'Luck',
-    sub: 'Your real points against what you’d have playing the league average every week',
+    sub: 'Your real points against what you’d have playing every other team every week',
     body: `<div class="list">${rows
       .map((r) =>
         listRow({
           lead: avatar(r.id, 24),
           title: first(r.id),
-          meta: `${r.pts} pts, ${r.avgPts} against the average · above it ${r.won} of ${r.played} weeks`,
-          value: signed(r.luck),
+          meta: meta(r),
+          value: signed(Math.round(r.luck)),
         }),
       )
       .join('')}</div>`,

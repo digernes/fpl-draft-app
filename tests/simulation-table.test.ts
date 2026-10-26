@@ -35,6 +35,18 @@ describe('the simulated table’s formula', () => {
     assert.match(lines.at(-1)!, /^A projected XI is the best one their squad can field/);
   });
 
+  it('says how much of the projected XI counts, for a season built with the weights', () => {
+    const d: Data = season();
+    d.simulation.model.weight = [1, 0.9, 0.5];
+    setData(d);
+    const formula = simulationFormula();
+    assert.match(formula, /\+ part of how far their projected XI sits from the average one/);
+    assert.match(
+      formula,
+      /The projected XI counts 100% next week, 0.9 of that for each week after, and never under 50%, as squads change\./,
+    );
+  });
+
   it('says how far ahead the projected XIs go, and leaves them out before there are any', () => {
     assert.match(formula(1), /\(the next gameweek’s, and the same after\)/);
     assert.match(formula(3), /\(each of the next 3 gameweeks’ own, then their average\)/);

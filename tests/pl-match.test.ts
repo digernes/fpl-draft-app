@@ -223,7 +223,7 @@ describe('a Premier League match still to come', () => {
     setData(d);
     const lineups = cardTitled(page(9).body, 'Lineups');
     assert.match(lineups, /4-3-3/);
-    assert.match(lineups, /<span class="ptsp xp" data-tip="5\.2 expected points">5\.2<\/span>/);
+    assert.match(lineups, /<span class="ptsp xp" data-tip="5\.2 projected points">5\.2<\/span>/);
     assert.doesNotMatch(lineups, /faded/);
   });
 

@@ -161,31 +161,23 @@ describe('the tables', () => {
     );
   });
 
-  it('plays every week against the league average for the luck table', () => {
-    // Gameweek 1 averages 47.5 and gameweek 2 50.
+  it('plays every week against each of the other teams for the luck table, a share of a match each', () => {
+    // Gameweek 1: 1 60, 2 50, 3 40, 4 40; gameweek 2: 4 70, 1 55, 3 45, 2 30.
     const { luck } = build();
-    const row = (id: number) => luck.find((r) => r.id === id)!;
     assert.deepEqual(
-      luck.map((r) => r.id),
-      [1, 4, 2, 3],
+      luck.map((r) => [r.id, r.rank, r.won, r.drawn, r.lost, r.avgPts, r.pts, r.luck]),
+      [
+        [1, 1, 5, 0, 1, 5, 6, 1], // all three beaten, then two of three
+        [4, 2, 3, 1, 2, 3.3, 4, 0.7], // a draw with 3 the first week (a third of a point), all three beaten the second
+        [2, 3, 2, 0, 4, 2, 0, -2],
+        [3, 4, 1, 1, 4, 1.3, 1, -0.3],
+      ],
     );
-    assert.deepEqual(row(1), {
-      id: 1,
-      played: 2,
-      won: 2,
-      drawn: 0,
-      lost: 0,
-      above: 17.5,
-      avgPts: 6,
-      pts: 6,
-      luck: 0,
-      tableRank: 1,
-      rank: 1,
-    });
-    assert.equal(row(2).avgPts, 3); // above in the first, below in the second
-    assert.equal(row(2).luck, -3);
-    assert.equal(row(2).above, -17.5);
-    assert.equal(row(3).luck, 1); // a point from a draw while below the average both weeks
+    // Points above each week's average (47.5, then 50), all season.
+    assert.deepEqual(
+      luck.map((r) => r.above),
+      [17.5, 12.5, -17.5, -12.5],
+    );
   });
 
   it('keeps each gameweek’s scores for the odds', () => {

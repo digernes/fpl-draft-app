@@ -258,6 +258,18 @@ describe('buildPlSeasonStats', () => {
     assert.deepEqual(projected?.gws, [9, 10]);
     assert.deepEqual(projected?.players[7], [7.7, 7.7, 160, 2, 0.6, 0, 0.8, 1]);
   });
+
+  it('takes each gameweek’s projection apart for the tips, owned or not: the minutes whole, the points to a tenth', () => {
+    const parts: XpParts = [79.6, 2.04, 3.96, 0, 0.91, 0, 0, 0.4, 0, 0.52, -0.1];
+    const upcoming = [
+      { gw: 9, points: () => 7.7, parts: (pid: number) => (pid === 7 ? parts : undefined) },
+      { gw: 10, points: () => 7.7 },
+    ];
+    const { projected } = buildPlSeasonStats(season, upcoming);
+    assert.deepEqual(projected?.parts?.[7], [[80, 2, 4, 0, 0.9, 0, 0, 0.4, 0, 0.5, -0.1], null]);
+    // Nobody without any, to keep the file small.
+    assert.equal(Object.keys(projected?.parts ?? {}).length, 1);
+  });
 });
 
 describe('withFplAssists', () => {

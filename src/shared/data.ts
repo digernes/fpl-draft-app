@@ -168,9 +168,10 @@ export interface PlSeasonStats {
   /**
    * The site's projections for the gameweeks to come (`gws`), for its Projected category:
    * player id → his expected points in each, then over them all his minutes, goals and
-   * assists, and his points from clean sheets, defensive contributions and bonus.
+   * assists, and his points from clean sheets, defensive contributions and bonus. `parts`:
+   * each gameweek's taken apart, to a tenth (missing from files built before them).
    */
-  projected?: { gws: number[]; players: ById<number[]> };
+  projected?: { gws: number[]; players: ById<number[]>; parts?: ById<(XpParts | null)[]> };
 }
 
 /**
@@ -328,11 +329,15 @@ export interface XgRow {
 
 export interface LuckRow {
   id: number;
+  /** Weeks. */
   played: number;
+  /** Against every other team: a week is a match against each of the others. */
   won: number;
   drawn: number;
   lost: number;
+  /** Points scored above the league average, all season. */
   above: number;
+  /** The table points against everyone, to a tenth. */
   avgPts: number;
   pts: number;
   luck: number;
@@ -378,6 +383,8 @@ export interface Simulation {
     leagueAverage: number;
     /** How many gameweeks ahead get their own projected XIs; 0 before there are projections. */
     projected: number;
+    /** How much the projected XI counts: next week's share, the decay each week after and the floor; missing from archives built before it. */
+    weight?: [number, number, number];
     levelSpread: number;
     spread: number;
     laterSpread: number;

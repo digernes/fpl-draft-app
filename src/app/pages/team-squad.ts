@@ -174,13 +174,13 @@ function gwColumn(sq: Squad, l: Lineup): SquadColumn {
   };
 }
 
-// The next gameweek's expected points, for the squad now only.
+// The next gameweek's projected points, for the squad now only.
 function xpColumn(sq: Squad): SquadColumn {
   const { nextGw } = D.meta;
   return {
     key: 'xp',
-    label: 'xP',
-    tip: `Expected points for GW ${nextGw}${state.xp === 'fpl' ? ' (FPL’s form)' : ''}`,
+    label: 'Proj',
+    tip: `Projected points for GW ${nextGw}${state.xp === 'fpl' ? ' (FPL’s form)' : ''}`,
     value: (pid) => (sq.owned.has(pid) ? nextXp(pid) : -1),
     cell: (pid) => (sq.owned.has(pid) ? xpPill(nextXp(pid), nextParts(pid), opponents(player(pid).club, nextGw)) : DASH),
   };

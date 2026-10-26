@@ -47,7 +47,7 @@ describe('a team’s squad', () => {
   it('groups the squad by position, the XI first, then the bench and the new signings', () => {
     const html = squadCard(1);
     assert.match(html, /<div class="card-sub">4 players · 6 pts in GW 3<\/div>/);
-    assert.deepEqual(heads(html), ['Goalkeepers GWs GW3 xP Total', 'Defenders GWs GW3 xP Total', 'Midfielders GWs GW3 xP Total']);
+    assert.deepEqual(heads(html), ['Goalkeepers GWs GW3 Proj Total', 'Defenders GWs GW3 Proj Total', 'Midfielders GWs GW3 Proj Total']);
     assert.deepEqual(rows(html), [
       'Raya ! ARS 3 1 3.2 9',
       'Gabriel ARS · Bench 3 3 4.1 0 benched',
@@ -61,7 +61,7 @@ describe('a team’s squad', () => {
   it('sorts on a column, highest first, the position as a chip, and goes back to the groups from Position or the column', () => {
     state.squadSort = 'total';
     const html = squadCard(1);
-    assert.deepEqual(heads(html), ['Position GWs GW3 xP Total']);
+    assert.deepEqual(heads(html), ['Position GWs GW3 Proj Total']);
     assert.deepEqual(
       rows(html).map((r) => r.split(' ')[0]),
       ['Saka', 'Raya', 'Gabriel', 'White'],
@@ -98,9 +98,9 @@ describe('a team’s squad', () => {
   });
 
   it('says what the expected points are for, the site’s or FPL’s', () => {
-    assert.match(squadCard(1), /data-tip="Expected points for GW 4 · tap to sort">xP/);
+    assert.match(squadCard(1), /data-tip="Projected points for GW 4 · tap to sort">Proj/);
     state.xp = 'fpl';
-    assert.match(squadCard(1), /data-tip="Expected points for GW 4 \(FPL’s form\) · tap to sort">xP/);
+    assert.match(squadCard(1), /data-tip="Projected points for GW 4 \(FPL’s form\) · tap to sort">Proj/);
   });
 
   it('marks a player who came on automatically', () => {
@@ -115,7 +115,7 @@ describe('a team’s squad', () => {
     delete d.lineups[1][3];
     setData(d);
     assert.match(squadCard(1), /<div class="card-sub">4 players<\/div>/);
-    assert.deepEqual(heads(squadCard(1))[0], 'Goalkeepers GWs xP Total');
+    assert.deepEqual(heads(squadCard(1))[0], 'Goalkeepers GWs Proj Total');
     d.meta.nextGw = 5;
     setData(d);
     assert.deepEqual(heads(squadCard(1))[0], 'Goalkeepers GWs Total');

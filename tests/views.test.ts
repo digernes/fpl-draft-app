@@ -261,10 +261,21 @@ describe('the Table tab', () => {
 
   it('ranks the luck by how much the fixture list helped, the luckiest first', () => {
     assert.deepEqual(listRows(cardTitled(viewTable(), 'Luck')), [
-      'AN Ann 4 pts, 0 against the average · above it 0 of 2 weeks +4',
-      'CY Cy 4 pts, 6 against the average · above it 2 of 2 weeks -2',
-      'BO Bob 0 pts, 3 against the average · above it 1 of 2 weeks -3',
+      'AN Ann 4 pts, 0 against everyone · beat 0% of the other teams +4',
+      'CY Cy 4 pts, 6 against everyone · beat 100% of the other teams -2',
+      'BO Bob 0 pts, 3 against everyone · beat 50% of the other teams -3',
     ]);
+  });
+
+  it('shows the luck table’s points rounded, as the xG table’s, the tenths in the tip', () => {
+    state.tableView = 'luck';
+    const d = season();
+    d.tables.luck[0] = { ...d.tables.luck[0], avgPts: 5.6, luck: -1.6 };
+    setData(d);
+    assert.match(
+      viewTable(),
+      /<span class="xv" data-tip="5.6 against everyone, 4 in the real table">6<sup class="diff bad">-2<\/sup><\/span>/,
+    );
   });
 
   it('shows the xG table with how far each side ran above or below what was expected', () => {
@@ -302,7 +313,7 @@ describe('the Table tab', () => {
     state.tableView = 'form';
     assert.match(viewTable(), /Table over the last 5 gameweeks/);
     state.tableView = 'luck';
-    assert.match(viewTable(), /Every week played against the league average/);
+    assert.match(viewTable(), /Every week played against each of the other teams, a share of the week each/);
   });
 
   it('offers the phones’ Form mode for the standings only', () => {

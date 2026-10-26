@@ -94,8 +94,8 @@ describe('the tooltip', () => {
   });
 
   it('lines up rows of labels and values under its first line, which heads it', () => {
-    assert.deepEqual(fill({ tip: '5.2 xP · 80 avg mins\nChelsea (H)', tipRows: 'Playing\t1.9\nGoals\t1.5' }), [
-      'tip-head: 5.2 xP · 80 avg mins',
+    assert.deepEqual(fill({ tip: '5.2 projected · 80 avg mins\nChelsea (H)', tipRows: 'Playing\t1.9\nGoals\t1.5' }), [
+      'tip-head: 5.2 projected · 80 avg mins',
       'Chelsea (H)',
       '[tip-rows]',
       'Playing',

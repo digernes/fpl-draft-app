@@ -6,7 +6,17 @@
 import type { Data, Match, Odds, Price } from '../shared/data.ts';
 import { bestXi } from '../shared/best-xi.ts';
 import { price as sharedPrice, winDrawWin } from '../shared/odds.ts';
-import { MIN_SCORE_SPREAD, ODDS_GAMEWEEKS, ODDS_OVERROUND, POSITIONS, PROJECTED_GAMEWEEKS, STATS_GAMEWEEKS } from './config.ts';
+import {
+  MIN_SCORE_SPREAD,
+  ODDS_GAMEWEEKS,
+  ODDS_OVERROUND,
+  POSITIONS,
+  PROJECTED_GAMEWEEKS,
+  PROJECTION_DECAY,
+  PROJECTION_MIN_WEIGHT,
+  PROJECTION_WEIGHT,
+  STATS_GAMEWEEKS,
+} from './config.ts';
 import { modelBefore, modelExpected } from './expected.ts';
 import type { Season } from './season.ts';
 import { range, round, sum } from './util.ts';
@@ -53,7 +63,7 @@ export function oddsModel(season: Season, managerIds: number[], scoresByGw: Scor
     leagueMean,
     sigma,
     hasProjections,
-    expectedScore: hasProjections ? expectedScores(managerIds, projectedGws, projections, leagueMean) : () => leagueMean,
+    expectedScore: hasProjections ? expectedScores(managerIds, nextGw, projectedGws, projections, leagueMean) : () => leagueMean,
     spreadFor,
     before: expectedBefore(season, managerIds, scoresByGw, leagueMean),
   };
@@ -120,17 +130,22 @@ function scoreSpread(scoresByGw: ScoresByGw, nextGw: number) {
 
 function expectedScores(
   managerIds: number[],
+  nextGw: number,
   projectedGws: number[],
   projections: Projections,
   leagueMean: number,
 ): (id: number, gw: number) => number {
-  const byGw: Record<number, (id: number) => number> = Object.fromEntries(
-    projectedGws.map((gw) => [gw, fromProjections(Object.fromEntries(managerIds.map((id) => [id, projections[gw][id].pts])), leagueMean)]),
+  const gapIn: Record<number, (id: number) => number> = Object.fromEntries(
+    projectedGws.map((gw) => [gw, fromProjections(Object.fromEntries(managerIds.map((id) => [id, projections[gw][id].pts])), 0)]),
   );
   // A gameweek being played, or one without its fixtures yet, gets each side's average over those.
-  const later = (id: number) => (projectedGws.length ? sum(projectedGws.map((gw) => byGw[gw](id))) / projectedGws.length : leagueMean);
-  return (id, gw) => (byGw[gw] ?? later)(id);
+  const later = (id: number) => (projectedGws.length ? sum(projectedGws.map((gw) => gapIn[gw](id))) / projectedGws.length : 0);
+  return (id, gw) => leagueMean + projectionWeight(gw - nextGw) * (gapIn[gw] ?? later)(id);
 }
+
+/** How much of a projected XI's gap from the average one counts, `ahead` gameweeks after the next. */
+export const projectionWeight = (ahead: number) =>
+  Math.max(PROJECTION_MIN_WEIGHT, PROJECTION_WEIGHT * PROJECTION_DECAY ** Math.max(0, ahead));
 
 // A gameweek that started before odds were kept: what the model would have said with
 // only the gameweeks before it, from each side's squad that week.
@@ -141,7 +156,11 @@ function expectedBefore(season: Season, managerIds: number[], scoresByGw: Scores
     const xp = modelBefore(season, gw);
     if (!xp) return () => mean;
     const squad = (id: number) => season.picks[id]?.[gw]?.picks.map((p) => p.element) ?? [];
-    return fromProjections(Object.fromEntries(managerIds.map((id) => [id, projectedXi(season, squad(id), xp).pts])), mean);
+    return fromProjections(
+      Object.fromEntries(managerIds.map((id) => [id, projectedXi(season, squad(id), xp).pts])),
+      mean,
+      projectionWeight(0),
+    );
   };
 }
 
@@ -153,11 +172,11 @@ function upcomingForecasts(model: Model, projectedGws: number[], nextGw: number,
   });
 }
 
-/** Each side's expected score: the league's average plus how far its projected XI sits from the average one. */
-export function fromProjections(projected: Record<number, number>, leagueMean: number): (id: number) => number {
+/** Each side's expected score: the league's average plus `weight` of how far its projected XI sits from the average one. */
+export function fromProjections(projected: Record<number, number>, leagueMean: number, weight = 1): (id: number) => number {
   const all = Object.values(projected);
   const average = all.length ? sum(all) / all.length : 0;
-  return (id) => leagueMean + (projected[id] ?? average) - average;
+  return (id) => leagueMean + weight * ((projected[id] ?? average) - average);
 }
 
 // Prices every match in the next ODDS_GAMEWEEKS gameweeks. A started match keeps the

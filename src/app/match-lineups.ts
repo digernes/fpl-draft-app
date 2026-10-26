@@ -192,7 +192,7 @@ export function projectedLineups(m: Match) {
       id,
       xi: ids.map(face),
       note: showXp
-        ? `<span data-tip="Best legal XI by expected points">${sum(ids.map((pid) => xpAt(pid, m.gw))).toFixed(1)} xP</span>`
+        ? `<span data-tip="Best legal XI by projected points">${sum(ids.map((pid) => xpAt(pid, m.gw))).toFixed(1)} projected</span>`
         : '',
     };
   };

@@ -1,4 +1,4 @@
-// The tables: the official one, form, luck (against the league average), xG, points,
+// The tables: the official one, form, luck (against every other team each week), xG, points,
 // the Premier League rebuilt from its fixtures, and each manager's club "twin".
 
 import type {
@@ -99,24 +99,30 @@ function formAndNextOf(id: number, matches: Match[], results: Results) {
   };
 }
 
-// Luck: every week played against the league average, where scoring above it is a
-// win. (Beating the league average is the same as beating everyone else's average.)
-// The gap to the real table points is what the fixture list gave or took.
+// Luck: every week played against each of the other teams, the table points a fraction of a
+// match each (beating five of seven is five sevenths of a win), so a week just under the top
+// score counts for nearly a win rather than none. The won, drawn and lost are against every
+// team. The gap to the real table points is what the fixture list gave or took.
 function luckTable(managerIds: number[], weeks: GwScores[], overall: OverallRow[], scoring: Scoring): LuckRow[] {
   const rows = managerIds.map((id) => {
-    const row = { id, played: 0, won: 0, drawn: 0, lost: 0, above: 0 };
+    const row = { id, played: 0, won: 0, drawn: 0, lost: 0, above: 0, avgPts: 0 };
     for (const scores of weeks) {
       const mine = scores.find((sc) => sc.id === id);
-      if (!mine) continue;
-      const average = sum(scores.map((sc) => sc.pts)) / scores.length;
+      const others = scores.filter((sc) => sc.id !== id);
+      if (!mine || !others.length) continue;
+      const week = { won: 0, drawn: 0, lost: 0 };
+      for (const other of others) week[outcome(mine.pts, other.pts)]++;
       row.played++;
-      row.above += mine.pts - average;
-      row[outcome(mine.pts, average)]++;
+      row.won += week.won;
+      row.drawn += week.drawn;
+      row.lost += week.lost;
+      row.above += mine.pts - sum(scores.map((sc) => sc.pts)) / scores.length;
+      row.avgPts += tablePoints(week, scoring) / others.length;
     }
     const official = overall.find((r) => r.id === id);
-    const avgPts = tablePoints(row, scoring);
+    const avgPts = round(row.avgPts, 1);
     const pts = official?.pts ?? 0;
-    return { ...row, above: round(row.above, 1), avgPts, pts, luck: pts - avgPts, tableRank: official?.rank };
+    return { ...row, above: round(row.above, 1), avgPts, pts, luck: round(pts - avgPts, 1), tableRank: official?.rank };
   });
   return ranked(rows, (a, b) => b.avgPts - a.avgPts || b.above - a.above);
 }

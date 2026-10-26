@@ -169,7 +169,7 @@ describe('a player’s timeline', () => {
     d.players[12].ep = 5.5;
     setData(d);
     assert.match(timeline(12)[0], /^GW 3 In starting XI LIV \(H\)/);
-    assert.match(cardTitled(page(12).body, 'Timeline'), /data-tip="5.5 expected points \(not played yet\)">5.5</);
+    assert.match(cardTitled(page(12).body, 'Timeline'), /data-tip="5.5 projected points \(not played yet\)">5.5</);
   });
 
   it('tells who he came on for, and who came on for the one he replaced', () => {
@@ -270,8 +270,8 @@ describe('beside a player’s timeline', () => {
 
   it('suggests the players in his position nearest him on points, and who has them', () => {
     assert.deepEqual(listRows(cardTitled(page(16).body, 'Similar players')), [
-      'Watkins 25 pts · 0.0 xP next · with Cy CY',
-      'Haaland 80 pts · 0.0 xP next · with Bob BO',
+      'Watkins 25 pts · 0.0 projected next · with Cy CY',
+      'Haaland 80 pts · 0.0 projected next · with Bob BO',
     ]);
     assert.match(cardTitled(page(16).body, 'Similar players'), /<div class="card-sub">Forwards on about the same points<\/div>/);
     const d = data();

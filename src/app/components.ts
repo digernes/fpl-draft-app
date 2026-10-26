@@ -137,11 +137,12 @@ export function pointsTipRows(from: [string, number][], toCome: [string, number]
 const XP_PARTS = ['Playing', 'Goals', 'Penalties', 'Assists', 'Clean sheet', 'Conceded', 'Defcon', 'Saves', 'Bonus', 'Cards'];
 export const tenths = (x: number) => (x < 0 ? `−${(-x).toFixed(1)}` : x.toFixed(1));
 
-// Expected points, with a tip that takes them apart when the site's model gave the parts
-// (FPL's form has none): his expected minutes, who against on the line below, then every
-// part worth a tenth or more, as rows the tooltip lines up (tooltips.ts).
+// Projected points (called that rather than xP, which is what chances already taken were
+// worth), with a tip that takes them apart when the site's model gave the parts (FPL's form
+// has none): his expected minutes, who against on the line below, then every part worth a
+// tenth or more, as rows the tooltip lines up (tooltips.ts).
 export function xpPill(xp: number, parts?: XpParts, against = '', note = '') {
-  if (!parts) return `<span class="ptsp xp" data-tip="${esc(`${tenths(xp)} expected points${note}`)}">${xp.toFixed(1)}</span>`;
+  if (!parts) return `<span class="ptsp xp" data-tip="${esc(`${tenths(xp)} projected points${note}`)}">${xp.toFixed(1)}</span>`;
   return `<span class="ptsp xp"${xpTip(xp, parts, against)}>${xp.toFixed(1)}</span>`;
 }
 
@@ -151,7 +152,7 @@ export function xpTip(xp: number, parts: XpParts, against = '') {
     .slice(1)
     .flatMap((x, i) => (Math.abs(x) >= 0.05 ? [`${XP_PARTS[i]}\t${tenths(x)}`] : []))
     .join('\n');
-  const head = `${tenths(xp)} xP · ${Math.round(parts[0])} avg mins${against ? `\n${against}` : ''}`;
+  const head = `${tenths(xp)} projected · ${Math.round(parts[0])} avg mins${against ? `\n${against}` : ''}`;
   return ` data-tip="${esc(head)}" data-tip-rows="${esc(rows)}"`;
 }
 

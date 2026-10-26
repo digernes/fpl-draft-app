@@ -239,7 +239,17 @@ export function buildPlSeasonStats(season: Season, upcoming: Upcoming[] = []): P
       ];
   if (!upcoming.length) return { players };
   const ahead = Object.fromEntries(Object.keys(players).map((id) => [id, projectedFor(season, upcoming, Number(id))]));
-  return { players, projected: { gws: upcoming.map((u) => u.gw), players: ahead } };
+  const parts = Object.fromEntries(Object.keys(players).flatMap((id) => partsFor(upcoming, Number(id))));
+  return { players, projected: { gws: upcoming.map((u) => u.gw), players: ahead, parts } };
+}
+
+// Each gameweek's projection taken apart, for the Projected columns' tips (data.json has them
+// only for players in a squad): his minutes whole, the points to a tenth.
+function partsFor(upcoming: Upcoming[], pid: number): [string, (XpParts | null)[]][] {
+  const each = upcoming.map((u) => u.parts?.(pid) ?? null);
+  if (each.every((p) => p === null)) return [];
+  const rounded = (p: XpParts) => p.map((x, i) => (i ? round(x, 1) : Math.round(x))) as XpParts;
+  return [[String(pid), each.map((p) => p && rounded(p))]];
 }
 
 type Upcoming = { gw: number; points: (pid: number) => number; parts?: (pid: number) => XpParts | undefined };
