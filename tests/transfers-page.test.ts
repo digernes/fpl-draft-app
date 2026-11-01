@@ -43,7 +43,7 @@ function data(): Data {
 
 beforeEach(() => {
   setData(data());
-  Object.assign(state, { logManager: 'all', moveType: 'all', moveGw: 'all', movePos: 'all', moves: 'all' });
+  Object.assign(state, { logManager: 'all', moveType: 'all', moveGw: 'all', movePos: 'all', moves: 'all', moveFailed: 'hide' });
 });
 
 const allTransfers = () => cardTitled(pageTransfers().body, 'All transfers');
@@ -92,6 +92,39 @@ describe('the Transfer center', () => {
     assert.deepEqual(rows(allTransfers()), ['Cy, Waiver: Isak → Watkins']);
     state.logManager = '1';
     assert.deepEqual(rows(allTransfers()), ['Ann ⇄ Bob, Trade: Saka → Palmer', 'Ann, Free agent: White → Gabriel']);
+  });
+
+  it('shows the waiver claims that failed when asked, faded after their gameweek’s moves', () => {
+    assert.doesNotMatch(allTransfers(), /tc-row failed/);
+    state.moveFailed = 'show';
+    const html = allTransfers();
+    assert.match(html, /<div class="card-sub">3 moves · 1 failed<\/div>/);
+    assert.match(html, /<div class="date-head"><span>Gameweek 2<\/span><span class="muted">1 move · 1 failed<\/span><\/div>/);
+    const failed = html.split('<div class="tc-row failed">')[1];
+    assert.ok(html.indexOf('<div class="tc-row failed">') > html.lastIndexOf('<div class="tc-row">'));
+    assert.match(text(failed.split('<span class="tc-swaps">')[0]), /^Ann /);
+    assert.match(failed, /<span class="tc-how" data-tip="Another manager with better waiver priority got him">Claim lost to Cy<\/span>/);
+    assert.match(text(failed.split('<span class="tc-swaps">')[1].split('</span></span>')[0]), /White → Watkins/);
+    // A void one says so; a free agent or a trade can't fail this way, and another team's aren't its.
+    const d = data();
+    d.transfers.claims[1] = { ...d.transfers.claims[1], outcome: 'void', winner: null };
+    setData(d);
+    assert.match(allTransfers(), /data-tip="The player in or out was gone by the time it came up">Claim void</);
+    state.moveType = 'free';
+    assert.doesNotMatch(allTransfers(), /tc-row failed/);
+    state.moveType = 'all';
+    state.logManager = '3';
+    assert.doesNotMatch(allTransfers(), /tc-row failed/);
+    state.logManager = '1';
+    assert.match(allTransfers(), /tc-row failed/);
+  });
+
+  it('offers the failed claims in the filter, hidden at first', () => {
+    const filter = cardTitled(pageTransfers().body, 'Filter');
+    assert.match(
+      filter,
+      /Failed claims<\/div><div class="seg seg-sm" role="group"><button type="button" data-action="move-failed" data-value="hide" aria-pressed="true">Hide/,
+    );
   });
 
   it('narrows the list to a kind of move, a gameweek or a position of the player in or out', () => {

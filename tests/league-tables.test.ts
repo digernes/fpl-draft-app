@@ -42,6 +42,16 @@ describe('the league table', () => {
     assert.match(html, /<div class="table-note">With gameweek 3’s provisional points<\/div>/);
   });
 
+  it('gives the narrowest table points scored, and wider ones the difference', () => {
+    setData(season());
+    const html = standingsTable('overall');
+    assert.match(html, /<div class="tc {2}from-xs until-xs"><span data-tip="Points scored">PF<\/span><\/div>/);
+    assert.match(html, /<div class="tc {2}from-sm"><span data-tip="Points difference">GD<\/span><\/div>/);
+    // The leader's row has the points they scored there.
+    const top = season().tables.overall[0];
+    assert.match(html.split(`data-value="${top.id}"`)[1], new RegExp(`^[^]*?<div class="tc  from-xs until-xs">${top.pf}</div>`));
+  });
+
   it('has neither between gameweeks', () => {
     setData(season());
     const html = standingsTable('overall');

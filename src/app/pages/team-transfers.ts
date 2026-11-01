@@ -60,7 +60,8 @@ function moveRow(mv: Move, view: (typeof MOVE_VIEWS)[keyof typeof MOVE_VIEWS]) {
   });
 }
 
-const OUTCOMES = {
+/** A waiver claim's outcome, and why it went that way. */
+export const CLAIM_OUTCOMES = {
   won: ['Won', ''],
   lost: ['Lost', 'Another manager with better waiver priority got him'],
   void: ['Void', 'The player in or out was gone by the time it came up'],
@@ -70,7 +71,7 @@ export function claimsCard(id: number) {
   const claims = D.transfers.claims.filter((c) => c.manager === id).sort((a, b) => b.gw - a.gw);
   if (!claims.length) return '';
   const rows = claims.map((c) => {
-    const [label, tip] = OUTCOMES[c.outcome];
+    const [label, tip] = CLAIM_OUTCOMES[c.outcome];
     const lostTo = c.outcome === 'lost' && c.winner ? ` to ${first(c.winner)}` : '';
     return listRow({
       lead: `<a href="${href.player(c.in)}">${photo(c.in)}</a>`,

@@ -1,11 +1,11 @@
 // The Transfer center, as fotmob.com's: every move, newest first, as the game makes it (the
-// player a team let go and the one it brought in, a trade once for both sides), with the trade offers under
-// them; and on the left a filter for the team and the kind of move, the season's numbers and
-// the waiver order. On a phone the filter
-// is in a sheet behind a button, and the numbers and the order are left out. The home
-// page's recent transfers card leads here.
+// player a team let go and the one it brought in, a trade once for both sides), and if asked
+// the waiver claims that failed, with the trade offers under them; and on the left a filter
+// for the team and the kind of move, the season's numbers and the waiver order. On a phone
+// the filter is in a sheet behind a button, and the numbers and the order are left out. The
+// home page's recent transfers card leads here.
 
-import type { Move } from '../../shared/data.ts';
+import type { Claim, Move } from '../../shared/data.ts';
 import { onAction } from '../actions.ts';
 import { feed, feedRow, MOVE_TYPES } from '../cards.ts';
 import { avatar, card, empty, listRow, photo, seg, sheet, tile } from '../components.ts';
@@ -16,6 +16,7 @@ import { renderView, type PageView } from '../render.ts';
 import { href } from '../router.ts';
 import { D, state } from '../state.ts';
 import { tradesCard, waiverOrderCard } from '../views/transfers.ts';
+import { CLAIM_OUTCOMES } from './team-transfers.ts';
 
 onAction('log', (value) => {
   state.logManager = value;
@@ -33,13 +34,29 @@ onAction('move-pos', (value) => {
   state.movePos = value;
   renderView();
 });
+onAction('move-failed', (value) => {
+  state.moveFailed = value;
+  renderView();
+});
 
-/** A move as the game makes it: a team's players in and out (one each, but for a trade). */
+/** A move as the game makes it: a team's players in and out (one each, but for a trade); or a waiver claim that failed. */
 interface Deal {
   move: Move;
   ins: number[];
   outs: number[];
+  failed?: Claim;
 }
+
+// The waiver claims lost to a better priority or void, as the moves they would have been.
+const failedOf = (team: number | null): Deal[] =>
+  D.transfers.claims
+    .filter((c) => c.outcome !== 'won' && (!team || c.manager === team))
+    .map((c) => ({
+      move: { type: 'waiver', manager: c.manager, in: c.in, out: c.out, gw: c.gw, at: '' },
+      ins: [c.in],
+      outs: [c.out],
+      failed: c,
+    }));
 
 // A waiver or free-agent move is a deal of its own. A trade is a move for each side per
 // player swapped, which make one deal: as a team's side for that team, else as the side
@@ -101,7 +118,9 @@ function stature() {
 
 export function pageTransfers(): PageView {
   const team = Number(state.logManager) || null;
-  const shown = dealsOf(team).filter(
+  // Each gameweek's failed claims after its moves (the sort keeps the order within one).
+  const all = state.moveFailed === 'show' ? [...dealsOf(team), ...failedOf(team)].sort((a, b) => b.move.gw - a.move.gw) : dealsOf(team);
+  const shown = all.filter(
     ({ move, ins, outs }) =>
       (state.moveType === 'all' || move.type === state.moveType) &&
       (state.moveGw === 'all' || move.gw === Number(state.moveGw)) &&
@@ -118,13 +137,19 @@ export function pageTransfers(): PageView {
     },
     body: `<div class="cols-side">
       <div class="col tc-side">${card({ title: 'Filter', body: filters() })}${numbersCard()}${waiverOrderCard()}</div>
-      <div class="col">${card({ title: 'All transfers', sub: plural(shown.length, 'move'), body: shown.length ? byGameweek(shown) : empty('No transfers like that yet') })}${tradesCard()}</div>
-    </div>${sheet('tc-sheet', 'Filter', filters(), `Show ${plural(shown.length, 'move')}`)}`,
+      <div class="col">${card({ title: 'All transfers', sub: counted(shown), body: shown.length ? byGameweek(shown) : empty('No transfers like that yet') })}${tradesCard()}</div>
+    </div>${sheet('tc-sheet', 'Filter', filters(), `Show ${counted(shown)}`)}`,
   };
 }
 
-// fotmob.com's Edit card (or sheet, on a phone): which team, when, which kind of move and
-// which position (of the player in or out).
+// How many moves, and failed claims when shown.
+function counted(list: Deal[]) {
+  const failed = list.filter((d) => d.failed).length;
+  return `${plural(list.length - failed, 'move')}${failed ? ` · ${failed} failed` : ''}`;
+}
+
+// fotmob.com's Edit card (or sheet, on a phone): which team, when, which kind of move, which
+// position (of the player in or out), and whether to show the waiver claims that failed.
 function filters() {
   const options = [
     `<option value="all"${state.logManager === 'all' ? ' selected' : ''}>All teams</option>`,
@@ -158,11 +183,20 @@ function filters() {
     ],
     state.movePos,
   );
+  const failed = seg(
+    'move-failed',
+    [
+      ['hide', 'Hide'],
+      ['show', 'Show'],
+    ],
+    state.moveFailed,
+  );
   return `<div class="tc-filter">
       <label class="tc-label">Team<span class="tc-select"><select data-action="log" aria-label="Team">${options}</select></span></label>
       <label class="tc-label">Timeframe<span class="tc-select"><select data-action="move-gw" aria-label="Timeframe">${timeframe}</select></span></label>
       <div class="tc-label">Kind of move</div>${kinds}
       <div class="tc-label">Position</div>${positions}
+      <div class="tc-label">Failed claims</div>${failed}
     </div>`;
 }
 
@@ -196,20 +230,31 @@ function teamCell(mv: Move) {
 }
 
 // fotmob.com's transfer rows, a move each: the team that made it, from → to (the player out,
-// then the player in, a line for each pair a trade swapped), how and when.
+// then the player in, a line for each pair a trade swapped), how and when. A failed claim's
+// is faded, with what became of it as its move.
 function table(list: Deal[]) {
-  const rows = list.map(({ move: mv, ins, outs }) => {
+  const rows = list.map(({ move: mv, ins, outs, failed }) => {
     const swaps = ins.map(
       (pid, i) => `<span class="tc-move">${playerPill(outs[i])}<span class="tc-arrow">→</span>${playerPill(pid)}</span>`,
     );
-    return `<div class="tc-row">
+    const when = failed
+      ? `<span class="tc-when">GW ${mv.gw}</span>`
+      : `<span class="tc-when" data-tip="${esc(ago(mv.at))}">GW ${mv.gw}</span>`;
+    return `<div class="tc-row${failed ? ' failed' : ''}">
       ${teamCell(mv)}
       <span class="tc-swaps">${swaps.join('')}</span>
-      <span class="tc-how">${MOVE_TYPES[mv.type]}</span>
-      <span class="tc-when" data-tip="${esc(ago(mv.at))}">GW ${mv.gw}</span>
+      ${failed ? claimHow(failed) : `<span class="tc-how">${MOVE_TYPES[mv.type]}</span>`}
+      ${when}
     </div>`;
   });
   return `<div class="tc-table"><div class="tc-row tc-head"><span>Team</span><span>From → To</span><span>Move</span><span>When</span></div>${rows.join('')}</div>`;
+}
+
+// A failed claim's move: lost, and to whom, or void, why in its tip.
+function claimHow(c: Claim) {
+  const [label, tip] = CLAIM_OUTCOMES[c.outcome];
+  const to = c.outcome === 'lost' && c.winner ? ` to ${first(c.winner)}` : '';
+  return `<span class="tc-how" data-tip="${esc(tip)}">Claim ${label.toLowerCase()}${to}</span>`;
 }
 
 function byGameweek(list: Deal[]) {
@@ -219,10 +264,7 @@ function byGameweek(list: Deal[]) {
     groups.at(-1)!.list.push(deal);
   }
   return groups
-    .map(
-      (g) =>
-        `<div class="date-head"><span>Gameweek ${g.gw}</span><span class="muted">${plural(g.list.length, 'move')}</span></div>${table(g.list)}`,
-    )
+    .map((g) => `<div class="date-head"><span>Gameweek ${g.gw}</span><span class="muted">${counted(g.list)}</span></div>${table(g.list)}`)
     .join('');
 }
 

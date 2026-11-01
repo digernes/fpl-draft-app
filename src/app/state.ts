@@ -46,6 +46,7 @@ export const state = {
   moveType: 'all', // and its kind of move: 'all', 'waiver', 'free' or 'trade'
   moveGw: 'all', // its gameweek: 'all' or one
   movePos: 'all', // its players' position: 'all', 'GKP', 'DEF', 'MID' or 'FWD'
+  moveFailed: 'hide', // and the waiver claims that failed: 'hide' or 'show'
   openSquad: null as string | null, // manager whose original squad is expanded
   moves: 'all', // a team's moves, on its Transfers tab: 'all', 'in' or 'out'
   lineupView: 'last', // a team's pitch: 'last' (the latest lineup) or 'all' (the season's best XI)
@@ -60,7 +61,7 @@ export const state = {
   playersOwner: 'all', // and whose: 'all', 'free' (the free agents) or a manager's id
   playersAll: false, // all of them, rather than the first 50
   commentaryBench: false, // a head-to-head's commentary: the benches' players too
-  momentumView: 'lead', // a head-to-head's momentum: 'lead' or 'chance' (each side's chance of winning)
+  momentumView: 'chance', // a head-to-head's momentum: each side's 'chance' of winning (the default) or the 'lead'
   season: null as string | null, // slug of an archived season being viewed, e.g. "2025-26"; null = current
 };
 

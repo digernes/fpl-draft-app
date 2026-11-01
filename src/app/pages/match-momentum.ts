@@ -136,8 +136,8 @@ export function momentumCard(m: Match, steps: Step[], lineups: [Lineup, Lineup])
     })
     .join('');
   const views: [string, string][] = [
-    ['lead', 'Lead'],
     ['chance', 'Win chance'],
+    ['lead', 'Lead'],
   ];
   const sofar = m.finished ? '' : ' so far';
   return card({

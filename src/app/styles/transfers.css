@@ -161,6 +161,16 @@
   font-size: 12px;
 }
 
+/* A waiver claim that failed: faded, what became of it in the loss colour. */
+.tc-row.failed .tc-team,
+.tc-row.failed .tc-swaps {
+  opacity: 0.55;
+}
+
+.tc-row.failed .tc-how {
+  color: var(--lose);
+}
+
 /* On one column, the filter is in a sheet behind a pill at the header's right, as
    fotmob.com's Edit, and the season's numbers and the waiver order are left to wider
    screens. */
