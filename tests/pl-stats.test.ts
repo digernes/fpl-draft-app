@@ -27,6 +27,7 @@ before(async () => {
     window: nothing,
     matchMedia: () => ({ matches: false }),
     HTMLSelectElement: class {},
+    HTMLInputElement: class {},
     HTMLDialogElement: class {},
     fetch: async () => ({ ok: true, json: async () => file }),
   });

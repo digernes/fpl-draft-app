@@ -86,13 +86,23 @@ export function recordsNow(d: RecordData, feed: SlimLive, now: number, stats?: E
   const records: Record<string, InPlayRecord> = {};
   if (gw === undefined || !(minutes >= 0)) return records;
   for (const m of d.matches) {
-    if (m.gw !== gw || !m.started || m.finished) continue;
-    const [home, away] = [scoreLive(d, m.home, gw, feed), scoreLive(d, m.away, gw, feed)];
-    if (!home || !away) continue;
-    const { p } = inPlayOddsIn(d, [home, away], feed, liveExpectedIn(d, gw, false, stats));
-    records[recordKey(m)] = [minutes, Math.round(p[0] * 1000), Math.round(p[2] * 1000), home.pts, away.pts];
+    const now = matchOddsNow(d, feed, m, stats);
+    if (now) records[recordKey(m)] = [minutes, Math.round(now.p[0] * 1000), Math.round(now.p[2] * 1000), now.score[0], now.score[1]];
   }
   return records;
+}
+
+/**
+ * A head-to-head's live odds now, with the site's expected points, and its live score: while
+ * it's played (started, not finished, in the gameweek of data.json's live feed), with both
+ * lineups' picks. What the live records keep, and what a live bet is priced at (shared/bets.ts).
+ */
+export function matchOddsNow(d: InPlayData, feed: SlimLive, m: Match, stats?: Expected['stats']) {
+  const gw = d.live?.gw;
+  if (gw === undefined || m.gw !== gw || !m.started || m.finished) return null;
+  const [home, away] = [scoreLive(d, m.home, gw, feed), scoreLive(d, m.away, gw, feed)];
+  if (!home || !away) return null;
+  return { ...inPlayOddsIn(d, [home, away], feed, liveExpectedIn(d, gw, false, stats)), score: [home.pts, away.pts] as [number, number] };
 }
 
 /** A move, in thousandths of either side's chance, that earns a record its own place rather than the last one's. */

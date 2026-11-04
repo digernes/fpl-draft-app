@@ -1,26 +1,35 @@
-// A head-to-head's odds: the 1X2 row, the pre-match odds and who will win, and the live
-// odds while it's played, from where each lineup's score is heading.
+// A head-to-head's odds: the 1X2 row (its prices a tap from the betslip), the pre-match odds
+// and who will win, and the live odds while it's played, from where each lineup's score is heading.
 
 import type { Match, Odds } from '../shared/data.ts';
 import { inPlayOddsIn, liveExpectedIn, playerInfoIn, projectionIn } from '../shared/in-play.ts';
 import { playerOutlook, type Expected } from '../shared/live-projection.ts';
 import { playerState, type Scored } from '../shared/live.ts';
+import { betting, oddsFor } from './betting.ts';
 import { avatar, empty, seg } from './components.ts';
 import { esc, pct, priceText } from './format.ts';
 import { isSettling, mgr, player } from './lookups.ts';
-import { D, live, state } from './state.ts';
+import { D, live, LIVE_URL, state } from './state.ts';
 import { statsFor, toComeRows } from './stats-files.ts';
 
 // `outcome` (0 home, 1 draw, 2 away) settles the row the way fotmob.com does after full
-// time: the losing selections go grey with their price struck through.
+// time: the losing selections go grey with their price struck through. Where the match takes
+// a bet at these odds (pre-match before its deadline, live while it's played), each price puts
+// itself on the betslip (bet-slip.ts).
 export function oddsRow(odds: Pick<Odds, 'p' | 'prices'>, m: Match, outcome: number | null = null, inPlay = false) {
   const labels = ['1', 'X', '2'];
   const who = [`${mgr(m.home)!.first} to win`, 'Draw', `${mgr(m.away)!.first} to win`];
+  const book = outcome === null && LIVE_URL ? oddsFor(m) : null;
+  const takes = typeof book === 'object' && book !== null && Boolean(book.live) === inPlay;
+  const s = betting.slip;
   return `<div class="odds${inPlay ? ' in-play' : ''}">${odds.prices
-    .map(
-      (price, i) =>
-        `<span class="odd${outcome !== null && i !== outcome ? ' lost' : ''}" data-tip="${esc(who[i])} · ${pct(odds.p[i])} chance${inPlay ? ' (live)' : ''}"><span class="odd-label">${labels[i]}</span><span class="odd-price">${priceText(price)}</span></span>`,
-    )
+    .map((price, i) => {
+      const tip = `${esc(who[i])} · ${pct(odds.p[i])} chance${inPlay ? ' (live)' : ''}`;
+      const inner = `<span class="odd-label">${labels[i]}</span><span class="odd-price">${priceText(price)}</span>`;
+      if (!takes) return `<span class="odd${outcome !== null && i !== outcome ? ' lost' : ''}" data-tip="${tip}">${inner}</span>`;
+      const on = s?.gw === m.gw && s.home === m.home && s.away === m.away && s.pick === i;
+      return `<button type="button" class="odd pick" data-action="bet-pick" data-value="${m.gw}:${m.home}:${m.away}:${i}" aria-pressed="${on}" data-tip="${tip} · tap to bet">${inner}</button>`;
+    })
     .join('')}</div>`;
 }
 

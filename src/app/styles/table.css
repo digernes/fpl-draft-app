@@ -370,3 +370,27 @@
     padding-right: 24px;
   }
 }
+
+/* A heading that sorts its table (the Premier League's Team stats): the sorted one in full
+   colour, with the way it runs. */
+.th-sort {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+}
+
+.th-sort[aria-pressed='true'] {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.th-sort .sort-mark {
+  flex: none;
+  width: 10px;
+  height: 10px;
+}

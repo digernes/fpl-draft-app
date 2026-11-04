@@ -2,10 +2,11 @@
 // one being played, and the season turned into what the model reads. Before any
 // gameweek has been played there is nothing to learn from, so odds.ts falls back on FPL's.
 
-import { forecast, type Forecast, type ModelInput } from '../model/forecast.ts';
+import { DEFAULT_OPTIONS, forecast, type Forecast, type ModelInput } from '../model/forecast.ts';
 import type { ById, Data, XpParts } from '../shared/data.ts';
 import type { Element } from '../shared/fpl-api.ts';
 import type { ModelPlayer } from '../model/history.ts';
+import { buildClubStrength } from './club-strength.ts';
 import { POSITIONS } from './config.ts';
 import type { Season } from './season.ts';
 
@@ -91,6 +92,8 @@ export function modelExpected(season: Season) {
     /** Both taken apart. */
     parts: partsOf(next),
     partsNow: partsOf(now),
+    /** The club ratings the next gameweek's forecast was made with. */
+    strength: buildClubStrength(next, nextGw, DEFAULT_OPTIONS.counts.goals),
     /**
      * A later gameweek's, by the chances of playing it (laterChance), and taken apart: its
      * fixtures, with what has been played weighed as for the next gameweek (as of now).

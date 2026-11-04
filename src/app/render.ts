@@ -1,11 +1,13 @@
 // Puts the page the address asks for on screen: its header and tabs, its body, the
 // document title, and which of the top bar's and the bottom bar's links is lit.
 
+import { betSlip } from './bet-slip.ts';
 import { alignHeads, avatar, markLoadingPhotos } from './components.ts';
 import { countdown, esc, fmtShortDay, fmtStamp, fmtTime } from './format.ts';
-import { caretSvg, leagueSvg, matchesSvg, premierLeagueSvg, shirtSvg, swapSvg } from './icons.ts';
+import { caretSvg, coinsSvg, leagueSvg, matchesSvg, premierLeagueSvg, shirtSvg, swapSvg } from './icons.ts';
 import { isLive, isSettling, mgr, seasonLabel, seasonSlug } from './lookups.ts';
 import { pageHeader, type Header } from './page-header.ts';
+import { pageBets } from './pages/bets.ts';
 import { pageHome } from './pages/home.ts';
 import { pageLeague } from './pages/league.ts';
 import { pageMatch } from './pages/match.ts';
@@ -39,6 +41,7 @@ const PAGES: Record<Page, (route: Route) => PageView> = {
   match: pageMatch,
   'pl-match': pagePlMatch,
   player: pagePlayer,
+  bets: pageBets,
 };
 
 // Between rounds the waiver run comes first, then the deadline; during a live
@@ -92,9 +95,23 @@ export const pageKey = (route: Route) =>
 /** A page's markup: its header over its body, or heading the body's column beside the right one. */
 export function pageHtml(page: PageView) {
   const header = page.header ? pageHeader(page.header) : '';
-  return page.aside
+  const view = page.aside
     ? `<div class="view" id="view"><div class="cols ${page.aside.cls}"><div class="col">${header}${page.body}</div><div class="col">${page.aside.html}</div></div></div>`
     : `${header}<div class="view" id="view">${page.body}</div>`;
+  return view + betSlip();
+}
+
+// A field being typed in keeps its place as the page redraws around it (a live score coming
+// in): its value is the page's to keep (betting.ts), the focus and the caret are kept here.
+function keepingFocus(app: HTMLElement, redraw: () => void) {
+  const field = document.activeElement instanceof HTMLInputElement && app.contains(document.activeElement) ? document.activeElement : null;
+  const id = field?.id ?? '';
+  const caret = field && id ? [field.selectionStart, field.selectionEnd] : null;
+  redraw();
+  const again = id ? document.getElementById(id) : null;
+  if (!(again instanceof HTMLInputElement)) return;
+  again.focus();
+  if (caret?.[0] != null) again.setSelectionRange(caret[0], caret[1]);
 }
 
 // A sheet open over the page stays open as the page redraws under it (a filter in it
@@ -121,7 +138,7 @@ export function renderView() {
   shownView = view;
   const page = PAGES[route.page](route);
   const app = document.getElementById('app')!;
-  const redraw = () => keepingSheet(app, () => (app.innerHTML = pageHtml(page)));
+  const redraw = () => keepingSheet(app, () => keepingFocus(app, () => (app.innerHTML = pageHtml(page))));
   // The same view again (a sort, a filter, a live score): what scrolls sideways stays put.
   if (again) keepingSideways(app, redraw);
   else redraw();
@@ -202,6 +219,7 @@ export function navItems({ page, id }: Route): NavItem[] {
     { label: 'Draft league', to: href.league(), icon: leagueSvg, on: on('league', 'match'), top: true },
     { label: 'Premier League', to: href.pl(), icon: premierLeagueSvg, on: on('pl', 'pl-match'), top: true },
     { label: 'Transfers', to: href.transfers(), icon: swapSvg, on: on('transfers'), top: true },
+    { label: 'Bets', to: href.bets(), icon: coinsSvg, on: on('bets'), top: true },
     mine
       ? { label: 'My team', to: href.team(mine), icon: avatar(mine, 24), on: on('team') && id === mine, top: true, face: true }
       : { label: 'Teams', to: href.teams(), icon: shirtSvg, on: on('teams', 'team'), top: true },

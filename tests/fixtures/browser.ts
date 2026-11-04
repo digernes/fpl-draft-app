@@ -22,6 +22,7 @@ export function drawIntoNothing(page: Record<string | symbol, unknown> = {}) {
     history: nothing,
     matchMedia: () => ({ matches: false }),
     HTMLSelectElement: class {},
+    HTMLInputElement: class {},
     HTMLDialogElement: class {},
   });
 }

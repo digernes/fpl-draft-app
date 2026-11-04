@@ -19,6 +19,7 @@
 import type { InPlayRecord } from '../src/shared/data.ts';
 import { recordsNow, withRecord, type RecordData } from '../src/shared/in-play.ts';
 import { API, liveFeed, Upstream } from './feed.ts';
+import { Site } from './site.ts';
 
 export interface InPlayEnv {
   /** The gameweeks' Durable Objects (wrangler.toml). */
@@ -29,7 +30,6 @@ export interface InPlayEnv {
 
 const GAME = `${API}/game`;
 const GAME_MS = 5 * 60 * 1000; // a deadline passing, or the gameweek finishing, reaches the timer within five minutes
-const SITE_MS = 5 * 60 * 1000; // data.json changes about every ten minutes while matches are on
 
 /** A gameweek's address among the relay's routes and the Durable Objects: its season's slug ("2026-27") and its number. */
 export interface Gameweek {
@@ -100,19 +100,16 @@ export async function recordMinute(env: InPlayEnv, now: number): Promise<void> {
 
 type Records = Record<string, InPlayRecord[]>;
 
-/** What of the site's data.json the records read, as it's built (shared/data.ts). */
-type Site = RecordData;
-
 /** A gameweek's records. Its storage: `records`, each head-to-head's by `<home>-<away>`. */
 export class InPlay {
   storage: DurableObjectStorage;
   env: InPlayEnv;
-  private site: Site | undefined;
-  private siteAsked: number | undefined;
+  private site: Site<RecordData>;
 
   constructor(state: DurableObjectState, env: InPlayEnv) {
     this.storage = state.storage;
     this.env = env;
+    this.site = new Site(env.SITE_URL);
   }
 
   async fetch(request: Request): Promise<Response> {
@@ -141,7 +138,7 @@ export class InPlay {
       return err.message;
     }
     if (!Object.keys(feed.matches).length) return 0;
-    const site = await this.siteData(now);
+    const site = await this.site.get(now);
     if (!site) return 'Can’t read the site’s data.json just now';
     // Until a build has caught up with the gameweek, its data.json can't tell its lineups.
     if (site.meta.season.replace('/', '-') !== season || site.live?.gw !== gw) return 0;
@@ -154,22 +151,5 @@ export class InPlay {
     }
     if (added) await this.storage.put({ records });
     return added;
-  }
-
-  // The site's data.json, asked for at most every SITE_MS (Cloudflare's cache answers within
-  // that, past GitHub Pages' own ten minutes) and kept in memory between the timer's minutes.
-  // A failed read waits as long, with the last one read, if any.
-  private async siteData(now: number): Promise<Site | undefined> {
-    if (!this.env.SITE_URL || (this.siteAsked !== undefined && now - this.siteAsked < SITE_MS)) return this.site;
-    this.siteAsked = now;
-    try {
-      const bucket = Math.floor(now / SITE_MS);
-      const res = await fetch(`${this.env.SITE_URL}/data.json?v=${bucket}`, { cf: { cacheTtl: SITE_MS / 1000, cacheEverything: true } });
-      const data = res.ok ? ((await res.json()) as Site) : undefined;
-      if (data?.meta?.season && Array.isArray(data.matches) && Array.isArray(data.gameweeks)) this.site = data;
-    } catch {
-      // The last one stands.
-    }
-    return this.site;
   }
 }

@@ -7,7 +7,7 @@
 import type { Position } from '../shared/data.ts';
 import type { LiveFeed } from '../shared/fpl-api.ts';
 import { fitBonus, type Bonus, type BonusOptions } from './bonus.ts';
-import { readHistory, type History, type ModelPlayer } from './history.ts';
+import { readHistory, type ClubMatch, type History, type ModelPlayer } from './history.ts';
 import { startingPoint, type LastSeason } from './last-season.ts';
 import { minutesScenarios, playerRates, standIns, type Plan, type PlayerOptions, type Scenario, type StandInOptions } from './players.ts';
 import { matchParts, PARTS, readScoring, type Counts, type Match, type Parts, type Rates, type Scoring } from './points.ts';
@@ -65,6 +65,9 @@ export interface Forecast {
   points: Map<number, number>;
   parts: Map<number, Parts>;
   minutes: Map<number, number>;
+  /** The club ratings it was made with, and the matches they come from. */
+  teams: Teams;
+  matches: ClubMatch[];
 }
 
 type Fixtures = { team_h: number; team_a: number }[];
@@ -131,7 +134,7 @@ export function forecast(input: ModelInput, gw: number, fixtures: Fixtures, o = 
   }
   shareBonus(feeds, bonusIn, parts);
   const points = new Map([...parts].map(([pid, mine]) => [pid, PARTS.reduce((t, part) => t + mine[part], 0)]));
-  return { points, parts, minutes };
+  return { points, parts, minutes, teams, matches: history.matches };
 }
 
 const playsIn = (club: number, f: Fixtures[number]) => f.team_h === club || f.team_a === club;

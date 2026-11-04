@@ -96,3 +96,23 @@
 .legend-item i.best-key {
   box-shadow: inset 0 0 0 1.5px var(--text);
 }
+
+/* The Premier League's fixtures ahead: room for an opponent and where it's played, two
+   in a double gameweek. */
+.fixtures-ahead .hm-row {
+  grid-template-columns: 72px repeat(var(--gws), minmax(60px, 1fr)) 40px;
+}
+
+.fixtures-ahead .hm-cell {
+  height: auto;
+  min-height: 34px;
+  padding: 4px 2px;
+  font-size: 11px;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.fixtures-ahead .hm-who {
+  color: var(--text);
+  font-weight: 500;
+}

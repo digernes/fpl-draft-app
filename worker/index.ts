@@ -9,6 +9,7 @@
 //   /poll/…                  a head-to-head's Who will win? votes, and a vote (poll.ts)
 //   /in-play/<season>/<gw>   each head-to-head's live win chance, recorded every minute while
 //                            the gameweek's matches are on (in-play.ts)
+//   /bets/…                  fake-money betting: accounts, bets and the leaderboard (bets.ts)
 //
 // Its timer fires every minute: it records the win chance when a match is on (in-play.ts)
 // and starts the data build on its own cadence and after transfers (timer.ts). Deploy with
@@ -20,6 +21,7 @@ import type { PlMoment } from '../src/shared/data.ts';
 import { ElementStatus, LiveFeed, PlEvents, Trades, Transactions } from '../src/shared/fpl-api.ts';
 import { momentsOf } from '../src/shared/match-stats.ts';
 import { slimTransfers } from '../src/shared/transfers.ts';
+import { betsRoute, type BetsEnv } from './bets.ts';
 import { fplGet, LIVE_SECONDS, recentFixtures, slimFeed, Upstream } from './feed.ts';
 import { parseInPlayPath, recordMinute, type InPlayEnv } from './in-play.ts';
 import { pollRoute, type PollEnv } from './poll.ts';
@@ -31,14 +33,15 @@ const IN_PLAY_SECONDS = 30; // a minute's record, give or take
 const HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-  'Access-Control-Allow-Headers': 'Content-Type',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
 };
 
 // The Durable Object classes, which Cloudflare finds among the main module's exports.
 export { Poll } from './poll.ts';
 export { InPlay } from './in-play.ts';
+export { Book } from './bets.ts';
 
-interface Env extends TimerEnv, PollEnv, InPlayEnv {
+interface Env extends TimerEnv, PollEnv, InPlayEnv, BetsEnv {
   /** The one league /transfers answers for (wrangler.toml). */
   LEAGUE_ID?: string;
 }
@@ -64,6 +67,7 @@ export default {
     if (request.method === 'OPTIONS') return new Response(null, { headers: HEADERS });
     const url = new URL(request.url);
     if (url.pathname.startsWith('/poll/')) return pollRoute(request, env, url.pathname, HEADERS);
+    if (url.pathname.startsWith('/bets/')) return betsRoute(request, env, url.pathname, HEADERS);
     const gw = url.pathname.match(/^\/live\/([1-9]|[12]\d|3[0-8])$/)?.[1];
     const inPlay = parseInPlayPath(url.pathname);
     const route = gw ? 'live' : url.pathname === '/transfers' ? 'transfers' : inPlay && env.IN_PLAY ? 'in-play' : null;

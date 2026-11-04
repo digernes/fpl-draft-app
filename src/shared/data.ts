@@ -44,6 +44,8 @@ export interface Data {
   asScored?: ById<ById<number[]>>;
   /** The real Premier League's matches, the whole season's, in kick-off order. Missing from older archives. */
   plMatches?: PlMatch[];
+  /** The model's club ratings before the next gameweek, for the Premier League's Team stats. Missing before any gameweek is played, and from older archives. */
+  clubStrength?: ClubStrength;
   /** While a gameweek is being played: its live feed, so the page can tell who is still to play. */
   live?: LiveData;
   /** FPL's chance of playing at each deadline for everyone it flagged (doubtful, injured or suspended), by gameweek: kept to test how the model reads flags. */
@@ -106,6 +108,23 @@ export interface Club {
   logo: string;
   /** Home shirt and trim colours, or null when unknown. */
   kit: [string, string] | null;
+}
+
+/**
+ * The expected-points model's ratings of the clubs (src/model/teams.ts): a club's expected
+ * goals against an opponent are exp(base + home + its attack − the opponent's defence).
+ */
+export interface ClubStrength {
+  /** The gameweek they were fitted for. */
+  gw: number;
+  base: number;
+  home: number;
+  /** Club → its attack and defence, on the log scale. */
+  ratings: ById<[number, number]>;
+  /** How spread out a match's goals are around their expectation: a negative binomial's size, as the model's clean sheets take it. */
+  size: number;
+  /** Club → its matches, xG and xG against this season, as the ratings read them. */
+  season: ById<[number, number, number]>;
 }
 
 export interface Gameweek {

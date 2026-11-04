@@ -45,3 +45,20 @@ interface DurableObjectStorage {
 interface DurableObjectState {
   readonly storage: DurableObjectStorage;
 }
+
+// A SQLite-backed object's database (bets.ts): exec runs one statement with its bindings.
+type SqlStorageValue = string | number | null | ArrayBuffer;
+
+interface SqlStorageCursor<T> {
+  toArray(): T[];
+  /** The one row, or an error when there isn't exactly one. */
+  one(): T;
+}
+
+interface SqlStorage {
+  exec<T = Record<string, SqlStorageValue>>(query: string, ...bindings: unknown[]): SqlStorageCursor<T>;
+}
+
+interface SqlDurableObjectState {
+  readonly storage: { readonly sql: SqlStorage };
+}

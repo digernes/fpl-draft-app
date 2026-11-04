@@ -53,6 +53,7 @@ export function oddsModel(season: Season, managerIds: number[], scoresByGw: Scor
     fromFpl: model === null,
     parts: model?.parts,
     partsNow: model?.partsNow,
+    clubStrength: model?.strength,
     /** The site's for the gameweeks after the next that the page shows (PROJECTED_GAMEWEEKS). */
     ahead: model ? priced.slice(1, PROJECTED_GAMEWEEKS).flatMap((gw) => forecasts.get(gw) ?? []) : [],
     /** The site's for everyone over the next STATS_GAMEWEEKS, for the Premier League's Player stats. */

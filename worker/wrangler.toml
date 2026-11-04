@@ -23,6 +23,11 @@ class_name = "Poll"
 name = "IN_PLAY"
 class_name = "InPlay"
 
+# Fake-money betting's accounts and bets: one Durable Object, the book (bets.ts), SQLite-backed.
+[[durable_objects.bindings]]
+name = "BETS"
+class_name = "Book"
+
 [[migrations]]
 tag = "v1"
 new_sqlite_classes = ["Poll"]
@@ -30,6 +35,10 @@ new_sqlite_classes = ["Poll"]
 [[migrations]]
 tag = "v2"
 new_sqlite_classes = ["InPlay"]
+
+[[migrations]]
+tag = "v3"
+new_sqlite_classes = ["Book"]
 
 # Every minute: in-play.ts records the win chance when a match is on, and timer.ts decides
 # which of every tenth minute's firings start a build.

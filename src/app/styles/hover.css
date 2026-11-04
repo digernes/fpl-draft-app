@@ -58,7 +58,19 @@
     opacity: 0.75;
   }
 
-  .ps-sort:not(.on):hover {
+  .bet-odd[aria-pressed='false']:hover,
+  .odd.pick[aria-pressed='false']:hover,
+  .bsp-close:hover,
+  .bet-button:not(.primary):not(:disabled):hover {
+    background: var(--hover);
+  }
+
+  .bet-link:hover {
+    text-decoration: underline;
+  }
+
+  .ps-sort:not(.on):hover,
+  .th-sort[aria-pressed='false']:hover {
     color: var(--text);
   }
 

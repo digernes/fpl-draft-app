@@ -33,6 +33,7 @@ describe('router', () => {
     assert.deepEqual(parseRoute('#/premier-league/players'), { page: 'pl', tab: 'players', id: undefined });
     assert.deepEqual(parseRoute('#/premier-league/players/14'), { page: 'pl', tab: 'players', id: 14 });
     assert.equal(href.pl('players', 14), '#/premier-league/players/14');
+    assert.deepEqual(parseRoute(href.pl('team-stats')), { page: 'pl', tab: 'team-stats', gw: undefined });
     assert.deepEqual(parseRoute('#/team/123/squad'), { page: 'team', tab: 'squad', id: 123 });
     assert.deepEqual(parseRoute('#/match/9/1-2/stats'), { page: 'match', tab: 'stats', gw: 9, home: 1, away: 2 });
     assert.deepEqual(parseRoute('#/transfers'), { page: 'transfers', tab: '' });

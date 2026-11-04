@@ -11,8 +11,11 @@ export const LIVE_REFRESH_MS = 2 * 60 * 1000; // data.json itself changes about 
 // Worker (worker/), because browsers can't call the FPL API. Leave empty to rely on
 // data.json, which the scheduled job refreshes every 10 minutes during matches. ?relay=off
 // does that for one visit, to try a gameweek faked by scripts/fake-live.ts.
+// ?relay=local uses one on this computer (a Worker under development), and never anywhere
+// else: the betting's PINs go to the relay.
+const RELAY = new URLSearchParams(location.search).get('relay');
 export const LIVE_URL: string =
-  new URLSearchParams(location.search).get('relay') === 'off' ? '' : 'https://fpl-draft-live.digernes.workers.dev';
+  RELAY === 'off' ? '' : RELAY === 'local' ? 'http://localhost:8787' : 'https://fpl-draft-live.digernes.workers.dev';
 export const LIVE_POLL_MS = 30 * 1000; // while Premier League matches are on
 export const LIVE_IDLE_MS = 5 * 60 * 1000; // between the match days of a live gameweek
 export const TRANSFERS_POLL_MS = 2 * 60 * 1000; // new moves between builds, from the relay
@@ -60,6 +63,11 @@ export const state = {
   playersPos: 'all', // the Premier League's season of player stats: a position, or 'all'
   playersOwner: 'all', // and whose: 'all', 'free' (the free agents) or a manager's id
   playersAll: false, // all of them, rather than the first 50
+  plTeamSort: 'diff', // the Premier League's team strength: the column it's sorted by, best first unless plTeamFlip
+  plTeamFlip: false,
+  plFixtures: 'goals', // its fixtures ahead, shaded by the 'goals' each club can expect or its chance of a 'clean' sheet
+  plFixturesSort: 'total', // sorted by the whole run ('total') or one gameweek of it, most first unless plFixturesFlip
+  plFixturesFlip: false,
   commentaryBench: false, // a head-to-head's commentary: the benches' players too
   momentumView: 'chance', // a head-to-head's momentum: each side's 'chance' of winning (the default) or the 'lead'
   season: null as string | null, // slug of an archived season being viewed, e.g. "2025-26"; null = current

@@ -1,9 +1,10 @@
 // The page's addresses, as fotmob.com's: the home page at #/, then a page per league,
 // team, match and player, each with its tabs, like #/league/table, #/team/123/squad,
-// #/match/9/123-456, #/premier-league/match/81/player-stats and #/player/351. Links from
+// #/match/9/123-456, #/premier-league/match/81/player-stats and #/player/351, and the
+// betting at #/bets. Links from
 // before the pages (#table, #squads/123) still land where they used to.
 
-export type Page = 'home' | 'league' | 'pl' | 'transfers' | 'teams' | 'team' | 'match' | 'pl-match' | 'player';
+export type Page = 'home' | 'league' | 'pl' | 'transfers' | 'teams' | 'team' | 'match' | 'pl-match' | 'player' | 'bets';
 
 export interface Route {
   page: Page;
@@ -21,10 +22,11 @@ export interface Route {
 }
 
 export const LEAGUE_TABS = ['overview', 'table', 'fixtures', 'stats', 'transfer-stats', 'draft'] as const;
-export const PL_TABS = ['overview', 'fixtures', 'table', 'players'] as const;
+export const PL_TABS = ['overview', 'fixtures', 'table', 'players', 'team-stats'] as const;
 export const TEAM_TABS = ['overview', 'squad', 'fixtures', 'transfers', 'stats'] as const;
 export const MATCH_TABS = ['facts', 'commentary', 'lineup', 'table', 'stats', 'h2h'] as const;
 export const PL_MATCH_TABS = ['facts', 'player-stats'] as const;
+export const BETS_TABS = ['bet', 'leaderboard', 'feed'] as const;
 
 const num = (s: string | undefined) => (s && /^\d+$/.test(s) ? Number(s) : undefined);
 const tabOf = (tabs: readonly string[], s: string | undefined) => (s && tabs.includes(s) ? s : tabs[0]);
@@ -66,6 +68,8 @@ export function parseRoute(hash: string): Route {
       return { page: 'transfers', tab: '' };
     case 'teams':
       return { page: 'teams', tab: '' };
+    case 'bets':
+      return { page: 'bets', tab: tabOf(BETS_TABS, a) };
     case 'team':
       if (num(a)) return { page: 'team', tab: tabOf(TEAM_TABS, b), id: num(a) };
       break;
@@ -93,6 +97,7 @@ export const href = {
     `#/premier-league${tab === 'overview' && arg == null ? '' : `/${tab}`}${arg != null ? `/${arg}` : ''}`,
   transfers: () => '#/transfers',
   teams: () => '#/teams',
+  bets: (tab = 'bet') => `#/bets${tabPath(tab, 'bet')}`,
   team: (id: number, tab = 'overview') => `#/team/${id}${tabPath(tab, 'overview')}`,
   match: (m: { gw: number; home: number; away: number }, tab = 'facts') => `#/match/${m.gw}/${m.home}-${m.away}${tabPath(tab, 'facts')}`,
   plMatch: (id: number, tab = 'facts') => `#/premier-league/match/${id}${tabPath(tab, 'facts')}`,

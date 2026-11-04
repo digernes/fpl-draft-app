@@ -122,6 +122,7 @@ const data: Data = {
   events: buildEvents(season, lineups),
   ...buildUnderlying(season, lineups),
   plMatches: buildPlMatches(season, formations),
+  clubStrength: model.clubStrength,
   flags: deadlineFlags(season, previous),
   live: buildLiveData(
     season,

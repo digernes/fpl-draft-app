@@ -60,3 +60,19 @@
     padding: 12px 24px;
   }
 }
+
+/* A line or two above a card's table that says what it shows. */
+.card-intro {
+  margin: 0;
+  padding: 0 16px 12px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+@media (min-width: 992px) {
+  .card-intro {
+    padding-right: 24px;
+    padding-left: 24px;
+  }
+}

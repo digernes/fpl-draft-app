@@ -10,9 +10,10 @@ export function onAction(name: string, handler: Handler) {
   handlers.set(name, handler);
 }
 
-/** Runs the action of the element clicked (or the picker changed, with its choice), if it has one; false if it doesn't. */
+/** Runs the action of the element clicked (or the picker changed, or the field typed in, with its value), if it has one; false if it doesn't. */
 export function runAction(target: HTMLElement): boolean {
   const handler = handlers.get(target.dataset.action ?? '');
-  handler?.(target instanceof HTMLSelectElement ? target.value : (target.dataset.value ?? ''), target);
+  const field = target instanceof HTMLSelectElement || target instanceof HTMLInputElement;
+  handler?.(field ? target.value : (target.dataset.value ?? ''), target);
   return Boolean(handler);
 }

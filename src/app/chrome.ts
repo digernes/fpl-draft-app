@@ -2,6 +2,7 @@
 // action the element clicked registered (actions.ts). It binds the search and the tooltips.
 
 import { onAction, runAction } from './actions.ts';
+import { saveTeam } from './betting.ts';
 import { alignHead, alignHeads } from './components.ts';
 import { applyLatestLive, applyLatestTransfers, loadData, pollTransfers, scheduleRefresh } from './live-scores.ts';
 import { seasonSlug } from './lookups.ts';
@@ -86,6 +87,7 @@ onAction('open', (value) => navigate(value));
 onAction('follow', (value) => {
   state.myTeam = state.myTeam === Number(value) ? null : Number(value);
   store.set('draft.myTeam', state.myTeam ? String(state.myTeam) : '');
+  saveTeam();
   renderView();
 });
 
@@ -97,7 +99,7 @@ function onClick(event: MouseEvent) {
   if (event.target instanceof HTMLDialogElement) return event.target.close();
   const target = (event.target as Element).closest<HTMLElement>('[data-action]');
   const link = (event.target as Element).closest('a[href]');
-  if (!target || target.tagName === 'SELECT' || linkWins(target, link)) return;
+  if (!target || target.tagName === 'SELECT' || target.tagName === 'INPUT' || linkWins(target, link)) return;
   if (link && link !== target) event.preventDefault(); // inside a link, the action wins
   runAction(target);
 }
@@ -120,6 +122,13 @@ function bindDocument() {
     if (select.matches('[data-action="season"]')) switchSeason(select.value);
     else if (select.matches('select[data-action]')) runAction(select);
   });
+  // A field with an action runs it as it's typed in (the betslip's stake, the sign-in's name).
+  document.addEventListener(
+    'input',
+    (event) => (event.target as Element).matches('input[data-action]') && runAction(event.target as HTMLElement),
+  );
+  // Enter in a form clicks its first button, which has the action: the page itself never goes anywhere.
+  document.addEventListener('submit', (event) => event.preventDefault());
   // Scrolls don't bubble: a table's rows scrolled sideways, for its header to follow.
   document.addEventListener(
     'scroll',

@@ -26,6 +26,8 @@ export interface Teams {
   rate(club: number, opp: number, home: boolean): number;
   attack: Map<number, number>;
   defence: Map<number, number>;
+  /** On the log scale: a club's goals in a match are exp(base + home + attack − the opponent's defence). */
+  base: number;
   home: number;
 }
 
@@ -59,5 +61,5 @@ export function fitTeams(matches: ClubMatch[], o: TeamOptions): Teams {
     for (const c of clubs) attack.set(c, step(attacking.get(c)!, 1, attack.get(c) ?? 0, o.prior, o.centre?.attack.get(c)));
     for (const c of clubs) defence.set(c, step(defending.get(c)!, -1, defence.get(c) ?? 0, o.prior, o.centre?.defence.get(c)));
   }
-  return { rate, attack, defence, home };
+  return { rate, attack, defence, base, home };
 }

@@ -149,6 +149,22 @@
   color: var(--odds-label);
 }
 
+/* A price that puts itself on the betslip (bet-slip.ts), and the one that's on it. */
+.odd.pick {
+  border: 0;
+  color: inherit;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.odd.pick[aria-pressed='true'],
+.odd.pick[aria-pressed='true'] .odd-label,
+.odd.pick[aria-pressed='true'] .odd-price {
+  background: var(--brand-solid);
+  color: #fff;
+}
+
 /* Settled after full time, as on fotmob.com: losing selections grey, price struck through. */
 .odd.lost .odd-label,
 .odd.lost .odd-price {

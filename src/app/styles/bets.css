@@ -1,0 +1,423 @@
+/* --- Bets ----------------------------------------------------------------------- */
+/* The betting page: the matches with their prices as fotmob.com's odds, the sign-in form,
+   the betslip, and the bets as rows. */
+
+.bets-logo {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: var(--brand-solid);
+  color: #fff;
+}
+
+.bets-logo svg {
+  width: 22px;
+  height: 22px;
+}
+
+@media (min-width: 992px) {
+  .bets-logo {
+    width: 56px;
+    height: 56px;
+  }
+
+  .bets-logo svg {
+    width: 28px;
+    height: 28px;
+  }
+}
+
+.bet-matches {
+  display: grid;
+}
+
+.bet-match {
+  display: grid;
+  gap: 10px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--divider);
+}
+
+.bet-match:first-child {
+  border-top: 0;
+}
+
+.bet-teams {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.bet-side {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bet-side > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bet-side.away {
+  flex-direction: row-reverse;
+}
+
+.bet-score {
+  color: var(--text-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.bet-odds {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.bet-odd {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 36px;
+  border-radius: 7px;
+  background: var(--odds-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bet-odd .odd-label {
+  color: var(--odds-label);
+  font-weight: 500;
+}
+
+.bet-odd[aria-pressed='true'],
+.bet-odd[aria-pressed='true'] .odd-label,
+.bet-odd[aria-pressed='true'] .odd-price {
+  background: var(--brand-solid);
+  color: #fff;
+}
+
+.bet-closed,
+.bet-hint {
+  margin: 0;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+/* The sign-in form, the slip and what came of them. */
+.bet-form,
+.bet-slip {
+  display: grid;
+  gap: 12px;
+  padding: 0 16px 16px;
+}
+
+.bet-form {
+  gap: 16px;
+  padding-top: 12px;
+}
+
+.bet-field,
+.bet-stake {
+  display: grid;
+  gap: 6px;
+}
+
+.bet-label,
+.bet-stake {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bet-help {
+  color: var(--text-2);
+  font-size: 12px;
+  line-height: 16px;
+}
+
+.bet-help:empty {
+  display: none;
+}
+
+.bet-field input,
+.bet-stake input {
+  height: 44px;
+  padding: 0 14px;
+  border: 1px solid transparent;
+  border-radius: 10px;
+  background: var(--search-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 16px; /* under 16px, iOS zooms in on the field */
+  font-weight: 400;
+}
+
+.bet-field input::placeholder,
+.bet-stake input::placeholder {
+  color: var(--text-3);
+}
+
+#bet-pin {
+  letter-spacing: 0.3em;
+}
+
+.bet-field input:focus,
+.bet-stake input:focus {
+  border-color: var(--brand-solid);
+  outline: none;
+}
+
+.bet-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 40px;
+  border: 1px solid var(--chip-border);
+  border-radius: 20px;
+  background: var(--chip-bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.bet-button.primary {
+  border-color: transparent;
+  background: var(--brand-solid);
+  color: #fff;
+}
+
+.bet-button:disabled {
+  opacity: 0.5;
+}
+
+.bet-link {
+  padding: 0;
+  color: var(--brand);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.bet-note {
+  margin: 0;
+  padding: 0 16px 16px;
+  color: var(--lose);
+  font-size: 13px;
+}
+
+.bet-form .bet-note {
+  padding: 0;
+}
+
+.bet-balance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  padding: 12px 16px 16px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.bet-balance b {
+  color: var(--text);
+  font-size: 16px;
+}
+
+.bet-slip-pick {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 15px;
+}
+
+.bet-slip-price {
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.bet-slip-match {
+  margin-top: -8px;
+  color: var(--text-2);
+  font-size: 13px;
+}
+
+.bet-quick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.bet-returns {
+  min-height: 18px;
+  color: var(--text-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* The betslip, over the foot of every page once a price is tapped: at the bottom right from
+   769px, above the bottom bar on a phone. The page makes room for it under its end. */
+.bet-slip-panel {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 30;
+  width: 340px;
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+  border: 1px solid var(--card-border);
+  border-radius: 16px;
+  background: var(--card);
+  box-shadow: var(--shadow);
+}
+
+#app:has(.bet-slip-panel) {
+  padding-bottom: 340px;
+}
+
+@media (max-width: 768px) {
+  .bet-slip-panel {
+    right: 8px;
+    bottom: calc(68px + env(safe-area-inset-bottom, 0px));
+    left: 8px;
+    width: auto;
+    max-height: calc(100vh - 140px);
+  }
+}
+
+.bsp-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 8px 8px 16px;
+}
+
+.bsp-title {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.bsp-close {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: var(--text-2);
+  font-size: 22px;
+  line-height: 1;
+}
+
+.bet-placed {
+  margin: 0;
+  color: var(--win);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.bet-placed::before {
+  content: '✓ ';
+}
+
+.bet-how {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0 16px 16px 32px;
+  color: var(--text-2);
+  font-size: 13px;
+  line-height: 18px;
+}
+
+/* A bet as a row: the pick and price, the match, the stake and what came of it. */
+.bet-rows {
+  display: grid;
+}
+
+.bet-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-areas:
+    'what result'
+    'where stakes';
+  align-items: center;
+  gap: 4px 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--divider);
+  font-size: 13px;
+}
+
+.bet-row:first-child {
+  border-top: 0;
+}
+
+.bet-row:has(.bet-who) {
+  grid-template-areas:
+    'who result'
+    'what stakes'
+    'where where';
+}
+
+.bet-who {
+  grid-area: who;
+  font-weight: 600;
+}
+
+.bet-what {
+  grid-area: what;
+}
+
+.bet-where {
+  grid-area: where;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.bet-where .av + :not(.av) {
+  margin-left: 4px;
+}
+
+.bet-stakes {
+  grid-area: stakes;
+  justify-self: end;
+  color: var(--text-2);
+  font-size: 12px;
+}
+
+.bet-result {
+  grid-area: result;
+  justify-self: end;
+  font-weight: 600;
+}
+
+.bet-result.open {
+  color: var(--text-2);
+}
+
+.bet-result.won {
+  color: var(--win);
+}
+
+.bet-result.lost {
+  color: var(--lose);
+}
+
+.bet-leader {
+  font-weight: 500;
+}
