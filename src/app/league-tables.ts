@@ -26,12 +26,18 @@ const standingsCols = ({ compact = false }: TableExtras, live: boolean): Column<
     numCol('W', (r) => r.won, 'lg'),
     numCol('D', (r) => r.drawn, 'lg'),
     numCol('L', (r) => r.lost, 'lg'),
-    { label: '+/-', w: '64px', from: formMode ? 'md' : 'sm', tip: 'Points scored – conceded', cell: (r) => `${r.pf}-${r.pa}` },
-    // The narrowest table has points scored, the tiebreaker, where wider ones have the difference beside +/-.
-    ...(formMode
-      ? []
-      : [{ label: 'PF', w: '40px', until: 'xs', tip: 'Points scored', cell: (r: StandingRow) => r.pf } as Column<StandingRow>]),
-    { label: 'GD', w: '36px', from: formMode ? 'md' : 'sm', tip: 'Points difference', cell: (r) => signed(r.pf - r.pa) },
+    // Points scored decide a tie on points, so they stand out as the points do; what was
+    // conceded and the difference, which decide nothing, are greyed. The narrowest has only them.
+    {
+      label: 'PF',
+      w: '40px',
+      from: formMode ? 'md' : undefined,
+      cls: 'c-pf',
+      tip: 'Points scored, which decide a tie on points',
+      cell: (r) => r.pf,
+    },
+    { label: 'PA', w: '40px', from: formMode ? 'md' : 'sm', cls: 'c-minor', tip: 'Points conceded', cell: (r) => r.pa },
+    { label: 'GD', w: '36px', from: formMode ? 'md' : 'sm', cls: 'c-minor', tip: 'Points difference', cell: (r) => signed(r.pf - r.pa) },
     { label: 'PTS', w: '30px', cls: 'c-pts', cell: (r) => r.pts },
     { label: 'Form', w: FORM_WIDTH, from: formMode ? 'xs' : 'md', cls: 'c-form', cell: (r) => formPills(r.form) },
     { label: 'Next', w: '28px', from: 'lg', cell: nextLink },

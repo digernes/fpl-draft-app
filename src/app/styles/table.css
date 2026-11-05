@@ -51,8 +51,13 @@
 }
 
 .c-pos,
-.c-pts {
+.c-pts,
+.c-pf {
   font-weight: 500;
+}
+
+.trow:not(.thead) .c-minor {
+  color: var(--text-2);
 }
 
 .c-team,

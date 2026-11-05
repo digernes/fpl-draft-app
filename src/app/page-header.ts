@@ -1,6 +1,6 @@
 // The card at the top of every page but the home page, as on fotmob.com: a logo, the
 // page's name and what it is, anything that goes on the right (status chips, a Follow
-// button), and the page's tabs with a bar under the one picked. A match has its own
+// button), anything under that in the same card (a player's facts), and the page's tabs with a bar under the one picked. A match has its own
 // middle instead (the sides and the score).
 
 import { esc } from './format.ts';
@@ -20,6 +20,8 @@ export interface Header {
   side?: string;
   /** In place of the logo, title, sub and side. */
   poster?: string;
+  /** Under the poster, in the same card: a player's facts, as on fotmob.com. */
+  foot?: string;
   tabs?: Tab[];
   tab?: string;
   cls?: string;
@@ -36,5 +38,5 @@ export function pageHeader(h: Header) {
         .map((t) => `<a class="tab" role="tab" href="${esc(t.href)}" aria-selected="${t.id === h.tab}">${t.label}</a>`)
         .join('')}<span class="tab-indicator"></span></nav>`
     : '';
-  return `<section class="page-header ${h.cls ?? ''}"><div class="poster">${poster}</div>${tabs}</section>`;
+  return `<section class="page-header ${h.cls ?? ''}"><div class="poster">${poster}</div>${h.foot ?? ''}${tabs}</section>`;
 }

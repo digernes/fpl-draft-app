@@ -1,5 +1,6 @@
 // A player's page: everything the draft league has done with him, after fotmob.com's
-// player pages. His season in numbers; one timeline of it all, the latest first: every
+// player pages. The header in his owner's colour (as fotmob.com's is in his club's), with
+// his facts under it and his position on a pitch. His season in numbers; one timeline of it all, the latest first: every
 // gameweek he was in a squad (his match, his points, whether he started, sat on the bench
 // or was swapped automatically), every claim, move and trade, each spell as a free agent
 // in one line, and the draft; what he scored for each owner; his next matches; and the
@@ -11,9 +12,9 @@ import {
   avatar,
   card,
   crest,
+  cutout,
   empty,
   listRow,
-  photo,
   playerName,
   playerPhoto,
   ptsPill,
@@ -23,8 +24,8 @@ import {
   xpPill,
 } from '../components.ts';
 import { eventRow } from '../event-icons.ts';
-import { esc, fmtShortDay, ordinal, plural, sum } from '../format.ts';
-import { club, first, isArchive, liveParts, liveXp, mgr, nextParts, nextXp, opponents, partsAt, player, xpAt } from '../lookups.ts';
+import { esc, fmtDate, fmtShortDay, ordinal, plural, sum } from '../format.ts';
+import { club, first, isArchive, liveParts, liveXp, mgr, nextParts, nextXp, opponents, partsAt, player, slotOf, xpAt } from '../lookups.ts';
 import { projectedPill } from '../match-odds.ts';
 import { playerHistory, type History, type Spell, type StoryEvent, type Week } from '../player-history.ts';
 import { clubMatches, lineEvents, linesIn, plState } from '../pl.ts';
@@ -41,24 +42,97 @@ export function pagePlayer(route: Route): PageView {
   const p = player(pid);
   if (!p) return { title: 'Player', body: card({ body: empty('No such player this season') }) };
   const h = playerHistory(D, pid);
+  // Whose he is, where fotmob.com has its Follow button.
   const owner = p.owner
     ? `<a class="owner-chip" href="${href.team(p.owner)}">${avatar(p.owner, 24)}<span>${first(p.owner)}</span></a>`
-    : tag('Free agent');
+    : '<span class="owner-chip free">Free agent</span>';
   const news = p.status !== 'a' ? `<div class="player-news">${tag('!', '', 'tag-flag')} ${esc(p.news || 'Flagged by FPL')}</div>` : '';
   return {
     title: p.name,
     header: {
-      logo: photo(pid, 64),
-      // Whose he is, beside his name.
-      title: `<span>${esc(p.full)}</span>${owner}`,
-      sub: `<a class="club-link" href="${href.pl('players', p.club)}">${crest(p.club, 16)} ${esc(club(p.club)?.name ?? '')}</a> · ${POSITIONS[p.pos]}`,
-      cls: 'player-header',
+      logo: cutout(pid),
+      title: esc(p.full),
+      // His club, and the draft team he's in.
+      sub: `<a class="club-link" href="${href.pl('players', p.club)}">${crest(p.club, 20)} ${esc(club(p.club)?.name ?? '')}</a>${
+        mgr(p.owner) ? `<a class="club-link" href="${href.team(p.owner!)}">${avatar(p.owner, 18)} ${esc(mgr(p.owner)!.team)}</a>` : ''
+      }`,
+      side: owner,
+      foot: bio(p, h),
+      cls: `player-header m${mgr(p.owner) ? slotOf(p.owner!) : 0}`,
     },
     body: `${news}<div class="cols">
       <div class="col">${seasonCard(pid, p)}${timelineCard(pid, p, h)}</div>
       <div class="col">${ownersCard(h)}${draftCard(h)}${nextCard(pid, p)}${similarCard(pid, p)}</div>
     </div>`,
   };
+}
+
+// --- His facts, under the header ----------------------------------------------------------
+
+// As fotmob.com's: a value over what it is, two to a row, and beside them his position on a
+// pitch. What FPL doesn't have (an archived season's players have none of it) is left out.
+function bio(p: Player, h: History) {
+  const fact = (value: string, label: string) =>
+    `<div class="bio-fact"><div class="bio-value">${value}</div><div class="bio-label">${label}</div></div>`;
+  const facts = [
+    p.born && fact(`${yearsOld(p.born)} years`, fmtDate.format(dateOf(p.born))),
+    p.nation && fact(`${flag(p.nation[1])}${esc(p.nation[0])}`, 'Country'),
+    p.joined && fact(fmtDate.format(dateOf(p.joined)), `Joined ${esc(club(p.club)?.name ?? 'his club')}`),
+    ownerFact(p, h, fact),
+  ].filter(Boolean);
+  return `<div class="player-bio">
+    <div class="bio-facts">${facts.join('')}</div>
+    <div class="bio-position">
+      <div class="bio-position-text"><div class="bio-heading">Position</div><div class="bio-label">Primary</div><div class="bio-value">${POSITIONS[p.pos]}</div></div>
+      ${positionPitch(p.pos)}
+    </div>
+  </div>`;
+}
+
+// Whose he is and since when: the draft, or the gameweek he was signed or let go. Moves
+// still to come split a spell, so it starts at the first of the owner's in a row.
+function ownerFact(p: Player, h: History, fact: (value: string, label: string) => string) {
+  let i = h.spells.length - 1;
+  while (i > 0 && h.spells[i - 1].owner === p.owner) i--;
+  const never = !p.owner && !h.pick && h.spells.every((s) => s.owner === null);
+  const drafted = p.owner && i === 0 && h.pick?.manager === p.owner;
+  const since = never ? 'Never in a squad' : drafted ? 'Since the draft' : h.spells[i] ? `Since gameweek ${h.spells[i].from}` : 'Owner';
+  if (!p.owner) return fact('Free agent', since);
+  return fact(`<a href="${href.team(p.owner)}">${avatar(p.owner, 18)}${esc(mgr(p.owner)!.team)}</a>`, since);
+}
+
+// The FPL position's place on a pitch, attacking upwards, as fotmob.com marks his.
+const SPOTS = { GKP: ['GK', 88], DEF: ['DEF', 70], MID: ['MID', 47], FWD: ['FWD', 18] } as const;
+
+function positionPitch(pos: Player['pos']) {
+  const [label, y] = SPOTS[pos];
+  return `<div class="bio-pitch" role="img" aria-label="${POSITIONS[pos]}">
+    <svg viewBox="0 0 136 184" aria-hidden="true"><rect x="0.5" y="0.5" width="135" height="183" rx="6"/><path d="M0.5 92H135.5M38 0.5V26H98V0.5M38 183.5V158H98V183.5M54 0.5V9H82V0.5M54 183.5V175H82V183.5"/><circle cx="68" cy="92" r="16"/></svg>
+    <span class="bio-spot" style="top:${y}%">${label}</span>
+  </div>`;
+}
+
+// Dates FPL gives as YYYY-MM-DD, at noon UTC so no time zone moves them a day.
+const dateOf = (day: string) => new Date(`${day}T12:00:00Z`);
+
+export function yearsOld(born: string, now = new Date()) {
+  const b = dateOf(born);
+  const birthday = now.getUTCMonth() > b.getUTCMonth() || (now.getUTCMonth() === b.getUTCMonth() && now.getUTCDate() >= b.getUTCDate());
+  return now.getUTCFullYear() - b.getUTCFullYear() - (birthday ? 0 : 1);
+}
+
+// A country's flag from its code: two regional-indicator letters, or for England, Scotland
+// and Wales their own (FPL's EN, S1 and WA). Northern Ireland has none.
+const HOME_NATIONS: Record<string, string> = { EN: 'eng', S1: 'sct', WA: 'wls' };
+
+export function flag(code: string) {
+  const nation = HOME_NATIONS[code];
+  const emoji = nation
+    ? String.fromCodePoint(0x1f3f4, ...[...`gb${nation}`].map((c) => 0xe0000 + c.charCodeAt(0)), 0xe007f)
+    : /^[A-Z]{2}$/.test(code) && code !== 'NN'
+      ? String.fromCodePoint(...[...code].map((c) => 0x1f1a5 + c.charCodeAt(0)))
+      : '';
+  return emoji ? `<span class="flag" aria-hidden="true">${emoji}</span>` : '';
 }
 
 // His season so far, as fotmob.com's season stats: points, goals and assists, each over

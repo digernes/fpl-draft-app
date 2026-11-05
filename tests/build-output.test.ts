@@ -52,6 +52,15 @@ describe('players', () => {
     assert.equal(players[61].pts, undefined); // nobody's ever wanted him
   });
 
+  it('says where he’s from, when he was born and when he joined his club, from the main game', () => {
+    assert.deepEqual([players[13].born, players[13].nation, players[13].joined], ['2000-07-21', ['Norway', 'NO'], '2022-07-01']);
+    assert.deepEqual(players[14].nation, ['England', 'EN']);
+    // A country regions/ doesn't list, or nothing from the main game at all, leaves them out.
+    assert.ok(!('nation' in players[15]) && !('born' in players[15]));
+    const without = build({ noFplBoot: true });
+    assert.ok(!('nation' in buildPlayers(without.season, drafted, without.lineups, () => 0)[13]));
+  });
+
   it('sums the season’s xG, xA and expected points over the finished gameweeks he played', () => {
     const [xg, xa, xp] = players[13].xs!;
     assert.equal(xg, 0.85); // a goal's 0.55 in the first, 0.3 in the second

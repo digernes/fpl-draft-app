@@ -31,6 +31,7 @@ export function buildPlayers(
   // Those FPL added after the draft: from the first gameweek whose deadline came after.
   const draftEnd = Math.max(0, ...season.choices.map((c) => Date.parse(c.choice_time ?? '') || 0));
   const firstGwAfter = (iso: string) => season.events.find((e) => Date.parse(e.deadline_time) > Date.parse(iso))?.id;
+  const details = playerDetails(season);
   const players: ById<Player> = {};
   for (const el of [...elements.values()].sort((a, b) => a.id - b.id)) {
     const pid = el.id;
@@ -47,6 +48,7 @@ export function buildPlayers(
       status: el.status,
       ...(el.added && draftEnd && Date.parse(el.added) > draftEnd ? { added: firstGwAfter(el.added) } : {}),
       ...(el.news ? { news: el.news } : {}),
+      ...details(el.code),
       ep: round(expected(pid), 1),
       ...(fpl ? { fpl: round(fpl(pid), 1) } : {}),
       ...withParts(ownerNow.has(pid) && round(expected(pid), 1) > 0 ? parts?.(pid) : undefined),
@@ -61,6 +63,22 @@ export function buildPlayers(
     };
   }
   return players;
+}
+
+// Where he's from, when he was born and when he joined his club: only FPL's main game has
+// them, by player code.
+function playerDetails({ fplBoot, fplRegions }: Pick<Season, 'fplBoot' | 'fplRegions'>) {
+  const regions = new Map((fplRegions ?? []).map((r) => [r.id, [r.name, r.iso_code_short] as [string, string]]));
+  const byCode = new Map((fplBoot?.elements ?? []).map((el) => [el.code, el]));
+  return (code: number): Pick<Player, 'born' | 'nation' | 'joined'> => {
+    const el = byCode.get(code);
+    const nation = el?.region ? regions.get(el.region) : undefined;
+    return {
+      ...(el?.birth_date ? { born: el.birth_date } : {}),
+      ...(nation ? { nation } : {}),
+      ...(el?.team_join_date ? { joined: el.team_join_date } : {}),
+    };
+  };
 }
 
 // The season's underlying numbers, summed over the finished gameweeks he played in.

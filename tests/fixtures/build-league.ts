@@ -487,6 +487,10 @@ export function responses({ noFplBoot = false, preseason = false }: Options = {}
       { ...fixtureJson(699, 6, 1, 3, 'future'), event: null }, // not scheduled yet
     ],
   };
+  out['https://fantasy.premierleague.com/api/regions/'] = [
+    { id: 161, name: 'Norway', code: 161, iso_code_short: 'NO', iso_code_long: 'NOR' },
+    { id: 241, name: 'England', code: 241, iso_code_short: 'EN', iso_code_long: 'ENG' },
+  ];
   if (!noFplBoot)
     out['https://fantasy.premierleague.com/api/bootstrap-static/'] = {
       elements: elements.map((el) => ({
@@ -494,6 +498,10 @@ export function responses({ noFplBoot = false, preseason = false }: Options = {}
         ep_next: ((el.id % 6) + 1).toFixed(1),
         ep_this: (el.id % 5).toFixed(1),
         penalties_order: el.id === 13 ? 1 : null,
+        // Where 13 and 14 come from (15's country isn't in regions/), and 13's birthday and when he joined his club.
+        region: { 13: 161, 14: 241, 15: 999 }[el.id] ?? null,
+        birth_date: el.id === 13 ? '2000-07-21' : null,
+        team_join_date: el.id === 13 ? '2022-07-01' : null,
       })),
       phases: [
         { name: 'Overall', start_event: 1, stop_event: 38 },
@@ -532,6 +540,7 @@ export function fetched(options: Options = {}): Fetched {
       ),
     ),
     fplBoot: fplBoot ? api.FplBootstrap.parse(fplBoot) : null,
+    fplRegions: api.FplRegions.parse(get('https://fantasy.premierleague.com/api/regions/')),
     fplFixtures: api.FplFixtures.parse(get('https://fantasy.premierleague.com/api/fixtures/?future=1')),
     live: Object.fromEntries(gws.map((gw) => [gw, api.LiveFeed.parse(get(`${draft}/event/${gw}/live`))])),
     picks: Object.fromEntries(

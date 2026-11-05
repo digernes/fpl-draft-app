@@ -1,10 +1,10 @@
 // The page's addresses, as fotmob.com's: the home page at #/, then a page per league,
 // team, match and player, each with its tabs, like #/league/table, #/team/123/squad,
 // #/match/9/123-456, #/premier-league/match/81/player-stats and #/player/351, and the
-// betting at #/bets. Links from
+// betting at #/bets, and the account it's done with at #/account. Links from
 // before the pages (#table, #squads/123) still land where they used to.
 
-export type Page = 'home' | 'league' | 'pl' | 'transfers' | 'teams' | 'team' | 'match' | 'pl-match' | 'player' | 'bets';
+export type Page = 'home' | 'league' | 'pl' | 'transfers' | 'teams' | 'team' | 'match' | 'pl-match' | 'player' | 'bets' | 'account';
 
 export interface Route {
   page: Page;
@@ -70,6 +70,8 @@ export function parseRoute(hash: string): Route {
       return { page: 'teams', tab: '' };
     case 'bets':
       return { page: 'bets', tab: tabOf(BETS_TABS, a) };
+    case 'account':
+      return { page: 'account', tab: '' };
     case 'team':
       if (num(a)) return { page: 'team', tab: tabOf(TEAM_TABS, b), id: num(a) };
       break;
@@ -98,6 +100,7 @@ export const href = {
   transfers: () => '#/transfers',
   teams: () => '#/teams',
   bets: (tab = 'bet') => `#/bets${tabPath(tab, 'bet')}`,
+  account: () => '#/account',
   team: (id: number, tab = 'overview') => `#/team/${id}${tabPath(tab, 'overview')}`,
   match: (m: { gw: number; home: number; away: number }, tab = 'facts') => `#/match/${m.gw}/${m.home}-${m.away}${tabPath(tab, 'facts')}`,
   plMatch: (id: number, tab = 'facts') => `#/premier-league/match/${id}${tabPath(tab, 'facts')}`,

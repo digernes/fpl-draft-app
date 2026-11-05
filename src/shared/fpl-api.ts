@@ -265,15 +265,31 @@ export const EntryPicks = z.object({
   subs: z.array(z.object({ element_in: id, element_out: id })).nullish(),
 });
 
-// --- Main FPL game: bootstrap-static (projections only) -----------------------
+// --- Main FPL game: bootstrap-static (projections and players' details) -------
 
 export const FplBootstrap = z.object({
-  elements: z.array(z.object({ code: id, ep_next: numeric.nullable(), ep_this: numeric.nullish(), penalties_order: z.number().nullish() })),
+  elements: z.array(
+    z.object({
+      code: id,
+      ep_next: numeric.nullable(),
+      ep_this: numeric.nullish(),
+      penalties_order: z.number().nullish(),
+      /** His country, an id in regions/; born and joined his club, as YYYY-MM-DD. The Draft game has none of them. */
+      region: z.number().nullish(),
+      birth_date: z.string().nullish(),
+      team_join_date: z.string().nullish(),
+    }),
+  ),
   /** The season and its months, by gameweek. */
   phases: z.array(z.object({ name: z.string(), start_event: z.number(), stop_event: z.number() })).optional(),
   /** Whether FPL has checked each gameweek's stats (Opta's BPS, defensive contributions, contentious goals), after its matches. */
   events: z.array(z.object({ id, data_checked: z.boolean() })).optional(),
 });
+
+// --- Main FPL game: regions/ ----------------------------------------------------
+
+/** The countries players come from, England, Scotland, Wales and Northern Ireland among them (EN, S1, WA and NN). */
+export const FplRegions = z.array(z.object({ id, name: z.string(), iso_code_short: z.string() }));
 
 // --- Main FPL game: fixtures/?future=1 (projections only) ----------------------
 
@@ -314,5 +330,6 @@ export type LiveFeed = z.infer<typeof LiveFeed>;
 export type EntryPicks = z.infer<typeof EntryPicks>;
 export type FplBootstrap = z.infer<typeof FplBootstrap>;
 export type FplFixtures = z.infer<typeof FplFixtures>;
+export type FplRegions = z.infer<typeof FplRegions>;
 export type PlLineups = z.infer<typeof PlLineups>;
 export type PlEvents = z.infer<typeof PlEvents>;

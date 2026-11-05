@@ -10,9 +10,9 @@ import { D } from './state.ts';
 
 // The Premier League keeps photos in two places: newer signings only on the first,
 // some older players only on the second.
-const photoUrls = (code: number) => [
-  `https://resources.premierleague.com/premierleague25/photos/players/40x40/${Number(code)}.png`,
-  `https://resources.premierleague.com/premierleague/photos/players/40x40/p${Number(code)}.png`,
+const photoUrls = (code: number, size = '40x40') => [
+  `https://resources.premierleague.com/premierleague25/photos/players/${size}/${Number(code)}.png`,
+  `https://resources.premierleague.com/premierleague/photos/players/${size}/p${Number(code)}.png`,
 ];
 
 export function avatar(id: number | null | undefined, size = 18) {
@@ -54,6 +54,13 @@ export function photo(pid: number | string, size = 32) {
   const [src, fallback] = p ? photoUrls(p.code) : [];
   const img = p ? `<img src="${src}" data-fallback="${fallback}" alt="" loading="lazy">` : '';
   return `<span class="photo" style="--s:${size}px">${kitSvg(p?.club)}${img}</span>`;
+}
+
+/** A player's photo cut out, as the Premier League has it, for his page's header (his kit until it loads, or where there's none). */
+export function cutout(pid: number) {
+  const p = player(pid);
+  const [src, fallback] = photoUrls(p.code, '110x140');
+  return `<span class="photo cutout">${kitSvg(p.club)}<img src="${src}" data-fallback="${fallback}" alt=""></span>`;
 }
 
 // Run on fresh HTML before it is drawn: photos still on their way show the silhouette

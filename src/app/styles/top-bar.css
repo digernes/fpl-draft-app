@@ -180,6 +180,33 @@
   color: var(--text);
 }
 
+/* The account's, at the bar's end beside the settings: its name's first letters on the brand
+   colour once signed in. */
+.account-btn {
+  flex: none;
+  margin-left: auto;
+}
+
+.topnav + .account-btn {
+  margin-left: 0;
+}
+
+.account-btn + .settings {
+  margin-left: -16px;
+}
+
+.account-initials {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: var(--brand-solid);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .icon-btn:disabled {
   opacity: 0.3;
   cursor: default;
@@ -304,6 +331,25 @@
 @media (min-width: 1280px) {
   .topnav {
     gap: 20px;
+  }
+}
+
+/* Short of room for the links (below 1200px), they close up, after the wider rules above. */
+@media (max-width: 1199px) {
+  .topbar-inner {
+    gap: 16px;
+  }
+
+  .topnav {
+    gap: 0;
+  }
+
+  .topnav a {
+    padding: 0 10px;
+  }
+
+  .account-btn + .settings {
+    margin-left: -8px;
   }
 }
 

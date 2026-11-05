@@ -138,10 +138,11 @@ function lineupNote(l: Lineup, feed: SlimLive | null) {
 
 // On a pitch, a player still to play shows his expected points or when he kicks off, by
 // the filter (lineup-filters.ts), and with Projected one on the pitch where his points are
-// heading. `top`: the match's best.
-export function pitchPill(pid: number, gw: number, match: PlayerState | null, top = false) {
-  if (match?.state === 'live' && match.on && dueShows(gw) === 'xp') return headingPill(pid, gw) ?? roundPill(pid, gw, match, top);
-  if (match?.state !== 'due' || gwPoints(pid, gw) !== 0 || dueShows(gw) !== 'ko') return roundPill(pid, gw, match, top);
+// heading. `top`: the match's best; `shows`, for a pitch without the filters, what those
+// still to play show whatever was picked on another.
+export function pitchPill(pid: number, gw: number, match: PlayerState | null, top = false, shows = dueShows(gw)) {
+  if (match?.state === 'live' && match.on && shows === 'xp') return headingPill(pid, gw) ?? roundPill(pid, gw, match, top);
+  if (match?.state !== 'due' || gwPoints(pid, gw) !== 0 || shows !== 'ko') return roundPill(pid, gw, match, top);
   return kickoffPill(match.ko, fixtureTip(match.ko, match.opp, match.home));
 }
 

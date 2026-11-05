@@ -7,11 +7,11 @@ import { playerState, type SlimLive } from '../../shared/live.ts';
 import { avatar, bestOf, card, empty, listRow, photo, seg, tile } from '../components.ts';
 import { totalSlots } from '../event-icons.ts';
 import { esc, fmtShortDay, pct, plural, priceText, signed } from '../format.ts';
-import { first, gwEvents, gwInfo, lineupFor, mgr, player } from '../lookups.ts';
+import { first, gwEvents, gwInfo, gwPoints, lineupFor, mgr, player } from '../lookups.ts';
 import { nemesis, rivalries, type Rivalry } from '../manager-stats.ts';
 import { pitchNote, pitchPill } from '../match-lineups.ts';
 import { matchStatus, matchStatusText } from '../matches.ts';
-import { bestOfMatch, lineupFilters, showsEvents, statBadge, stillToCome } from '../lineup-filters.ts';
+import { gwTiebreaks } from '../lineup-filters.ts';
 import { autoSubOf, formationOf, pitch, type PitchPlayer } from '../pitch.ts';
 import { href } from '../router.ts';
 import { D, live, state } from '../state.ts';
@@ -111,19 +111,22 @@ function lastLineup(id: number) {
   if (!l) return { sub: '', body: empty('No lineup yet') };
   const feed = live?.gw === gw ? live.feed : null;
   const top = bestInMatch(id, gw, l.xi, feed);
+  const h2h = D.matches.find((m) => m.gw === gw && (m.home === id || m.away === id));
+  const line = `GW ${gw} · ${plural(l.pts, 'pt')}${feed ? ' so far' : ''} · ${formationOf(l.xi)}`;
   const onPitch = (pid: number): PitchPlayer => {
     const match = feed ? playerState(feed, pid, player(pid).club) : null;
     return {
       pid,
-      badge: statBadge(pid, gw, top.has(pid)) ?? pitchPill(pid, gw, match, top.has(pid)),
-      events: showsEvents(gw) ? gwEvents(pid, gw) : undefined,
+      badge: pitchPill(pid, gw, match, top.has(pid), 'ko'),
+      events: gwEvents(pid, gw),
       mark: autoSubOf(l, pid, gw),
       note: pitchNote(match),
     };
   };
   return {
-    sub: `GW ${gw} · ${plural(l.pts, 'pt')}${feed ? ' so far' : ''} · ${formationOf(l.xi)}`,
-    body: lineupFilters(gw, stillToCome(feed)) + pitch(l.xi.map(onPitch), l.bench.map(onPitch)),
+    // Leading to that gameweek's head-to-head.
+    sub: h2h ? `<a class="card-sub-link" href="${href.match(h2h)}">${line}</a>` : line,
+    body: pitch(l.xi.map(onPitch), l.bench.map(onPitch)),
   };
 }
 
@@ -133,7 +136,7 @@ function bestInMatch(id: number, gw: number, xi: number[], feed: SlimLive | null
   const over = h2h ? matchStatus(h2h) === 'done' : !feed;
   if (!over) return new Set<number>();
   const other = h2h && lineupFor(opponentOf(h2h, id), gw);
-  return bestOfMatch([...xi, ...(other?.xi ?? [])], gw);
+  return bestOf([...xi, ...(other?.xi ?? [])], (pid) => gwPoints(pid, gw), ...gwTiebreaks(gw));
 }
 
 function bestLineup(id: number) {

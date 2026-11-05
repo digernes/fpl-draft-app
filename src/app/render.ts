@@ -2,11 +2,13 @@
 // document title, and which of the top bar's and the bottom bar's links is lit.
 
 import { betSlip } from './bet-slip.ts';
+import { account, betting } from './betting.ts';
 import { alignHeads, avatar, markLoadingPhotos } from './components.ts';
 import { countdown, esc, fmtShortDay, fmtStamp, fmtTime } from './format.ts';
-import { caretSvg, coinsSvg, leagueSvg, matchesSvg, premierLeagueSvg, shirtSvg, swapSvg } from './icons.ts';
+import { caretSvg, coinsSvg, leagueSvg, personSvg, matchesSvg, premierLeagueSvg, shirtSvg, swapSvg } from './icons.ts';
 import { isLive, isSettling, mgr, seasonLabel, seasonSlug } from './lookups.ts';
 import { pageHeader, type Header } from './page-header.ts';
+import { pageAccount } from './pages/account.ts';
 import { pageBets } from './pages/bets.ts';
 import { pageHome } from './pages/home.ts';
 import { pageLeague } from './pages/league.ts';
@@ -42,6 +44,7 @@ const PAGES: Record<Page, (route: Route) => PageView> = {
   'pl-match': pagePlMatch,
   player: pagePlayer,
   bets: pageBets,
+  account: pageAccount,
 };
 
 // Between rounds the waiver run comes first, then the deadline; during a live
@@ -236,6 +239,18 @@ function renderNav() {
     .map((i) => navLink(i, Boolean(i.face)))
     .join('');
   document.getElementById('bottom-bar')!.innerHTML = items.map((i) => navLink(i, true)).join('');
+  renderAccountButton();
+}
+
+// The top bar's way to the account: the name's first letters once signed in, else a head and shoulders.
+function renderAccountButton() {
+  const button = document.getElementById('account-btn');
+  if (!button) return;
+  // Asked of the relay when due, on any page: it's also what brings the account's followed team here.
+  const name = betting.token ? account()?.name : undefined;
+  button.innerHTML = name ? `<span class="account-initials">${esc(name.slice(0, 2).toUpperCase())}</span>` : personSvg;
+  button.setAttribute('aria-label', name ? `Account: ${name}` : 'Sign in');
+  button.toggleAttribute('aria-current', state.route.page === 'account');
 }
 
 export function syncSettings() {

@@ -609,6 +609,10 @@ export interface Player {
   /** For one FPL added after the draft (so nobody could draft him): the first gameweek he was in the game. */
   added?: number;
   news?: string;
+  /** Born, as YYYY-MM-DD; his country's name and FPL's code for it (ISO's, with EN, S1, WA and NN for England, Scotland, Wales and Northern Ireland); and when he joined his club. From FPL's main game, where it has them. */
+  born?: string;
+  nation?: [name: string, code: string];
+  joined?: string;
   /** The season's xG, xA and expected points (as the xG table counts them) over the finished gameweeks, for anyone who has played. */
   xs?: [xg: number, xa: number, xp: number];
   /** Expected points for the next gameweek, from the site's model (FPL's before a gameweek has been played). */

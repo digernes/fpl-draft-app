@@ -1,29 +1,269 @@
 /* --- A player's page: his draft story and match log ------------------------------- */
 
-/* His owner, or that he's a free agent, beside his name. */
-.player-header .poster-name {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 6px 12px;
+/* The header, as fotmob.com's: his photo cut out on his owner's colour (a free agent's
+   grey), his name and club, and whose he is where fotmob.com has its Follow button; under
+   it, in the same card, his facts and his position. */
+.page-header.player-header {
+  background: var(--card);
 }
 
+.player-header .poster {
+  flex-wrap: nowrap;
+  align-items: flex-end;
+  gap: 16px;
+  min-height: 0;
+  padding: 16px 16px 0;
+  background: var(--av-bg);
+  color: var(--av-ink, #fff);
+}
+
+.player-header .poster-text {
+  align-self: center;
+  padding-bottom: 12px;
+}
+
+.player-header .poster-name {
+  font-size: 22px;
+}
+
+.player-header .poster-sub,
+.player-header .club-link {
+  color: inherit;
+}
+
+.player-header .poster-sub {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+/* The owner's avatar is the header's colour: a ring keeps it apart. */
+.player-header .poster-sub .av {
+  box-shadow: 0 0 0 1.5px currentColor;
+}
+
+.player-header .club-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.player-header .poster-side {
+  align-self: center;
+  width: auto;
+  padding-bottom: 12px;
+}
+
+.photo.cutout {
+  width: 63px;
+  height: 80px;
+  border-radius: 0;
+  background: none;
+}
+
+.photo.cutout img {
+  background: none;
+  object-fit: contain;
+  object-position: bottom;
+}
+
+.photo.cutout:has(img:not(.loading)) .kit {
+  display: none;
+}
+
+/* Whose he is: a white pill, as fotmob.com's Follow button. */
 .owner-chip {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 28px;
-  padding: 0 12px 0 4px;
-  border: 1px solid var(--chip-border);
+  height: 32px;
+  padding: 0 14px 0 4px;
   border-radius: 22px;
-  background: var(--chip-bg);
-  font-size: 13px;
+  background: #fff;
+  color: #000;
+  font-size: 14px;
   font-weight: 500;
   white-space: nowrap;
 }
 
-.poster-name .tag {
+.owner-chip.free {
+  padding: 0 14px;
+}
+
+.player-bio {
+  display: grid;
+}
+
+.bio-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 24px;
+  align-content: start;
+  padding: 20px 16px;
+}
+
+.bio-fact {
+  display: grid;
+  gap: 6px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--bio-line);
+}
+
+.bio-fact:last-child,
+.bio-fact:nth-child(odd):nth-last-child(2) {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.bio-value {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 16px;
+}
+
+.bio-value a {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.bio-label {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.flag {
+  font-size: 18px;
+  line-height: 1;
+}
+
+.bio-position {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 20px 16px;
+  border-top: 1px solid var(--bio-line);
+}
+
+.bio-position-text {
+  display: grid;
+  gap: 6px;
+  align-content: start;
+}
+
+.bio-heading {
+  margin-bottom: 18px;
+  font-size: 16px;
+  font-weight: 500;
+}
+
+.bio-position-text .bio-label {
+  color: var(--text);
+  font-weight: 500;
+}
+
+.bio-position-text .bio-value {
+  color: var(--text-2);
+  font-size: 14px;
+}
+
+.bio-pitch {
+  position: relative;
+  flex: none;
+  width: 136px;
+  height: 184px;
+}
+
+.bio-pitch svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.bio-pitch rect {
+  fill: var(--bio-pitch);
+}
+
+.bio-pitch rect,
+.bio-pitch path,
+.bio-pitch circle {
+  stroke: var(--bio-pitch-lines);
+  stroke-width: 1.5;
+}
+
+.bio-pitch path,
+.bio-pitch circle {
+  fill: none;
+}
+
+.bio-spot {
+  position: absolute;
+  left: 50%;
+  display: grid;
+  place-items: center;
+  min-width: 36px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: 13px;
+  background: var(--av-bg);
+  color: var(--av-ink, #fff);
   font-size: 12px;
+  font-weight: 700;
+  transform: translate(-50%, -50%);
+}
+
+@media (min-width: 769px) {
+  .player-bio {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .bio-facts {
+    padding: 24px;
+    border-right: 1px solid var(--bio-line);
+  }
+
+  .bio-position {
+    padding: 24px;
+    border-top: 0;
+  }
+}
+
+@media (min-width: 992px) {
+  .player-header .poster {
+    gap: 24px;
+    padding: 24px 32px 0;
+  }
+
+  .player-header .poster-name {
+    font-size: 28px;
+  }
+
+  .player-header .poster-sub {
+    font-size: 16px;
+  }
+
+  .photo.cutout {
+    width: 79px;
+    height: 100px;
+  }
+
+  .bio-facts,
+  .bio-position {
+    padding: 24px 32px;
+  }
+
+  .bio-position {
+    justify-content: flex-start;
+    gap: 32px;
+  }
+
+  .bio-pitch {
+    width: 170px;
+    height: 230px;
+  }
 }
 
 .player-news {

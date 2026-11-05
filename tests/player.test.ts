@@ -3,7 +3,9 @@ import './fixtures/browser.ts';
 import assert from 'node:assert/strict';
 import { afterEach, beforeEach, describe, it } from 'node:test';
 
-import { pagePlayer } from '../src/app/pages/player.ts';
+import { fmtDate } from '../src/app/format.ts';
+import { slotOf } from '../src/app/lookups.ts';
+import { flag, pagePlayer, yearsOld } from '../src/app/pages/player.ts';
 import { href } from '../src/app/router.ts';
 import { setData, setLive, setSeasons, state } from '../src/app/state.ts';
 import type { Data, PlMatch } from '../src/shared/data.ts';
@@ -96,6 +98,15 @@ afterEach(() => {
 });
 
 const page = (pid: number) => pagePlayer({ page: 'player', tab: '', id: pid });
+const flagText = (code: string) => text(flag(code));
+// With Ann's squad picked for GW 3 too, as a build has the current gameweek's.
+function inSquadsNow() {
+  const d = data();
+  d.lineups[1][3] = d.lineups[1][2];
+  return d;
+}
+// His facts, as a reader sees them, before his position.
+const facts = (pid: number) => text(page(pid).header!.foot!.split('<div class="bio-position">')[0]);
 // The timeline's rows as a reader sees them, the latest first.
 const timeline = (pid: number) =>
   cardTitled(page(pid).body, 'Timeline')
@@ -110,13 +121,63 @@ describe('a player’s page', () => {
     assert.match(view.body, /No such player this season/);
   });
 
-  it('heads the page with his name, whose he is, his club and his position', () => {
+  it('heads the page with his name and club, and whose he is in his owner’s colours', () => {
     const { title, header } = page(12);
     assert.equal(title, 'Saka');
-    assert.match(header!.title!, /^<span>Saka<\/span><a class="owner-chip" href="#\/team\/1">.*<span>Ann<\/span><\/a>$/);
-    assert.equal(text(header!.sub!), 'Arsenal · Midfielder');
+    assert.equal(header!.title, 'Saka');
+    assert.equal(text(header!.sub!), 'Arsenal AN Ann’s &#38; Co');
+    assert.ok(header!.sub!.includes(`href="${href.team(1)}"`));
     assert.ok(header!.sub!.includes(`href="${href.pl('players', 1)}"`));
-    assert.match(page(16).header!.title!, /<span class="tag ">Free agent<\/span>/);
+    assert.match(header!.side!, /^<a class="owner-chip" href="#\/team\/1">.*<span>Ann<\/span><\/a>$/);
+    assert.equal(header!.cls, `player-header m${slotOf(1)}`);
+    // His photo cut out, his kit until it comes.
+    assert.match(header!.logo!, /^<span class="photo cutout"><svg class="kit".*<img src="[^"]+\/110x140\/[^"]+" data-fallback=/);
+    const free = page(16).header!;
+    assert.equal(free.side, '<span class="owner-chip free">Free agent</span>');
+    assert.equal(free.cls, 'player-header m0');
+    assert.equal(text(free.sub!), 'Chelsea');
+  });
+
+  it('lists his facts under it, as fotmob.com’s: his age, country, club since when and owner since when', () => {
+    const d = inSquadsNow();
+    Object.assign(d.players[12], { born: '2001-09-05', nation: ['England', 'EN'], joined: '2019-07-01' });
+    setData(d);
+    const day = (iso: string) => fmtDate.format(new Date(`${iso}T12:00:00Z`));
+    assert.equal(
+      facts(12),
+      `${yearsOld('2001-09-05')} years ${day('2001-09-05')} ${flagText('EN')} England Country ${day('2019-07-01')} Joined Arsenal AN Ann’s &#38; Co Since the draft`,
+    );
+  });
+
+  it('leaves out what FPL doesn’t have, and says how long a free agent has been one', () => {
+    setData(inSquadsNow());
+    assert.equal(facts(12), 'AN Ann’s &#38; Co Since the draft');
+    assert.equal(facts(18), 'AN Ann’s &#38; Co Since gameweek 1'); // signed before the first
+    assert.equal(facts(16), 'Free agent Since gameweek 3'); // Cy dropped him before GW 3
+    assert.equal(facts(19), 'Free agent Never in a squad');
+  });
+
+  it('puts his position on a pitch, attacking upwards', () => {
+    const foot = page(12).header!.foot!;
+    assert.ok(text(foot).endsWith('Position Primary Midfielder MID'), text(foot));
+    assert.match(foot, /<span class="bio-spot" style="top:47%">MID<\/span>/);
+    assert.match(page(11).header!.foot!, /style="top:88%">GK</);
+    assert.match(page(16).header!.foot!, /style="top:18%">FWD</);
+  });
+
+  it('works out his age from his birthday', () => {
+    assert.equal(yearsOld('2000-07-21', new Date('2026-07-20T23:00:00Z')), 25);
+    assert.equal(yearsOld('2000-07-21', new Date('2026-07-21T00:00:00Z')), 26);
+    assert.equal(yearsOld('2000-07-21', new Date('2026-12-31T12:00:00Z')), 26);
+  });
+
+  it('flags his country, the home nations with their own flags, Northern Ireland with none', () => {
+    assert.equal(flagText('NO'), '🇳🇴');
+    assert.equal(flagText('EN'), '🏴󠁧󠁢󠁥󠁮󠁧󠁿');
+    assert.equal(flagText('S1'), '🏴󠁧󠁢󠁳󠁣󠁴󠁿');
+    assert.equal(flagText('WA'), '🏴󠁧󠁢󠁷󠁬󠁳󠁿');
+    assert.equal(flag('NN'), '');
+    assert.equal(flag(''), '');
   });
 
   it('passes on FPL’s news of a flagged player', () => {

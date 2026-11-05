@@ -42,14 +42,17 @@ describe('the league table', () => {
     assert.match(html, /<div class="table-note">With gameweek 3’s provisional points<\/div>/);
   });
 
-  it('gives the narrowest table points scored, and wider ones the difference', () => {
+  it('picks out points scored, the tiebreaker, at every width, and greys what was conceded and the difference', () => {
     setData(season());
     const html = standingsTable('overall');
-    assert.match(html, /<div class="tc {2}from-xs until-xs"><span data-tip="Points scored">PF<\/span><\/div>/);
-    assert.match(html, /<div class="tc {2}from-sm"><span data-tip="Points difference">GD<\/span><\/div>/);
-    // The leader's row has the points they scored there.
+    assert.match(html, /<div class="tc c-pf from-xs"><span data-tip="Points scored, which decide a tie on points">PF<\/span><\/div>/);
+    assert.match(html, /<div class="tc c-minor from-sm"><span data-tip="Points conceded">PA<\/span><\/div>/);
+    assert.match(html, /<div class="tc c-minor from-sm"><span data-tip="Points difference">GD<\/span><\/div>/);
+    assert.doesNotMatch(html, />\+\/-</);
+    // The leader's row has the points they scored and conceded.
     const top = season().tables.overall[0];
-    assert.match(html.split(`data-value="${top.id}"`)[1], new RegExp(`^[^]*?<div class="tc  from-xs until-xs">${top.pf}</div>`));
+    const row = html.split(`data-value="${top.id}"`)[1];
+    assert.match(row, new RegExp(`^[^]*?<div class="tc c-pf from-xs">${top.pf}</div><div class="tc c-minor from-sm">${top.pa}</div>`));
   });
 
   it('has neither between gameweeks', () => {

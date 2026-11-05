@@ -1,14 +1,14 @@
 // The betting page: fake money on the draft league's head-to-heads, as betmobapp.com has it.
 // Its Bet tab has the matches that take a bet now with their prices (before the deadline the
 // pre-match odds, while the gameweek is played the live ones) and how many have bet on them,
-// the account and your bets; the Leaderboard ranks everyone on what they've won, and the Feed
+// what you have to stake and your bets (the account itself is the Account page's); the Leaderboard ranks everyone on what they've won, and the Feed
 // has everyone's bets once their gameweek's deadline has passed. The accounts and bets are the relay's (betting.ts).
 
-import { ALLOWANCE, leadersOf, leftIn, OUTCOMES, profitOf, seasonSlug, type Bet, type Leader } from '../../shared/bets.ts';
+import { ALLOWANCE, leadersOf, leftIn, OUTCOMES, profitOf, seasonSlug, type Bet, type Leader, type Me } from '../../shared/bets.ts';
 import type { Match } from '../../shared/data.ts';
 import { coins, pickName, signedCoins } from '../bet-slip.ts';
 import { account, betting, board, oddsFor } from '../betting.ts';
-import { avatar, card, empty, seg } from '../components.ts';
+import { avatar, card, empty } from '../components.ts';
 import { countdown, esc, fmtShortDay, fmtTime, plural } from '../format.ts';
 import { coinsSvg } from '../icons.ts';
 import { first, isArchive, isLive } from '../lookups.ts';
@@ -95,59 +95,34 @@ function matchRow(m: Match) {
   return `<div class="bet-match"><a class="bet-teams" href="${href.match(m)}">${side(m.home, 'home')}<span class="bet-score">${score}</span>${side(m.away, 'away')}</a>${prices}</div>`;
 }
 
-// Signed out: the form to sign up, or to sign in on another device. Signed in: who, and
-// what's left to stake.
+// Signed out: a way to the Account page. Signed in: what's left to stake, and what's been won.
 function accountCard() {
   const me = betting.me;
-  if (betting.token) {
-    if (!me) return card({ title: 'Your account', body: empty('Loading…') });
-    const season = seasonSlug(D);
-    const open = [...new Set([isLive() ? D.meta.currentGw : null, D.meta.nextGw].filter((gw): gw is number => gw !== null))];
-    const left = open.map((gw) => `<span class="bet-left"><b>${coins(leftIn(me.bets, season, gw))}</b> left in GW ${gw}</span>`).join('');
-    // All-time, as the leaderboard counts it: settled bets only.
-    const [mine] = leadersOf(me.bets);
-    const won = mine
-      ? `<span class="bet-left"><b>${signedCoins(mine.profit)}</b> won all-time</span><span class="bet-left"><b>${signedCoins(mine.profit / mine.gws)}</b> a gameweek</span>`
-      : '';
+  if (!betting.token)
     return card({
-      title: esc(me.name),
-      sub: 'Signed in on this device',
-      action: '<button type="button" class="bet-link" data-action="bet-signout">Sign out</button>',
-      body: `<div class="bet-balance">${left}${won}</div>`,
+      title: 'Bet with fake money',
+      sub: `${coins(ALLOWANCE)} to stake every gameweek, with an account that works on all your devices`,
+      body: `<div class="bet-slip"><a class="bet-button primary" href="${href.account()}">Sign up or sign in</a></div>`,
     });
-  }
-  const up = betting.mode === 'signup';
-  const field = (id: string, label: string, hint: string, attrs: string) =>
-    `<label class="bet-field" for="${id}"><span class="bet-label">${label}</span><input id="${id}" ${attrs}><span class="bet-help">${hint}</span></label>`;
-  const busy = betting.busy ? ' disabled' : '';
+  if (!me) return card({ title: 'Your account', body: empty('Loading…') });
   return card({
-    title: up ? 'Join the betting' : 'Sign in',
-    sub: up ? `Get ${coins(ALLOWANCE)} to bet with every gameweek` : 'With the name and PIN you signed up with',
-    action: seg(
-      'bet-mode',
-      [
-        ['signup', 'Sign up'],
-        ['signin', 'Sign in'],
-      ],
-      betting.mode,
-    ),
-    body: `<form class="bet-form">
-      ${field(
-        'bet-name',
-        'Name',
-        up ? 'Everyone sees it on the leaderboard: 3 to 16 letters, digits, - or _' : '',
-        `data-action="bet-name" value="${esc(betting.name)}" maxlength="16" autocomplete="username" autocapitalize="off" spellcheck="false" placeholder="${up ? 'Pick a name' : 'Your name'}"`,
-      )}
-      ${field(
-        'bet-pin',
-        'PIN',
-        up ? 'Six digits, to sign in with on your phone and your computer. It can’t be reset, so keep it somewhere safe.' : '',
-        `data-action="bet-pin" value="${esc(betting.pin)}" type="password" inputmode="numeric" maxlength="6" pattern="[0-9]*" autocomplete="${up ? 'new-password' : 'current-password'}" placeholder="••••••"`,
-      )}
-      <button type="submit" class="bet-button primary" data-action="bet-enter"${busy}>${up ? 'Create account' : 'Sign in'}</button>
-      ${betting.formNote ? `<p class="bet-note" role="alert">${esc(betting.formNote)}</p>` : ''}
-    </form>`,
+    title: esc(me.name),
+    sub: 'Your betting',
+    action: `<a class="bet-link" href="${href.account()}">Account</a>`,
+    body: balance(me),
   });
+}
+
+/** What an account has left to stake in the gameweeks open to bets, and what it has won all-time, as the leaderboard counts it. */
+export function balance(me: Me) {
+  const season = seasonSlug(D);
+  const open = [...new Set([isLive() ? D.meta.currentGw : null, D.meta.nextGw].filter((gw): gw is number => gw !== null))];
+  const left = open.map((gw) => `<span class="bet-left"><b>${coins(leftIn(me.bets, season, gw))}</b> left in GW ${gw}</span>`).join('');
+  const [mine] = leadersOf(me.bets);
+  const won = mine
+    ? `<span class="bet-left"><b>${signedCoins(mine.profit)}</b> won all-time</span><span class="bet-left"><b>${signedCoins(mine.profit / mine.gws)}</b> a gameweek</span>`
+    : '';
+  return `<div class="bet-balance">${left}${won}</div>`;
 }
 
 // What a visitor gets, beside the form.

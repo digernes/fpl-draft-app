@@ -1,100 +1,23 @@
 import { drawIntoNothing } from './fixtures/browser.ts';
 
 import assert from 'node:assert/strict';
-import { afterEach, beforeEach, describe, it, mock } from 'node:test';
+import { beforeEach, describe, it, mock } from 'node:test';
 
-import { runAction } from '../src/app/actions.ts';
 import { betting, returnsText } from '../src/app/betting.ts';
 import { betSlip } from '../src/app/bet-slip.ts';
 import { oddsRow } from '../src/app/match-odds.ts';
-import '../src/app/chrome.ts';
 import { pageBets } from '../src/app/pages/bets.ts';
 import { navItems, pageHtml } from '../src/app/render.ts';
 import { href, parseRoute } from '../src/app/router.ts';
-import { D, setData, setLive, state } from '../src/app/state.ts';
-import type { Bet, Board, Me } from '../src/shared/bets.ts';
-import type { Data } from '../src/shared/data.ts';
+import { D, setData, state } from '../src/app/state.ts';
+import type { Board } from '../src/shared/bets.ts';
+import { act, asked, bet, data, freshBetting, me, relay, settle } from './fixtures/betting.ts';
 import { cardTitled, text } from './fixtures/html.ts';
-import { squads } from './fixtures/league.ts';
 
 drawIntoNothing();
+freshBetting();
 
-// The small league with GW 4 (Ann v Bob, Cy v Ann) priced, its deadline a day off.
-function data(): Data {
-  const d = squads();
-  d.gameweeks[3].deadline = new Date(Date.now() + 864e5).toISOString();
-  const price = (dec: number) => ({ dec, frac: '1/1' });
-  const odds = {
-    p: [0.5, 0.05, 0.45] as [number, number, number],
-    prices: [price(1.9), price(17), price(2.1)] as never,
-    expected: [45, 44] as [number, number],
-  };
-  d.matches.push(
-    { gw: 4, home: 1, away: 2, homePts: null, awayPts: null, started: false, finished: false, odds },
-    { gw: 4, home: 3, away: 1, homePts: null, awayPts: null, started: false, finished: false, odds },
-  );
-  return d;
-}
-
-const bet = (more: Partial<Bet> = {}): Bet => ({
-  id: 1,
-  name: 'Ola',
-  season: '2026-27',
-  gw: 4,
-  home: 1,
-  away: 2,
-  pick: 0,
-  stake: 200,
-  price: 1.9,
-  at: 0,
-  ...more,
-});
-
-// The relay's book as fetch answers it: what each path answers, and what was asked of it.
-let asked: { path: string; body?: Record<string, unknown>; auth: string | null }[];
-function relay(answers: Record<string, [number, unknown]>) {
-  asked = [];
-  mock.method(globalThis, 'fetch', async (url: string, init: RequestInit = {}) => {
-    const path = new URL(url).pathname;
-    const headers = (init.headers ?? {}) as Record<string, string>;
-    // The Bet tab asks for the counts as it draws: only what's done counts here.
-    if (path !== '/bets/board')
-      asked.push({ path, body: init.body ? JSON.parse(String(init.body)) : undefined, auth: headers.Authorization ?? null });
-    const [status, body] = answers[path] ?? [404, { error: 'Not found' }];
-    return Response.json(body, { status });
-  });
-}
-
-const settle = () => new Promise((resolve) => setImmediate(resolve));
-const act = (action: string, value = '') => runAction({ dataset: { action, value } } as unknown as HTMLElement);
 const body = (tab = 'bet') => pageBets({ page: 'bets', tab }).body;
-const me = (bets: Bet[] = [], team: number | null = null): Me => ({ name: 'Ola', team, bets });
-
-beforeEach(() => {
-  setData(data());
-  setLive(null);
-  state.route = { page: 'bets', tab: 'bet' };
-  Object.assign(betting, {
-    token: '',
-    me: null,
-    meAt: 0,
-    board: null,
-    boardAt: 0,
-    offline: false,
-    mode: 'signup',
-    teamTaken: false,
-    name: '',
-    pin: '',
-    formNote: null,
-    slip: null,
-    placed: null,
-    stake: '',
-    busy: false,
-    note: null,
-  });
-  relay({});
-});
-afterEach(() => mock.restoreAll());
 
 describe('the betting page', () => {
   it('has its own address and tabs, and a link in the bars', () => {
@@ -121,70 +44,6 @@ describe('the betting page', () => {
     assert.ok(text(body()).includes('Nothing to bet on just now'));
   });
 
-  it('asks a visitor to sign up, with what the name and the PIN are for', () => {
-    const html = cardTitled(body(), 'Join the betting');
-    assert.ok(text(html).includes('Name Everyone sees it on the leaderboard'), text(html));
-    assert.ok(text(html).includes('It can’t be reset, so keep it somewhere safe'));
-    assert.match(html, /autocomplete="new-password"/);
-    assert.match(html, />Create account</);
-    assert.ok(cardTitled(body(), 'How it works'));
-  });
-
-  it('switches the form to signing in on another device', () => {
-    act('bet-mode', 'signin');
-    const html = cardTitled(body(), 'Sign in');
-    assert.ok(text(html).includes('With the name and PIN you signed up with'));
-    assert.match(html, /autocomplete="current-password"/);
-    assert.ok(!text(html).includes('Everyone sees it'));
-  });
-
-  it('checks the name and PIN before asking the relay', () => {
-    act('bet-name', 'O');
-    act('bet-enter');
-    assert.equal(betting.formNote, 'A name is 3 to 16 letters, digits, - or _');
-    act('bet-name', 'Ola');
-    act('bet-pin', '12a456');
-    act('bet-enter');
-    assert.equal(betting.formNote, 'A PIN is six digits');
-    assert.ok(text(body()).includes('A PIN is six digits'));
-    assert.equal(asked.length, 0);
-  });
-
-  it('keeps the token from a sign-up and shows what’s left to stake', async () => {
-    relay({ '/bets/signup': [200, { token: 'a'.repeat(64), me: me() }] });
-    act('bet-name', 'Ola');
-    act('bet-pin', '123456');
-    act('bet-enter');
-    await settle();
-    assert.deepEqual(asked[0], { path: '/bets/signup', body: { name: 'Ola', pin: '123456' }, auth: null });
-    assert.equal(betting.token, 'a'.repeat(64));
-    assert.equal(betting.pin, '');
-    assert.ok(text(cardTitled(body(), 'Ola')).includes('1,000 left in GW 4'));
-  });
-
-  it('follows the account’s team once signed in, on any device', async () => {
-    state.myTeam = null;
-    relay({ '/bets/login': [200, { token: 'a'.repeat(64), me: me([], 2) }] });
-    Object.assign(betting, { mode: 'signin', name: 'Ola', pin: '123456' });
-    act('bet-enter');
-    await settle();
-    assert.equal(state.myTeam, 2);
-  });
-
-  it('keeps this device’s team on an account that follows none yet, and any team followed later', async () => {
-    state.myTeam = 3;
-    relay({ '/bets/signup': [200, { token: 'a'.repeat(64), me: me() }], '/bets/team': [200, me([], 3)] });
-    Object.assign(betting, { name: 'Ola', pin: '123456' });
-    act('bet-enter');
-    await settle();
-    assert.equal(state.myTeam, 3);
-    assert.deepEqual(asked[1], { path: '/bets/team', body: { team: 3 }, auth: `Bearer ${'a'.repeat(64)}` });
-    act('follow', '1');
-    assert.equal(state.myTeam, 1);
-    assert.deepEqual(asked.at(-1)!.body, { team: 1 });
-    state.myTeam = null;
-  });
-
   it('shows what the account has won all-time, and a gameweek', () => {
     Object.assign(betting, {
       token: 'a'.repeat(64),
@@ -193,14 +52,8 @@ describe('the betting page', () => {
     assert.ok(text(cardTitled(body(), 'Ola')).includes('+80 won all-time +40 a gameweek'), text(body()));
   });
 
-  it('signs in, and says why it couldn’t', async () => {
-    relay({ '/bets/login': [401, { error: 'Wrong name or PIN' }] });
-    Object.assign(betting, { mode: 'signin', name: 'Ola', pin: '000000' });
-    act('bet-enter');
-    await settle();
-    assert.equal(asked[0].path, '/bets/login');
-    assert.equal(betting.token, '');
-    assert.ok(text(body()).includes('Wrong name or PIN'));
+  it('sends a visitor to the Account page to sign up or in', () => {
+    assert.match(cardTitled(body(), 'Bet with fake money'), /<a class="bet-button primary" href="#\/account">Sign up or sign in<\/a>/);
   });
 });
 
@@ -231,13 +84,12 @@ describe('the betslip', () => {
     assert.ok(slip().includes('Stake 50 Max 100'), slip());
   });
 
-  it('sends a visitor who isn’t signed in to the Bets page', () => {
+  it('sends a visitor who isn’t signed in to the Account page', () => {
     Object.assign(betting, { token: '', me: null });
     act('bet-pick', '4:1:2:0');
     state.route = { page: 'home', tab: '' };
-    assert.match(betSlip(), /<a class="bet-button primary" href="#\/bets">Sign up or sign in to bet<\/a>/);
-    state.route = { page: 'bets', tab: 'bet' };
-    assert.ok(slip().includes('Sign up or sign in above to place it.'));
+    assert.match(betSlip(), /<a class="bet-button primary" href="#\/account">Sign up or sign in to bet<\/a>/);
+    state.route = { page: 'bets', tab: 'bet' }; // for the redraws still to come of earlier answers
   });
 
   it('places the bet with its price, says so, and shows it among yours', async () => {

@@ -144,6 +144,27 @@ describe('a team’s starting XI', () => {
     assert.match(html, /<div class="pitch-bench-label">Bench<\/div>/);
   });
 
+  it('leads from its line to the gameweek’s head-to-head', () => {
+    const d = data();
+    d.lineups[1][3] = lineup([11, 18, 12], [19], 4);
+    d.matches.push(match(3, 2, 1, 40, 4));
+    setData(d);
+    assert.match(lineupCard(1), /<div class="card-sub"><a class="card-sub-link" href="#\/match\/3\/2-1">GW 3 · 4 pts · 1-1-0<\/a><\/div>/);
+  });
+
+  it('has no lineup filters, and keeps to the points whatever a match’s pitch was switched to', () => {
+    const d = data();
+    d.lineups[1][3] = lineup([11, 18, 12], [19], 4);
+    d.underlying = { 3: {} } as Data['underlying']; // the filters' numbers are in
+    setData(d);
+    state.lineupStat = 'xg';
+    const html = lineupCard(1);
+    state.lineupStat = '';
+    assert.doesNotMatch(html, /lineup-filters|data-action="lineup-stat"|data-action="due"/);
+    assert.match(html, /class="ptsp /);
+    assert.doesNotMatch(html, /xG/);
+  });
+
   it('marks the automatic substitutions', () => {
     const d = data();
     d.lineups[1][3] = { ...lineup([19, 12], [11], 4), subs: [19], off: [18] };

@@ -41,10 +41,7 @@ export function betSlip() {
       (n) => `<button type="button" class="chip" data-action="bet-quick" data-value="${n}">${n === left ? `Max ${coins(n)}` : n}</button>`,
     )
     .join('');
-  const signIn =
-    state.route.page === 'bets' && state.route.tab === 'bet'
-      ? '<p class="bet-hint">Sign up or sign in above to place it.</p>'
-      : `<a class="bet-button primary" href="${href.bets()}">Sign up or sign in to bet</a>`;
+  const signIn = `<a class="bet-button primary" href="${href.account()}">Sign up or sign in to bet</a>`;
   const place = !betting.token
     ? signIn
     : !me
