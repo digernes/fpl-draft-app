@@ -50,14 +50,16 @@ const bet = (more: Partial<Bet> = {}): Bet => ({
   ...more,
 });
 
-// The relay's book as fetch answers it: what each path answers, and what was asked.
+// The relay's book as fetch answers it: what each path answers, and what was asked of it.
 let asked: { path: string; body?: Record<string, unknown>; auth: string | null }[];
 function relay(answers: Record<string, [number, unknown]>) {
   asked = [];
   mock.method(globalThis, 'fetch', async (url: string, init: RequestInit = {}) => {
     const path = new URL(url).pathname;
     const headers = (init.headers ?? {}) as Record<string, string>;
-    asked.push({ path, body: init.body ? JSON.parse(String(init.body)) : undefined, auth: headers.Authorization ?? null });
+    // The Bet tab asks for the counts as it draws: only what's done counts here.
+    if (path !== '/bets/board')
+      asked.push({ path, body: init.body ? JSON.parse(String(init.body)) : undefined, auth: headers.Authorization ?? null });
     const [status, body] = answers[path] ?? [404, { error: 'Not found' }];
     return Response.json(body, { status });
   });
@@ -314,7 +316,12 @@ describe('the leaderboard and the feed', () => {
       { name: 'Ola', profit: 180, gws: 1, bets: 1, won: 1 },
       { name: 'Kari', profit: -300, gws: 2, bets: 3, won: 1 },
     ],
-    feed: [bet({ name: 'Kari', pick: 2, stake: 300, price: 2.1, result: 0, payout: 0 }), bet({ result: 0, payout: 380, live: [11, 7] })],
+    feed: [
+      bet({ name: 'Per', gw: 3, stake: 50 }),
+      bet({ name: 'Kari', pick: 2, stake: 300, price: 2.1, result: 0, payout: 0 }),
+      bet({ result: 0, payout: 380, live: [11, 7] }),
+    ],
+    counts: [{ gw: 4, players: 3, bets: 7, staked: 1450 }],
   };
 
   it('ranks everyone on what they’ve won, with the average per gameweek', async () => {
@@ -334,6 +341,22 @@ describe('the leaderboard and the feed', () => {
     assert.ok(html.includes('Kari Bob to win at 2.10'), html);
     assert.ok(html.includes('Lost 300'));
     assert.ok(html.includes('GW 4 · live at 11 - 7 200 → 380 Won +180'), html);
+  });
+
+  it('shows open bets too, once their deadline has passed', async () => {
+    relay({ '/bets/board': [200, board] });
+    body('feed');
+    await settle();
+    const html = text(cardTitled(body('feed'), 'Feed'));
+    assert.ok(html.includes('Per Ann to win at 1.90'), html);
+    assert.ok(html.includes('GW 3 50 Open'), html);
+  });
+
+  it('says on the Bet tab how many have bet on each gameweek', async () => {
+    relay({ '/bets/board': [200, board] });
+    body();
+    await settle();
+    assert.ok(text(cardTitled(body(), 'Gameweek 4')).includes('3 players · 7 bets · 1,450 staked'));
   });
 
   it('says so when the relay can’t be reached', async () => {

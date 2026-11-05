@@ -3,7 +3,7 @@ import './fixtures/browser.ts';
 import assert from 'node:assert/strict';
 import { beforeEach, describe, it } from 'node:test';
 
-import { matchLineups, projectedLineups, stateLabel } from '../src/app/match-lineups.ts';
+import { matchLineups, pitchNote, projectedLineups, stateLabel } from '../src/app/match-lineups.ts';
 import { setData, setLive, state, type LiveLineup } from '../src/app/state.ts';
 import type { Data, LiveData, Match, Odds } from '../src/shared/data.ts';
 import type { SlimLive } from '../src/shared/live.ts';
@@ -156,6 +156,22 @@ describe('a player’s match state by his name', () => {
   });
 });
 
+describe('who a player still to play is up against, under his name', () => {
+  beforeEach(() => setData(squads()));
+
+  it('is the opponent and where, short as FPL’s pitch has it, with the full name in its tip', () => {
+    assert.equal(pitchNote({ state: 'due', opp: 2, home: false }), '<span data-tip="Chelsea (A)">CHE (A)</span>');
+    assert.equal(pitchNote({ state: 'due', opp: 3, home: true }, '×2'), '<span data-tip="Liverpool (H)">LIV (H)</span>×2');
+  });
+
+  it('gives way to the minute while his match is on, and to nothing once it’s over', () => {
+    assert.match(pitchNote({ state: 'live', min: 30, on: true }), />30'</);
+    assert.equal(pitchNote({ state: 'done' }), '');
+    assert.equal(pitchNote({ state: 'blank' }, '×2'), '×2');
+    assert.equal(pitchNote(null), '');
+  });
+});
+
 describe('the projected lineups before the deadline', () => {
   // GW 4, Ann v Bob: Arsenal at home to Chelsea, Man City's kick-off against Spurs still to
   // be set, and Liverpool without a match. Saka is doubtful.
@@ -194,6 +210,9 @@ describe('the projected lineups before the deadline', () => {
     assert.match(html, /<span class="ptsp xp" data-tip="4\.2 projected · 85 avg mins\nChelsea \(H\)" data-tip-rows="Playing\t1\.9/);
     assert.match(html, /data-tip="5\.4 projected points">5\.4</);
     assert.match(html, /<span class="pp-flag" data-tip="Knock - 75% chance of playing">!<\/span>/);
+    // Who each plays: Arsenal at home to Chelsea, Chelsea away, Liverpool nobody.
+    assert.match(html, /href="#\/player\/18"[\s\S]*?<div class="pp-note">CHE \(H\)<\/div>/);
+    assert.match(html, /href="#\/player\/13"[\s\S]*?<div class="pp-note">ARS \(A\)<\/div>/);
     // The rest of each squad on its bench: White on Bob's.
     assert.deepEqual(faces(html).sort(), [11, 12, 13, 15, 18, 19]);
   });

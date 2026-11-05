@@ -308,8 +308,9 @@
 
 .pp-note {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
-  gap: 4px;
+  gap: 0 4px;
   max-width: 100%;
   color: var(--text-2);
   font-size: 11px;

@@ -9,7 +9,8 @@
 //   GET  /bets/me                           → Me              the account's bets and the team it follows
 //   POST /bets/team    {"team": id | null}  → Me              the team it follows, from any device
 //   POST /bets/bet     Slip                 → { bet, me }     or 409 { error, prices? }
-//   GET  /bets/board                        → Board           the leaderboard and the settled bets
+//   GET  /bets/board                        → Board           the leaderboard, everyone's bets once their deadline
+//                                                              has passed, and how many bets each open gameweek has
 //
 // The account's own calls carry `Authorization: Bearer <token>`. An account is a name, which
 // everyone sees on the leaderboard, and a six-digit PIN, of which only a salted PBKDF2 hash
@@ -17,6 +18,8 @@
 
 import {
   ALLOWANCE,
+  begun,
+  countsOf,
   leadersOf,
   leftIn,
   NAME,
@@ -49,7 +52,7 @@ const TRIES = 5;
 const LOCK_MS = 15 * 60 * 1000;
 const SIGNUPS_AN_HOUR = 30; // far beyond this league's visitors, and it bounds what a script can do
 const SESSIONS = 10; // devices an account stays signed in on
-const FEED = 40;
+const FEED = 60;
 const ROUTES = /^\/bets\/(signup|login|logout|me|team|bet|board)$/;
 
 /** The relay's side: checks the address and the size, and hands the request to the book. */
@@ -320,12 +323,14 @@ export class Book {
   }
 
   private async board(): Promise<Board> {
-    await this.settle();
-    const settled = this.sql
-      .exec<BetRow>(`SELECT ${BET_COLUMNS} WHERE result IS NOT NULL ORDER BY settled DESC, bets.id DESC`)
-      .toArray()
-      .map(toBet);
-    return { leaders: leadersOf(settled), feed: settled.slice(0, FEED) };
+    const now = this.now();
+    const site = await this.site.get(now);
+    if (site) this.settleWith(site);
+    // Placed or settled, whichever is later, first.
+    const all = this.sql.exec<BetRow>(`SELECT ${BET_COLUMNS} ORDER BY COALESCE(settled, at) DESC, bets.id DESC`).toArray().map(toBet);
+    // Without the site's deadlines, only what's settled is sure to be over its deadline.
+    const shown = all.filter((b) => (site ? begun(b, site, now) : b.payout !== undefined));
+    return { leaders: leadersOf(all), feed: shown.slice(0, FEED), counts: site ? countsOf(all, site) : [] };
   }
 
   private async settle() {

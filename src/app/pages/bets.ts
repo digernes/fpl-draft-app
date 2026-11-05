@@ -1,15 +1,15 @@
 // The betting page: fake money on the draft league's head-to-heads, as betmobapp.com has it.
 // Its Bet tab has the matches that take a bet now with their prices (before the deadline the
-// pre-match odds, while the gameweek is played the live ones), the account, the betslip and
-// your bets; the Leaderboard ranks everyone on what they've won, and the Feed has the bets
-// once they're settled. The accounts and bets are the relay's (betting.ts).
+// pre-match odds, while the gameweek is played the live ones) and how many have bet on them,
+// the account and your bets; the Leaderboard ranks everyone on what they've won, and the Feed
+// has everyone's bets once their gameweek's deadline has passed. The accounts and bets are the relay's (betting.ts).
 
 import { ALLOWANCE, leadersOf, leftIn, OUTCOMES, profitOf, seasonSlug, type Bet, type Leader } from '../../shared/bets.ts';
 import type { Match } from '../../shared/data.ts';
 import { coins, pickName, signedCoins } from '../bet-slip.ts';
 import { account, betting, board, oddsFor } from '../betting.ts';
 import { avatar, card, empty, seg } from '../components.ts';
-import { countdown, esc, fmtShortDay, fmtTime } from '../format.ts';
+import { countdown, esc, fmtShortDay, fmtTime, plural } from '../format.ts';
 import { coinsSvg } from '../icons.ts';
 import { first, isArchive, isLive } from '../lookups.ts';
 import type { PageView } from '../render.ts';
@@ -69,9 +69,14 @@ function roundCards() {
     : card({ title: 'Matches', body: empty('Nothing to bet on just now: the next gameweek’s odds come with its squads.') });
 }
 
+// With how many have bet on it so far, from the leaderboard's answer.
 function roundCard(gw: number, sub: string) {
   const matches = D.matches.filter((m) => m.gw === gw);
-  return card({ title: `Gameweek ${gw}`, sub, body: `<div class="bet-matches">${matches.map(matchRow).join('')}</div>` });
+  const count = board()?.counts.find((c) => c.gw === gw);
+  const bets = count
+    ? `<div class="bet-count">${plural(count.players, 'player')} · ${plural(count.bets, 'bet')} · ${coins(count.staked)} staked</div>`
+    : '';
+  return card({ title: `Gameweek ${gw}`, sub: sub + bets, body: `<div class="bet-matches">${matches.map(matchRow).join('')}</div>` });
 }
 
 function matchRow(m: Match) {
@@ -220,7 +225,9 @@ function feedCard() {
   if (!b) return card({ title: 'Feed', body: empty(betting.offline ? 'Can’t reach the betting just now.' : 'Loading…') });
   return card({
     title: 'Feed',
-    sub: 'Everyone’s bets, once their matches are settled',
-    body: b.feed.length ? `<div class="bet-rows">${b.feed.map((x) => betRow(x, true)).join('')}</div>` : empty('No bets settled yet.'),
+    sub: 'Everyone’s bets once their gameweek’s deadline has passed, and how they did',
+    body: b.feed.length
+      ? `<div class="bet-rows">${b.feed.map((x) => betRow(x, true)).join('')}</div>`
+      : empty('Nothing to show yet: bets show here once their gameweek’s deadline has passed.'),
   });
 }

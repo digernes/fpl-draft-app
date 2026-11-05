@@ -19,6 +19,7 @@ import {
   partsAt,
   player,
   versus,
+  versusShort,
   xpAt,
 } from './lookups.ts';
 import { projectedPill, projectionFor, projectionOf } from './match-odds.ts';
@@ -89,9 +90,21 @@ const onPitch =
       badge: statBadge(pid, m.gw, top.has(pid)) ?? pitchPill(pid, m.gw, match, top.has(pid)),
       events: showsEvents(m.gw) ? gwEvents(pid, m.gw) : undefined,
       mark: autoSubOf(l, pid, m.gw),
-      note: match?.state === 'live' ? stateLabel(match) : twice, // one taken off has his minute by the arrow
+      note: pitchNote(match, twice),
     };
   };
+
+/**
+ * Under a name on the pitch: the minute while his match is on (one taken off has his by the
+ * arrow), who he plays when it's still to come, as FPL's pitch has it ("HUL (A)"), and `extra`
+ * (that he plays twice).
+ */
+export function pitchNote(match: PlayerState | null, extra = '') {
+  if (match?.state === 'live') return stateLabel(match);
+  const opp =
+    match?.state === 'due' ? `<span data-tip="${esc(versus(match.opp, match.home))}">${versusShort(match.opp, match.home)}</span>` : '';
+  return opp + extra;
+}
 
 // The XI's total, at the end of its header as fotmob.com's team rating: its points, or with
 // the xP filter what the pitch's pills add up to (its expected points), or with Projected
@@ -184,6 +197,9 @@ export function projectedLineups(m: Match) {
       pid,
       badge: showXp ? xpPill(xpAt(pid, m.gw), partsAt(pid, m.gw), opponents(p.club, m.gw)) : kickoffBadge(pid, m.gw),
       mark: p.status !== 'a' ? `<span class="pp-flag" data-tip="${esc(p.news || 'Flagged')}">!</span>` : '',
+      note: clubFixtures(p.club, m.gw)
+        .map(([h, a]) => versusShort(h === p.club ? a : h, h === p.club))
+        .join(' '),
     };
   };
   const projected = (id: number, priced: number[]): PitchSide => {

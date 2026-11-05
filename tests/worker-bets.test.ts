@@ -232,7 +232,8 @@ describe('the book’s bets', () => {
     const kari = await signup('Kari', '654321');
     await call('/bets/bet', slip({ stake: 200 }), ola.token); // Cy to win at 1.90
     await call('/bets/bet', slip({ stake: 300, pick: 2, price: 2.1 }), kari.token); // Ann to win at 2.10
-    assert.deepEqual((await call('/bets/board')).body, { leaders: [], feed: [] });
+    // Before the deadline nobody sees anyone's picks: only how many have bet.
+    assert.deepEqual((await call('/bets/board')).body, { leaders: [], feed: [], counts: [{ gw: 4, players: 2, bets: 2, staked: 500 }] });
     // Cy beat Ann; the site's copy is asked again five minutes on.
     Object.assign(siteData.matches.at(-1)!, { started: true, finished: true, homePts: 55, awayPts: 40 });
     clock += 5 * 60_000;
@@ -252,6 +253,34 @@ describe('the book’s bets', () => {
     assert.equal(mine.bets[0].payout, 380);
     // A finished match takes no more.
     assert.deepEqual((await call('/bets/bet', slip(), ola.token)).body, { error: 'This match is over' });
+  });
+});
+
+describe('the book’s feed', () => {
+  it('shows everyone’s bets once their deadline has passed, open or settled', async () => {
+    const ola = await signup('Ola');
+    await call('/bets/bet', slip({ stake: 200 }), ola.token);
+    assert.deepEqual(((await call('/bets/board')).body as Board).feed, []);
+    // GW 4's deadline passes; the site's copy is asked again.
+    clock = Date.parse('2026-09-04T17:31:00Z');
+    const board = (await call('/bets/board')).body as Board;
+    assert.deepEqual(
+      board.feed.map((b) => [b.name, b.gw, b.stake, b.payout]),
+      [['Ola', 4, 200, undefined]],
+    );
+    assert.deepEqual(board.leaders, []);
+  });
+
+  it('puts the latest placed or settled first', async () => {
+    const ola = await signup('Ola');
+    await call('/bets/bet', slip({ stake: 100 }), ola.token);
+    clock += 60_000;
+    await call('/bets/bet', slip({ stake: 50, pick: 2, price: 2.1 }), ola.token);
+    clock = Date.parse('2026-09-04T17:31:00Z');
+    assert.deepEqual(
+      ((await call('/bets/board')).body as Board).feed.map((b) => b.stake),
+      [50, 100],
+    );
   });
 });
 

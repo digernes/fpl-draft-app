@@ -63,10 +63,20 @@ export interface Leader {
   won: number;
 }
 
+/** How many have bet on a gameweek still to be settled, and how much. */
+export interface Count {
+  gw: number;
+  players: number;
+  bets: number;
+  staked: number;
+}
+
 export interface Board {
   leaders: Leader[];
-  /** The latest settled bets, newest first. */
+  /** Everyone's bets once their gameweek's deadline has passed, the latest placed or settled first. */
   feed: Bet[];
+  /** The gameweek being played's and the next's, while they have bets. */
+  counts: Count[];
 }
 
 /** What a bet asks for: the match, the pick, the stake and the price the page showed. */
@@ -123,6 +133,23 @@ export function oddsNow(
   if (!live) return 'No live odds for this match just now';
   if (live.p.some((p) => p >= DECIDED)) return 'Betting has closed: the result is all but sure';
   return { p: live.p, prices: live.prices.map((x) => x.dec) as [number, number, number], live: live.score };
+}
+
+/** Whether everyone can see a bet: once it's settled, or its gameweek's deadline has passed (`now` in ms). */
+export function begun(b: Pick<Bet, 'season' | 'gw' | 'payout'>, d: Pick<Data, 'meta' | 'gameweeks'>, now: number) {
+  if (b.payout !== undefined || b.season !== seasonSlug(d)) return true;
+  return now >= Date.parse(d.gameweeks.find((g) => g.id === b.gw)?.deadline ?? '');
+}
+
+/** How many players and bets each gameweek being played or still to come has, of this season's. */
+export function countsOf(bets: Bet[], d: Pick<Data, 'meta'>): Count[] {
+  const season = seasonSlug(d);
+  const gws = [...new Set([d.meta.currentGw, d.meta.nextGw])].sort((a, b) => a - b);
+  return gws.flatMap((gw) => {
+    const these = bets.filter((b) => b.season === season && b.gw === gw);
+    if (!these.length) return [];
+    return [{ gw, players: new Set(these.map((b) => b.name)).size, bets: these.length, staked: these.reduce((t, b) => t + b.stake, 0) }];
+  });
 }
 
 /** A leaderboard from everyone's settled bets: the most won first, then the best average. */

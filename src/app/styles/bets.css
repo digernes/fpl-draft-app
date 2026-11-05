@@ -108,6 +108,12 @@
   color: #fff;
 }
 
+.bet-count {
+  margin-top: 4px;
+  color: var(--text-2);
+  font-weight: 500;
+}
+
 .bet-closed,
 .bet-hint {
   margin: 0;

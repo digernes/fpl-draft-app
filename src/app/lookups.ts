@@ -44,6 +44,8 @@ export const clubFixtures = (team: number, gw: number): [number, number, string 
 const seasonFixtures = (gw: number) =>
   (D.plMatches ?? []).filter((m) => m.gw === gw).map((m): [number, number, string | null] => [m.home, m.away, m.ko]);
 export const versus = (opp: number, home: boolean) => `${club(opp)?.name ?? '?'} (${home ? 'H' : 'A'})`;
+// Short, as FPL's own pitch has it under a player's name: "HUL (A)".
+export const versusShort = (opp: number, home: boolean) => `${club(opp)?.short ?? '?'} (${home ? 'H' : 'A'})`;
 // Who a club plays in a gameweek: "Arsenal (H)", or "Arsenal (H), Chelsea (A)" in a double.
 export const opponents = (team: number, gw: number) =>
   clubFixtures(team, gw)

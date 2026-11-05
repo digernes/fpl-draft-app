@@ -9,7 +9,7 @@ import { totalSlots } from '../event-icons.ts';
 import { esc, fmtShortDay, pct, plural, priceText, signed } from '../format.ts';
 import { first, gwEvents, gwInfo, lineupFor, mgr, player } from '../lookups.ts';
 import { nemesis, rivalries, type Rivalry } from '../manager-stats.ts';
-import { pitchPill, stateLabel } from '../match-lineups.ts';
+import { pitchNote, pitchPill } from '../match-lineups.ts';
 import { matchStatus, matchStatusText } from '../matches.ts';
 import { bestOfMatch, lineupFilters, showsEvents, statBadge, stillToCome } from '../lineup-filters.ts';
 import { autoSubOf, formationOf, pitch, type PitchPlayer } from '../pitch.ts';
@@ -118,7 +118,7 @@ function lastLineup(id: number) {
       badge: statBadge(pid, gw, top.has(pid)) ?? pitchPill(pid, gw, match, top.has(pid)),
       events: showsEvents(gw) ? gwEvents(pid, gw) : undefined,
       mark: autoSubOf(l, pid, gw),
-      note: match?.state === 'live' ? stateLabel(match) : '', // one taken off has his minute by the arrow
+      note: pitchNote(match),
     };
   };
   return {
